@@ -1,0 +1,12 @@
+Interation: 8
+Robots position: (y,x)
+[[[3. 9.]
+  [1. 1.]]
+
+ [[4. 9.]
+  [1. 2.]]
+
+ [[4. 8.]
+  [1. 3.]]]
+Target position: (y,x)
+[[4 8]]
