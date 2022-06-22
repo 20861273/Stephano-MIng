@@ -74,20 +74,15 @@ class MazeAI:
         self.score -= 1
         game_over = False
 
-        if self._is_explored():
-            self.score -= 100
-        
-        if self.is_collision():
-            print("Boom")
-            game_over = True
-            self.score -= 1000
+        if self.frame_iteration > 1000:
             reward = self.score
+            game_over = True
             return reward, game_over, self.score
             
         # 4. reached exit or just move
         if self.pos == self.exit:
             print("Success")
-            self.score += 10000
+            self.score += 1000
             reward = self.score
             game_over = True
             return reward, game_over, self.score
@@ -164,6 +159,17 @@ class MazeAI:
         elif self.direction == Direction.DOWN:
             y += 1
             #print("DOWN")
+        elif self.direction == Direction.UP:
+            y -= 1
+            #print("UP")
+        
+        if self.is_collision(Point(x,y)):
+            self.prev_pos = self.prev_pos
+            self.pos = self.prev_pos
+        else:
+            self.prev_pos = self.pos
+            self.pos = Point(x,y)
+            #print(action, self.prev_pos, self.pos)
         elif self.direction == Direction.UP:
             y -= 1
             #print("UP")
