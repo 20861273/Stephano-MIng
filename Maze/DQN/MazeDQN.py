@@ -171,28 +171,28 @@ class QValues():
         values[non_final_state_locations] = target_net(non_final_states).max(dim=1)[0].detach()
         return values
 
-def plot(reward, ep_dur, moving_avg_period):
+def plot(reward, ep_dur, lr, gamma, lr_count, gamma_count):
 
     plt.figure(1)
-    plt.clf()
+    plt.clf() # del if param sweep
     plt.title('Training...')
     plt.xlabel('Episode')
     plt.ylabel('Reward')
+
+    #l = str("α=" + str(lr[lr_count]))
+    #l = str(l + ", γ" + str(gamma[gamma_count]))
     
     plt.plot(reward)
-    
+    #plt.legend(l)  
+
     plt.figure(2)
     plt.clf()        
     plt.title('Training...')
     plt.xlabel('Episode')
     plt.ylabel('Duration')
     plt.plot(ep_dur)
-
-    moving_avg = get_moving_average(moving_avg_period, ep_dur)
-    plt.plot(moving_avg)    
+ 
     plt.pause(0.001)
-    print("Episode", len(ep_dur), "\n", \
-        moving_avg_period, "episode moving avg:", moving_avg[-1])
 
     #if is_ipython: display.clear_output(wait=True)
 
@@ -220,73 +220,76 @@ def extract_tensors(experiences):
 
 
 batch_size = 256
-gamma = 0.9
+gamma = np.array([0.1,0.3,0.5,0.7,0.9])
 eps_start = 1
 eps_end = 0.01
 eps_decay = 0.001
 target_update = 10
 memory_size = 10000
-lr = 0.01
-num_episodes = 200
+lr = np.array([0.1, 0.01])
+num_episodes = 10
 
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-em = MazeEnvManager(device)
-strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
+for lr_count in range(lr.shape[0]):
+    for gamma_count in range(gamma.shape[0]):
 
-n_states = len(em.get_state())
-n_actions = em.num_actions_available()
+        em = MazeEnvManager(device)
+        strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
 
-agent = Agent(strategy, n_actions, device)
-memory = ReplayMemory(memory_size)
+        n_states = len(em.get_state())
+        n_actions = em.num_actions_available()
 
-policy_net = DQN(n_states, n_actions).to(device)
-target_net = DQN(n_states, n_actions).to(device)
+        agent = Agent(strategy, n_actions, device)
+        memory = ReplayMemory(memory_size)
 
-target_net.load_state_dict(policy_net.state_dict())
-target_net.eval()
+        policy_net = DQN(n_states, n_actions).to(device)
+        target_net = DQN(n_states, n_actions).to(device)
 
-optimizer = optim.Adam(params=policy_net.parameters(), lr=lr)
-
-episode_durations = []
-rewards_per_episode = []
-
-for episode in range(num_episodes):
-    print("Episode: ", episode)
-    em.reset()
-    state = em.get_state()
-
-    for timestep in count():
-        print(em.grid())
-        action = agent.select_action(state, policy_net)
-        reward = em.take_action(action)
-        next_state = em.get_state()
-        print("State:", state, "Action: ", action.item())
-        memory.push(Experience(state, action, next_state, reward))
-        state = next_state
-
-        if memory.can_provide_sample(batch_size):
-            experiences = memory.sample(batch_size)
-            states, actions, rewards, next_states = extract_tensors(experiences)
-
-            current_q_values = QValues.get_current(policy_net, states, actions)
-            next_q_values = QValues.get_next(target_net, next_states)
-            target_q_values = (next_q_values * gamma) + rewards
-
-            loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        if em.done:
-            episode_durations.append(timestep)
-            rewards_per_episode.append(reward.item())
-            plot(rewards_per_episode, episode_durations, 100)
-            break
-
-    if episode % target_update == 0:
         target_net.load_state_dict(policy_net.state_dict())
+        target_net.eval()
+
+        optimizer = optim.Adam(params=policy_net.parameters(), lr=lr[lr_count])
+
+        episode_durations = []
+        rewards_per_episode = []
+
+        for episode in range(num_episodes):
+            print("Episode: ", episode)
+            em.reset()
+            state = em.get_state()
+
+            for timestep in count():
+                print(em.grid())
+                action = agent.select_action(state, policy_net)
+                reward = em.take_action(action)
+                next_state = em.get_state()
+                print("State:", state, "Action: ", action.item())
+                memory.push(Experience(state, action, next_state, reward))
+                state = next_state
+
+                if memory.can_provide_sample(batch_size):
+                    experiences = memory.sample(batch_size)
+                    states, actions, rewards, next_states = extract_tensors(experiences)
+
+                    current_q_values = QValues.get_current(policy_net, states, actions)
+                    next_q_values = QValues.get_next(target_net, next_states)
+                    target_q_values = (next_q_values * gamma[gamma_count]) + rewards
+
+                    loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+
+                if em.done:
+                    episode_durations.append(timestep)
+                    rewards_per_episode.append(reward.item())
+                    plot(rewards_per_episode, episode_durations, lr, gamma, lr_count, gamma_count)
+                    break
+
+            if episode % target_update == 0:
+                target_net.load_state_dict(policy_net.state_dict())
 
 plt.show()
