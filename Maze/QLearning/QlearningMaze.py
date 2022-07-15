@@ -29,8 +29,8 @@ num_episodes = 1000
 max_steps_per_episode = 10000
 num_sequences = 5
 
-learning_rate = np.array([0.01, 0.05, 0.1]) # 0.01
-discount_rate = np.array([0.9, 0.95, 0.99]) # 0.9
+learning_rate = np.array([0.01, 0.1]) # 0.01
+discount_rate = np.array([0.9, 0.99]) # 0.9
 
 exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
 max_exploration_rate = np.array([0.01], dtype=np.float32)
@@ -142,7 +142,7 @@ class print_results:
         plt.title(plt_title)
 
 def plot(q_tables, rewards, steps, learning_rate, discount_rate, exploration_rate):
-    f = open(os.path.join(PATH,"saved_data.txt"), "w", encoding="utf-8")
+    f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
 
     fig, ax = plt.subplots(1, 2, figsize=(30, 15))
     
@@ -183,7 +183,7 @@ def plot(q_tables, rewards, steps, learning_rate, discount_rate, exploration_rat
     ax[1].legend(l)
 
     file_name = "learning_curve.png"
-    plt.savefig(os.path.join(PATH, file_name))
+    plt.savefig(os.path.join(save_path, file_name))
     plt.close()
 
 # Calculates average rewards and steps
@@ -203,12 +203,12 @@ def calc_avg(rewards, steps, num_sequences, sim_num, ep_num):
 
     return avg_rewards.tolist(), avg_steps.tolist()
 
-def extract_values(policy):
+def extract_values(correct_path, policy):
     q_table = []
     maze = []
     policy_num = str("Policy %s:\n" %(str(policy)))
     #print(policy_num)
-    f = open(os.path.join(PATH,"saved_data.txt"), "r")
+    f = open(os.path.join(correct_path,"saved_data.txt"), "r")
     lines = f.readlines()
 
     m_flag = False
@@ -443,7 +443,9 @@ if debug_flag != 2:
 if debug_flag == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
     debug_q3 = input("Policy number?")
     policy = int(debug_q3)
-    q_table_list, maze = extract_values(policy)
+    correct_path = save_path
+    if debug_flag == 2: correct_path = PATH
+    q_table_list, maze = extract_values(correct_path, policy)
 
     q_table = np.array(q_table_list)
     env.grid = np.array(maze)
@@ -456,6 +458,7 @@ if debug_flag == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
         print(episode)
         # initialize new episode params
         state = env.reset(1, episode)
+        print(env.grid)
         #print(env.grid)
         done = False
         for step in range(max_steps_per_episode):   

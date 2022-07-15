@@ -1,5 +1,3 @@
-from dijkstra_maze import MazeAI, Direction, Point
-
 from math import inf as infinity
 
 
