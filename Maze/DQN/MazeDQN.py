@@ -13,7 +13,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T 
 
-from rl_maze import MazeAI, Direction, Point
+from dqn_maze import MazeAI, Direction, Point
 
 #is_ipython = 'inline' in matplotlib.get_backend()
 #if is_ipython: from IPython import display
@@ -83,6 +83,7 @@ class Agent():
             return torch.tensor([action]).to(self.device) # explore      
         else:
             with torch.no_grad():
+                print(policy_net(state).argmax(dim=1))
                 return policy_net(state).unsqueeze(dim=0).argmax(dim=1).to(self.device) # exploit
 
 class MazeEnvManager():
@@ -90,68 +91,26 @@ class MazeEnvManager():
         self.device = device
         self.env = MazeAI()
         self.done = False
+        self.current_state = None
 
-    def reset(self):
-        self.env.reset()
+    def reset(self, sim, episode):
+        self.current_state = torch.tensor([self.env.reset(sim, episode)], device=self.device).float()
     
     def grid(self):
         return self.env.grid
+
+    def num_states(self):
+        return self.env.grid.shape[1] * self.env.grid.shape[0]
 
     def num_actions_available(self):
         return len(Direction)
 
     def take_action(self, action):   
         #print("take action", action.item(), self.env.pos)     
-        reward, self.done, _ = self.env.step(action.item())
+        new_state, reward, self.done, _ = self.env.step(action.item())
         #print(self.done)
-        return torch.tensor([reward], device=self.device)
-
-    def get_state(self):
-        #print("get state")
-        pos = self.env.pos
-        point_l = Point(pos.x - 1, pos.y)
-        point_r = Point(pos.x + 1, pos.y)
-        point_u = Point(pos.x, pos.y - 1)
-        point_d = Point(pos.x, pos.y + 1)
-        #print(self.env.direction, Direction.LEFT)
-        dir_l = self.env.direction == Direction.LEFT
-        dir_r = self.env.direction == Direction.RIGHT
-        dir_u = self.env.direction == Direction.UP
-        dir_d = self.env.direction == Direction.DOWN
-
-        state = [
-            # Danger straight
-            (dir_r and self.env.is_collision(point_r)) or 
-            (dir_l and self.env.is_collision(point_l)) or 
-            (dir_u and self.env.is_collision(point_u)) or 
-            (dir_d and self.env.is_collision(point_d)),
-
-            # Danger right
-            (dir_u and self.env.is_collision(point_r)) or 
-            (dir_d and self.env.is_collision(point_l)) or 
-            (dir_l and self.env.is_collision(point_u)) or 
-            (dir_r and self.env.is_collision(point_d)),
-
-            # Danger left
-            (dir_d and self.env.is_collision(point_r)) or 
-            (dir_u and self.env.is_collision(point_l)) or 
-            (dir_r and self.env.is_collision(point_u)) or 
-            (dir_l and self.env.is_collision(point_d)),
-
-            # Danger back
-            (dir_d and self.env.is_collision(point_u)) or 
-            (dir_u and self.env.is_collision(point_d)) or 
-            (dir_r and self.env.is_collision(point_l)) or 
-            (dir_l and self.env.is_collision(point_r)),
-            
-            # Move direction
-            dir_l,
-            dir_r,
-            dir_u,
-            dir_d
-            ]
-
-        return torch.from_numpy(np.array(state, dtype=np.float32)).to(device)
+        return torch.tensor([new_state], device=self.device).float(), torch.tensor([reward], device=self.device)
+        #return torch.from_numpy(np.array([new_state], dtype=np.float32)).to(device), torch.tensor([reward], device=self.device)
 
 class QValues():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -171,30 +130,33 @@ class QValues():
         values[non_final_state_locations] = target_net(non_final_states).max(dim=1)[0].detach()
         return values
 
-def plot(reward, ep_dur, lr, gamma, lr_count, gamma_count):
+def plot(rewards, steps, learning_rate, discount_rate, exploration_rate):
+    fig, ax = plt.subplots(1, 2, figsize=(20, 8))
 
-    plt.figure(1)
-    plt.clf() # del if param sweep
-    plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Reward')
+    avg_reward = 0
+    avg_steps = 0
 
-    #l = str("α=" + str(lr[lr_count]))
-    #l = str(l + ", γ" + str(gamma[gamma_count]))
-    
-    plt.plot(reward)
-    #plt.legend(l)  
+    if len(rewards) != 0: avg_reward = sum(rewards)/len(rewards)
+    if len(steps) != 0: avg_steps = sum(steps)/len(steps)
 
-    plt.figure(2)
-    plt.clf()        
-    plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(ep_dur)
- 
-    plt.pause(0.001)
+    plt_title = "Results: α=%s, γ=%s, ϵ=%s\nAverage reward: %s\nAverage steps: %s" %(
+        str(learning_rate), 
+        str(discount_rate), 
+        str(exploration_rate), 
+        str(avg_reward), 
+        str(avg_steps)
+        )
+    fig.suptitle(plt_title)
 
-    #if is_ipython: display.clear_output(wait=True)
+    ax[0].plot(np.arange(0, len(rewards)), rewards)
+    ax[0].set_title('Rewards per episode')
+    ax[0].set_xlabel('Episode')
+    ax[0].set_ylabel('Rewards')
+
+    ax[1].plot(np.arange(0, len(steps)), steps)
+    ax[1].set_title('Steps per episode')
+    ax[1].set_xlabel('Episode')
+    ax[1].set_ylabel('#Steps')
 
 def get_moving_average(period, values):
     values = torch.tensor(values, dtype=torch.float)
@@ -220,76 +182,81 @@ def extract_tensors(experiences):
 
 
 batch_size = 256
-gamma = np.array([0.1,0.3,0.5,0.7,0.9])
-eps_start = 1
+learning_rate = np.array([0.1])
+discount_rate = np.array([0.98])
+exploration_rate = np.array([1], dtype=np.float32)
 eps_end = 0.01
 eps_decay = 0.001
 target_update = 10
 memory_size = 10000
-lr = np.array([0.1, 0.01])
 num_episodes = 10
 
+steps_per_episode = []
+
+sim = 0
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-for lr_count in range(lr.shape[0]):
-    for gamma_count in range(gamma.shape[0]):
+for lr_i in np.arange(len(learning_rate)):
+    for dr_i in np.arange(len(discount_rate)):
+        for er_i in np.arange(len(exploration_rate)):
 
-        em = MazeEnvManager(device)
-        strategy = EpsilonGreedyStrategy(eps_start, eps_end, eps_decay)
+            em = MazeEnvManager(device)
+            strategy = EpsilonGreedyStrategy(exploration_rate, eps_end, eps_decay)
 
-        n_states = len(em.get_state())
-        n_actions = em.num_actions_available()
+            n_states = em.num_states()
+            n_actions = em.num_actions_available()
 
-        agent = Agent(strategy, n_actions, device)
-        memory = ReplayMemory(memory_size)
+            agent = Agent(strategy, n_actions, device)
+            memory = ReplayMemory(memory_size)
 
-        policy_net = DQN(n_states, n_actions).to(device)
-        target_net = DQN(n_states, n_actions).to(device)
+            policy_net = DQN(n_states, n_actions).to(device)
+            target_net = DQN(n_states, n_actions).to(device)
 
-        target_net.load_state_dict(policy_net.state_dict())
-        target_net.eval()
+            target_net.load_state_dict(policy_net.state_dict())
+            target_net.eval()
 
-        optimizer = optim.Adam(params=policy_net.parameters(), lr=lr[lr_count])
+            optimizer = optim.Adam(params=policy_net.parameters(), lr=learning_rate[lr_i])
 
-        episode_durations = []
-        rewards_per_episode = []
+            episode_durations = []
+            rewards_per_episode = []
 
-        for episode in range(num_episodes):
-            print("Episode: ", episode)
-            em.reset()
-            state = em.get_state()
+            for episode in range(num_episodes):
+                print("Episode: ", episode)
+                state = em.reset(sim, episode)
 
-            for timestep in count():
-                print(em.grid())
-                action = agent.select_action(state, policy_net)
-                reward = em.take_action(action)
-                next_state = em.get_state()
-                print("State:", state, "Action: ", action.item())
-                memory.push(Experience(state, action, next_state, reward))
-                state = next_state
+                for timestep in count():
+                    #print(em.grid())
+                    action = agent.select_action(state, policy_net)
+                    next_state, reward = em.take_action(action)
+                    #print("State:", state, "Action: ", action.item())
+                    memory.push(Experience(state, action, next_state, reward))
+                    state = next_state
 
-                if memory.can_provide_sample(batch_size):
-                    experiences = memory.sample(batch_size)
-                    states, actions, rewards, next_states = extract_tensors(experiences)
+                    if memory.can_provide_sample(batch_size):
+                        experiences = memory.sample(batch_size)
+                        states, actions, rewards, next_states = extract_tensors(experiences)
 
-                    current_q_values = QValues.get_current(policy_net, states, actions)
-                    next_q_values = QValues.get_next(target_net, next_states)
-                    target_q_values = (next_q_values * gamma[gamma_count]) + rewards
+                        current_q_values = QValues.get_current(policy_net, states, actions)
+                        next_q_values = QValues.get_next(target_net, next_states)
+                        target_q_values = (next_q_values * discount_rate[dr_i]) + rewards
 
-                    loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+                        loss = F.mse_loss(current_q_values, target_q_values.unsqueeze(1))
+                        optimizer.zero_grad()
+                        loss.backward()
+                        optimizer.step()
 
-                if em.done:
-                    episode_durations.append(timestep)
-                    rewards_per_episode.append(reward.item())
-                    plot(rewards_per_episode, episode_durations, lr, gamma, lr_count, gamma_count)
-                    break
+                    if em.done:
+                        episode_durations.append(timestep)
+                        rewards_per_episode.append(reward.item())
+                        steps_per_episode.append(timestep+1)
+                        plot(rewards_per_episode, steps_per_episode, learning_rate[lr_i], discount_rate[dr_i], exploration_rate[er_i])
+                        break
 
-            if episode % target_update == 0:
-                target_net.load_state_dict(policy_net.state_dict())
+                if episode % target_update == 0:
+                    target_net.load_state_dict(policy_net.state_dict())
+            
+            sim += 1
 
 plt.show()

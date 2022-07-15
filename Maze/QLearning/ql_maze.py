@@ -5,8 +5,8 @@ import numpy as np
 import random
 
 # Maze characteristics
-HEIGHT = 30
-WIDTH = 30
+HEIGHT = 5
+WIDTH = 5
 
 # Direction states
 class Direction(Enum):
@@ -279,7 +279,7 @@ class MazeAI:
         #     "Exit = 3\n"
         #     "Explored block = 4")
         # init game state
-        if sim == 0 and episode ==0:
+        if sim == 0 and episode == 0:
             # Generates grid
             self.grid = self.generate_grid()
 
@@ -339,7 +339,7 @@ class MazeAI:
 
         # 5. reached exit or just move
         if self.pos == self.exit:
-            self.score += 1
+            #self.score += 1
             reward = self.score
             game_over = True
             return state, reward, game_over, self.score
