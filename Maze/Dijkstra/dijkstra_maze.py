@@ -5,8 +5,8 @@ import numpy as np
 import random
 
 # Maze characteristics
-HEIGHT = 5
-WIDTH = 5
+HEIGHT = 50
+WIDTH = 50
 
 # Direction states
 class Direction(Enum):
@@ -307,117 +307,3 @@ class MazeAI:
 
             # Setup maze exit
             self.grid[self.exit.y, self.exit.x] = States.EXIT.value
-        
-        #print(self.grid)
-        self.direction = (Direction.RIGHT).value
-                
-        self.score = 0
-        self.frame_iteration = 0
-
-        state = self.get_state()
-
-        return state
-        
-    def step(self, action):
-        #print(self.pos, self.prev_pos, action)
-        #print(self.grid,"\n")
-        self.frame_iteration += 1
-        # 2. move
-        self._move(action) # update the robot
-            
-        # 3. check if game over
-        reward = 0
-        self.score -= 0.1
-        game_over = False
-
-        state = self.get_state()
-        
-        reward = self.score
-
-        # 4. update maze
-        self._update_maze()
-
-        # 5. reached exit or just move
-        if self.pos == self.exit:
-            #self.score += 1
-            reward = self.score
-            game_over = True
-            return state, reward, game_over, self.score
-        
-        # 6. return game over and score
-        return state, reward, game_over, self.score
-
-    def get_state(self):
-        return self.pos.x*self.grid.shape[1] + self.pos.y
-    
-    def _is_collision(self, pt=None):
-        if pt is None:
-            pt = self.pos
-        # hits boundary
-        obstacles = np.argwhere(self.grid == 1)
-        if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
-            return True
-        elif pt.y < 0 or pt.y > self.grid.shape[0]-1 or pt.x < 0 or pt.x > self.grid.shape[1]-1:
-            return True
-        
-        return False
-
-    def _is_explored(self, pt=None):
-        if pt is None:
-            pt = self.pos
-        # hits boundary
-        explored = np.argwhere(self.grid == States.EXP.value)
-        if any(np.equal(explored,np.array([self.pos.y,self.pos.x])).all(1)):
-            #print(self.pos)
-            return True
-        
-        return False
-        
-    def _update_maze(self):
-        if self.frame_iteration == 0:
-            # Update robot position(s) on grid
-            self.grid[self.pos.y,self.pos.x] = States.ROBOT.value
-        else:
-            # Update robot position(s) on grid
-            self.grid[self.prev_pos.y,self.prev_pos.x] = States.UNEXP.value
-            self.grid[self.pos.y,self.pos.x] = States.ROBOT.value
-            
-
-    def _move(self, action):
-        if action == (Direction.LEFT).value:
-            self.direction = action
-            #print(action, (Direction.LEFT).value, self.direction)
-        elif action == (Direction.RIGHT).value:
-            self.direction = action
-            #print(action, (Direction.RIGHT).value, self.direction)
-        elif action == (Direction.UP).value:
-            self.direction = action
-            #print(action, (Direction.UP).value, self.direction)
-        elif action == (Direction.DOWN).value:
-            self.direction = action
-            #print(action, (Direction.DOWN).value, self.direction)
-
-        x = self.pos.x
-        y = self.pos.y
-        if self.direction == (Direction.RIGHT).value:
-            x += 1
-            #print("RIGHT")
-        elif self.direction == (Direction.LEFT).value:
-            x -= 1
-            #print("LEFT")
-        elif self.direction == (Direction.DOWN).value:
-            y += 1
-            #print("DOWN")
-        elif self.direction == (Direction.UP).value:
-            y -= 1
-            #print("UP")
-
-        if self._is_collision(Point(x,y)):
-            self.pos = self.pos
-            self.prev_pos = self.pos
-        else:
-            self.prev_pos = self.pos
-            self.pos = Point(x,y)
-            #print(action, self.prev_pos, self.pos)
-
-        #print(action, self.prev_pos, self.pos)
