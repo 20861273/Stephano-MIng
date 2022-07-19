@@ -29,8 +29,8 @@ num_episodes = 1000
 max_steps_per_episode = 10000
 num_sequences = 5
 
-learning_rate = np.array([0.01, 0.1]) # 0.01
-discount_rate = np.array([0.9, 0.99]) # 0.9
+learning_rate = np.array([0.01, 0.05, 0.1]) # 0.01
+discount_rate = np.array([0.9, 0.95, 0.99]) # 0.9
 
 exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
 max_exploration_rate = np.array([0.01], dtype=np.float32)
@@ -138,7 +138,7 @@ class print_results:
                 #elif self.grid[j][i] == 4:
                 #    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'b', alpha=0.75)
 
-        plt_title = "Results of eipsode %s, step %s" %(str(episode), str(step)) 
+        plt_title = "Q-learning Results: Episode %s, step %s" %(str(episode), str(step)) 
         plt.title(plt_title)
 
 def plot(q_tables, rewards, steps, learning_rate, discount_rate, exploration_rate):
@@ -458,7 +458,7 @@ if debug_flag == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
         print(episode)
         # initialize new episode params
         state = env.reset(1, episode)
-        print(env.grid)
+        #print(env.grid)
         #print(env.grid)
         done = False
         for step in range(max_steps_per_episode):   

@@ -1,4 +1,5 @@
 from dijkstra_maze import HEIGHT, WIDTH, MazeAI, States
+#from test import HEIGHT, WIDTH, MazeAI, States
 
 from math import inf as infinity
 import collections
@@ -54,7 +55,7 @@ class Graph:
     def get_neighbors(self, node):
         (x, y) = node
         neighbors = [(x+1, y), (x-1, y), (x, y-1), (x, y+1)] # E W N S
-        # see "Ugly paths" section for an explanation:
+        
         if (x + y) % 2 == 0: neighbors.reverse() # S N W E
         results = list(filter(self.in_bounds, neighbors))
         results = list(filter(self.passable, results))
@@ -164,29 +165,33 @@ class print_results:
                 #elif self.grid[j][i] == 4:
                 #    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'b', alpha=0.75)
 
-        plt_title = "Results step %s" %(str(step))
+        plt_title = "Dijkstra's Algorithm Results: Step %s" %(str(step))
         plt.title(plt_title)
 
 env = MazeAI()
 
 g = Graph(env.grid)
-print(env.grid, "\n",g.all_nodes, "\n",g.walls)
-start = (env.starting_pos.x, env.starting_pos.y)
+print("Grid:\n", env.grid)
+print("Starting position: ", env.starting_pos)
+print("Goal: ", env.exit)
 start, goal = (env.starting_pos.x, env.starting_pos.y), (env.exit.x, env.exit.y)
+#print(start, goal, "\n",env.grid)
+
 came_from, cost_so_far = dijkstra_search(g, start, goal)
 
 path_taken = reconstruct_path(came_from, start=start, goal=goal)
-print(path_taken)
+#print(path_taken)
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'Results')
 date_and_time = datetime.now()
 save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
 if not os.path.exists(save_path): os.makedirs(save_path)
 
+env.grid[path_taken[0][1], path_taken[0][0]] = States.ROBOT.value
+env.grid[env.exit.y, env.exit.x] = States.EXIT.value
+
 for i in np.arange(len(path_taken)):
-    if i == 0:
-        env.grid[path_taken[i][1], path_taken[i][0]] = States.ROBOT.value
-    else:
+    if i != 0:
         env.grid[path_taken[i-1][1], path_taken[i-1][0]] = States.EXP.value
         env.grid[path_taken[i][1], path_taken[i][0]] = States.ROBOT.value
 
@@ -196,8 +201,3 @@ for i in np.arange(len(path_taken)):
     file_name = "plot-%s.png" %(i)
     plt.savefig(os.path.join(save_path, file_name))
     plt.close()
-
-# graph.get_nodes(env.grid)
-# print(graph.all_nodes)
-# edges = graph.get_neighbors(graph.all_nodes[0])
-# print(edges)

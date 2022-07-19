@@ -5,8 +5,8 @@ import numpy as np
 import random
 
 # Maze characteristics
-HEIGHT = 50
-WIDTH = 50
+HEIGHT = 30
+WIDTH = 30
 
 # Direction states
 class Direction(Enum):
@@ -259,17 +259,24 @@ class MazeAI:
                     grid[i][j] = States.OBS.value
 
         # Set entrance and exit
-        for i in range(0, width):
-            if (grid[1][i] == States.UNEXP.value):
-                grid[0][i] = States.ROBOT.value
-                break
+        # for i in range(0, width):
+        #     if (grid[1][i] == States.UNEXP.value):
+        #         grid[0][i] = States.ROBOT.value
+        #         break
 
-        for i in range(width-1, 0, -1):
-            if (grid[height-2][i] == States.UNEXP.value):
-                grid[height-1][i] = States.EXIT.value
-                break
+        # for i in range(width-1, 0, -1):
+        #     if (grid[height-2][i] == States.UNEXP.value):
+        #         grid[height-1][i] = States.EXIT.value
+        #         break
 
-        return np.array(grid)
+        npgrid = np.array(grid)
+        possible_indexes = np.argwhere(npgrid == 1)
+        np.random.shuffle(possible_indexes)
+        indices = possible_indexes[0:int(len(possible_indexes)*0.5)]
+        for index in indices:
+            npgrid[index[1], index[0]] = States.UNEXP.value
+
+        return npgrid
 
 
     def reset(self, sim, episode):
@@ -291,13 +298,29 @@ class MazeAI:
                 #print(self.grid[i[0],i[1]])
                 self.grid[i[0],i[1]] = States.OBS.value
 
-            # Setup robot starting position
-            self.prev_pos = Point(np.argwhere(self.grid == States.ROBOT.value)[0,1], np.argwhere(self.grid == States.ROBOT.value)[0,0])
-            self.pos = self.prev_pos
-            self.starting_pos = self.pos
+            # Set start and goal positions
+            s_quadrant = random.randint(0,3)
+            g_quadrant = (s_quadrant+2) % 4
+            quadrants = np.array([  [[self.grid.shape[1]/4*3-1,self.grid.shape[1]-1],   [0,self.grid.shape[0]/4-1]],
+                                    [[0,self.grid.shape[1]/4-1],                        [0,self.grid.shape[0]/4-1]],
+                                    [[0,self.grid.shape[1]/4-1],                        [self.grid.shape[0]/4*3-1,self.grid.shape[0]-1]],
+                                    [[self.grid.shape[1]/4*3-1,self.grid.shape[1]-1],   [self.grid.shape[0]/4*3-1,self.grid.shape[0]-1]]], dtype=int)
             
-            # Setup maze exit
-            self.exit = Point(np.argwhere(self.grid == States.EXIT.value)[0,1], np.argwhere(self.grid == States.EXIT.value)[0,0])
+            indices = np.argwhere(self.grid == States.OBS.value)
+            self.starting_pos = Point(indices[0,1], indices[0,0])
+            
+            while self.grid[self.starting_pos.y, self.starting_pos.x] != States.UNEXP.value:
+                self.starting_pos = Point(random.randint(quadrants[s_quadrant,0,0],quadrants[s_quadrant,0,1]),
+                                        random.randint(quadrants[s_quadrant,1,0],quadrants[s_quadrant,1,1]))
+            
+            indices = np.argwhere(self.grid == States.OBS.value)
+            self.exit = Point(indices[0,1], indices[0,0])
+            while self.grid[self.exit.y, self.exit.x] != States.UNEXP.value:
+                self.exit = Point(random.randint(quadrants[g_quadrant,0,0],quadrants[g_quadrant,0,1]),
+                                random.randint(quadrants[g_quadrant,1,0],quadrants[g_quadrant,1,1]))
+
+            self.grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
+            self.grid[self.exit.y, self.exit.x] = States.EXIT.value
         else:
             # Setup robot starting position
             self.grid[self.pos.y, self.pos.x] = States.UNEXP.value
