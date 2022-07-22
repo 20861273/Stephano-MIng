@@ -27,10 +27,10 @@ q_table = np.zeros((state_space_size, action_space_size))
 # Initializing Q-Learning Parameters
 num_episodes = 1000
 max_steps_per_episode = 10000
-num_sequences = 5
+num_sequences = 1
 
-learning_rate = np.array([0.01, 0.05, 0.1]) # 0.01
-discount_rate = np.array([0.9, 0.95, 0.99]) # 0.9
+learning_rate = np.array([0.1]) # 0.01
+discount_rate = np.array([0.99]) # 0.9
 
 exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
 max_exploration_rate = np.array([0.01], dtype=np.float32)
@@ -158,12 +158,19 @@ def plot(q_tables, rewards, steps, learning_rate, discount_rate, exploration_rat
     l = []
     cnt = 0
 
-    f.write(str("Starting position: %s\nExit: %s\nMaze:\n%s" %(str(env.starting_pos), str(env.exit), str(env.grid))))
+    f.write(str("\nStarting position: %s\nExit: %s\nMaze:\n%s" %(str(env.starting_pos), str(env.exit), str(env.grid))))
     for lr_i in np.arange(len(learning_rate)):
         for dr_i in np.arange(len(discount_rate)):
             for er_i in np.arange(len(exploration_rate)):
                 #print(q_tables[cnt])
-                f.write(str("\nPolicy %s:\nα=%s, γ=%s, ϵ=%s\n%s\n\n" %(str(cnt), str(learning_rate[lr_i]), str(discount_rate[dr_i]), str(exploration_rate[er_i]), str(q_tables[cnt]))))
+                # f.write(str("\nPolicy %s:\nα=%s, γ=%s, ϵ=%s\n" %(
+                #                                                 str(cnt),
+                #                                                 str(learning_rate[lr_i]),
+                #                                                 str(discount_rate[dr_i]),
+                #                                                 str(exploration_rate[er_i]))
+                #                                                 ))
+                file_name = "policy" + str(cnt) + ".txt"
+                np.savetxt(os.path.join(save_path, file_name), q_tables[cnt])
                 
                 l.append("%s: α=%s, γ=%s, ϵ=%s" %(
                         str(cnt),
@@ -204,30 +211,15 @@ def calc_avg(rewards, steps, num_sequences, sim_num, ep_num):
     return avg_rewards.tolist(), avg_steps.tolist()
 
 def extract_values(correct_path, policy):
-    q_table = []
     maze = []
-    policy_num = str("Policy %s:\n" %(str(policy)))
-    #print(policy_num)
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
     lines = f.readlines()
 
-    m_flag = False
     for line in lines:
         cur_num = ''
         cur_line = []
         if line == "\n":
             break
-
-        if line[0:6] == "Policy": m_flag = False
-        if m_flag:
-            for num in line:
-                if num.isdigit():
-                    cur_num += num
-                else:
-                    if cur_num != '':
-                        cur_line.append(int(cur_num))
-                    cur_num = ''
-            maze.append(cur_line)  
 
         cur_num = ''
         cur_line = []
@@ -248,45 +240,53 @@ def extract_values(correct_path, policy):
                     cur_num += num
                 else:
                     if cur_num == ',':
-                        x = cur_line
                         cur_line = []
                     elif cur_num != '': cur_line.append(int(cur_num))
                     cur_num = ''
-            y = cur_line
             env.exit = Point(int(cur_line[0]),int(cur_line[1]))
         
         cur_num = ''
         cur_line = []
-        if line[0:5] == "Maze:": m_flag = True
-        
+        if line[0:5] == "Maze:":
+            for num in line:
+                if num.isdigit():
+                    cur_num += num
+                else:
+                    if cur_num != '':
+                        cur_line.append(int(cur_num))
+                    cur_num = ''
+            maze.append(cur_line) 
 
-    skip_line = True
+    file_name = "policy" + str(policy) + ".txt"
+    return np.loadtxt(os.path.join(save_path, file_name)), np.array(maze)
 
-    policy_flag = False
-    for line in lines:
-        if policy_flag:
-            if not skip_line:
-                #hi = line[0:6]
-                #print("We're in: ", hi)
-                if line == "\n":
-                    # print(maze, "\n\n\n", q_table)
-                    return q_table, maze
-                # add without \n  at end
-                cur_num = ''
-                cur_line = []
-                for num in line:
-                    if num.isdigit() or num == '.' or num == '-':
-                        cur_num += num
-                    else:
-                        if cur_num != '': 
-                            cur_line.append(float(cur_num))
-                        cur_num = ''
-                q_table.append(cur_line)
-            else:
-                skip_line = False
+    # skip_line = True
 
-        #print("Check: ", line, policy_num)
-        if line == policy_num: policy_flag = True
+    # policy_flag = False
+    # for line in lines:
+    #     if policy_flag:
+    #         if not skip_line:
+    #             #hi = line[0:6]
+    #             #print("We're in: ", hi)
+    #             if line == "\n":
+    #                 # print(maze, "\n\n\n", q_table)
+    #                 return q_table, maze
+    #             # add without \n  at end
+    #             cur_num = ''
+    #             cur_line = []
+    #             for num in line:
+    #                 if num.isdigit() or num == '.' or num == '-':
+    #                     cur_num += num
+    #                 else:
+    #                     if cur_num != '': 
+    #                         cur_line.append(float(cur_num))
+    #                     cur_num = ''
+    #             q_table.append(cur_line)
+    #         else:
+    #             skip_line = False
+
+    #     #print("Check: ", line, policy_num)
+    #     if line == policy_num: policy_flag = True
 
 
 if debug_flag != 2:
@@ -455,7 +455,7 @@ if debug_flag == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
     nb_success = 0
     # Display percentage successes
     for episode in range(100):
-        print(episode)
+        print("Episode", episode)
         # initialize new episode params
         state = env.reset(1, episode)
         #print(env.grid)

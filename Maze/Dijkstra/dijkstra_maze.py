@@ -1,5 +1,6 @@
 from enum import Enum
 from collections import namedtuple
+from os import stat
 from time import sleep
 import numpy as np
 import random
@@ -257,22 +258,42 @@ class MazeAI:
             for j in range(0, width):
                 if (grid[i][j] == 'u'):
                     grid[i][j] = States.OBS.value
-
-        # Set entrance and exit
-        # for i in range(0, width):
-        #     if (grid[1][i] == States.UNEXP.value):
-        #         grid[0][i] = States.ROBOT.value
-        #         break
-
-        # for i in range(width-1, 0, -1):
-        #     if (grid[height-2][i] == States.UNEXP.value):
-        #         grid[height-1][i] = States.EXIT.value
-        #         break
-
+        
         npgrid = np.array(grid)
-        possible_indexes = np.argwhere(npgrid == 1)
+
+        # Sets all explored blocks to wall blocks
+        # (generation can not convert all the walls since the exsisting walls blocks it off)
+        exp_pos = np.argwhere(npgrid == States.EXP.value)
+        for i in exp_pos: npgrid[i[0],i[1]] = States.OBS.value
+        
+        # Set start and goal positions
+        s_quadrant = random.randint(0,3)
+        g_quadrant = (s_quadrant+2) % 4
+        quadrants = np.array([  [[npgrid.shape[1]/4*3-1,npgrid.shape[1]-1],   [0,npgrid.shape[0]/4-1]],
+                                [[0,npgrid.shape[1]/4-1],                        [0,npgrid.shape[0]/4-1]],
+                                [[0,npgrid.shape[1]/4-1],                        [npgrid.shape[0]/4*3-1,npgrid.shape[0]-1]],
+                                [[npgrid.shape[1]/4*3-1,npgrid.shape[1]-1],   [npgrid.shape[0]/4*3-1,npgrid.shape[0]-1]]], dtype=int)
+        
+        indices = np.argwhere(npgrid == States.OBS.value)
+        starting_pos = Point(indices[0,1], indices[0,0])
+        
+        while npgrid[starting_pos.y, starting_pos.x] != States.UNEXP.value:
+            starting_pos = Point(random.randint(quadrants[s_quadrant,0,0],quadrants[s_quadrant,0,1]),
+                                    random.randint(quadrants[s_quadrant,1,0],quadrants[s_quadrant,1,1]))
+        
+        indices = np.argwhere(npgrid == States.OBS.value)
+        exit = Point(indices[0,1], indices[0,0])
+        while npgrid[exit.y, exit.x] != States.UNEXP.value:
+            exit = Point(random.randint(quadrants[g_quadrant,0,0],quadrants[g_quadrant,0,1]),
+                            random.randint(quadrants[g_quadrant,1,0],quadrants[g_quadrant,1,1]))
+
+        npgrid[starting_pos.y, starting_pos.x] = States.ROBOT.value
+        npgrid[exit.y, exit.x] = States.EXIT.value
+
+        # Remove 50% of walls
+        possible_indexes = np.argwhere(npgrid == States.OBS.value)
         np.random.shuffle(possible_indexes)
-        indices = possible_indexes[0:int(len(possible_indexes)*0.5)]
+        indices = possible_indexes[0:int(len(possible_indexes)*0.6)]
         for index in indices:
             npgrid[index[1], index[0]] = States.UNEXP.value
 
@@ -289,38 +310,13 @@ class MazeAI:
         if sim == 0 and episode == 0:
             # Generates grid
             self.grid = self.generate_grid()
+            index = np.argwhere(self.grid == States.ROBOT.value)
+            self.starting_pos = Point(index[0,1], index[0,0])
+            self.pos = self.starting_pos
+            index = np.argwhere(self.grid == States.EXIT.value)
+            self.exit = Point(index[0,1], index[0,0])
 
-            # Sets all explored blocks to wall blocks
-            # (generation can not convert all the walls since the exsisting walls blocks it off)
-            exp_pos = np.argwhere(self.grid == States.EXP.value)
-            for i in exp_pos:
-                #print(i)
-                #print(self.grid[i[0],i[1]])
-                self.grid[i[0],i[1]] = States.OBS.value
-
-            # Set start and goal positions
-            s_quadrant = random.randint(0,3)
-            g_quadrant = (s_quadrant+2) % 4
-            quadrants = np.array([  [[self.grid.shape[1]/4*3-1,self.grid.shape[1]-1],   [0,self.grid.shape[0]/4-1]],
-                                    [[0,self.grid.shape[1]/4-1],                        [0,self.grid.shape[0]/4-1]],
-                                    [[0,self.grid.shape[1]/4-1],                        [self.grid.shape[0]/4*3-1,self.grid.shape[0]-1]],
-                                    [[self.grid.shape[1]/4*3-1,self.grid.shape[1]-1],   [self.grid.shape[0]/4*3-1,self.grid.shape[0]-1]]], dtype=int)
             
-            indices = np.argwhere(self.grid == States.OBS.value)
-            self.starting_pos = Point(indices[0,1], indices[0,0])
-            
-            while self.grid[self.starting_pos.y, self.starting_pos.x] != States.UNEXP.value:
-                self.starting_pos = Point(random.randint(quadrants[s_quadrant,0,0],quadrants[s_quadrant,0,1]),
-                                        random.randint(quadrants[s_quadrant,1,0],quadrants[s_quadrant,1,1]))
-            
-            indices = np.argwhere(self.grid == States.OBS.value)
-            self.exit = Point(indices[0,1], indices[0,0])
-            while self.grid[self.exit.y, self.exit.x] != States.UNEXP.value:
-                self.exit = Point(random.randint(quadrants[g_quadrant,0,0],quadrants[g_quadrant,0,1]),
-                                random.randint(quadrants[g_quadrant,1,0],quadrants[g_quadrant,1,1]))
-
-            self.grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
-            self.grid[self.exit.y, self.exit.x] = States.EXIT.value
         else:
             # Setup robot starting position
             self.grid[self.pos.y, self.pos.x] = States.UNEXP.value
