@@ -1,14 +1,9 @@
-from audioop import avg
-from msilib import sequence
 import numpy as np
 import random
-import time
-import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
-from cycler import cycler
 
-from ql_maze import MazeAI, Direction, Point
+from ql_maze import WIDTH, MazeAI, Direction, Point
 
 from datetime import datetime
 import time
@@ -29,7 +24,7 @@ num_episodes = 1000
 max_steps_per_episode = 10000
 num_sequences = 1
 
-learning_rate = np.array([0.1]) # 0.01
+learning_rate = np.array([0.1, 0.001]) # 0.01
 discount_rate = np.array([0.99]) # 0.9
 
 exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
@@ -38,7 +33,7 @@ min_exploration_rate = np.array([0.01], dtype=np.float32)
 exploration_decay_rate = np.array([0.01], dtype=np.float32)
 
 # Debug menu
-debug_q = input("Default training mode: 0\nDebug training mode: 1\nGreedy policy: 2\nSelect mode: ")
+debug_q = input("Default training mode: 1\nGreedy policy: 2\nSelect mode: ")
 # debug_q = input("Default training mode: 0\nDebug training mode: 1\nSelect mode: ")
 debug_flag = int(debug_q)
 
@@ -69,7 +64,8 @@ if debug_flag != 0:
 if debug_flag == 2:
     PATH = os.getcwd()
     PATH = os.path.join(PATH, 'Results')
-    PATH = os.path.join(PATH, 'saved_data')
+    load_path = os.path.join(PATH, 'saved_data')
+    if not os.path.exists(load_path): os.makedirs(load_path)
 
 class print_results:
     """
@@ -214,13 +210,9 @@ def extract_values(correct_path, policy):
     maze = []
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
     lines = f.readlines()
+    maze_flag = False
 
     for line in lines:
-        cur_num = ''
-        cur_line = []
-        if line == "\n":
-            break
-
         cur_num = ''
         cur_line = []
         if line[0:18] == "Starting position:":
@@ -247,7 +239,8 @@ def extract_values(correct_path, policy):
         
         cur_num = ''
         cur_line = []
-        if line[0:5] == "Maze:":
+        if line[0:5] == "Maze:" or maze_flag:
+            maze_flag = True
             for num in line:
                 if num.isdigit():
                     cur_num += num
@@ -255,39 +248,10 @@ def extract_values(correct_path, policy):
                     if cur_num != '':
                         cur_line.append(int(cur_num))
                     cur_num = ''
-            maze.append(cur_line) 
+            if len(cur_line) == WIDTH: maze.append(cur_line) 
 
     file_name = "policy" + str(policy) + ".txt"
-    return np.loadtxt(os.path.join(save_path, file_name)), np.array(maze)
-
-    # skip_line = True
-
-    # policy_flag = False
-    # for line in lines:
-    #     if policy_flag:
-    #         if not skip_line:
-    #             #hi = line[0:6]
-    #             #print("We're in: ", hi)
-    #             if line == "\n":
-    #                 # print(maze, "\n\n\n", q_table)
-    #                 return q_table, maze
-    #             # add without \n  at end
-    #             cur_num = ''
-    #             cur_line = []
-    #             for num in line:
-    #                 if num.isdigit() or num == '.' or num == '-':
-    #                     cur_num += num
-    #                 else:
-    #                     if cur_num != '': 
-    #                         cur_line.append(float(cur_num))
-    #                     cur_num = ''
-    #             q_table.append(cur_line)
-    #         else:
-    #             skip_line = False
-
-    #     #print("Check: ", line, policy_num)
-    #     if line == policy_num: policy_flag = True
-
+    return np.loadtxt(os.path.join(correct_path, file_name)), np.array(maze)
 
 if debug_flag != 2:
     # Training loop
@@ -351,73 +315,28 @@ if debug_flag != 2:
                                 (max_exploration_rate[er_i] - min_exploration_rate[er_i]) * np.exp(-exploration_decay_rate[er_i]*episode)
 
                         # Add current episode reward to total rewards list
-                        if debug_flag:
-                            if not done:
-                                rewards_per_episode.append(rewards_current_episode)
-                                steps_per_episode.append(step+1)
+                        if not done:
+                            rewards_per_episode.append(rewards_current_episode)
+                            steps_per_episode.append(step+1)
 
-                    if debug_flag:
-                        tmp_seq_rewards = np.array(seq_rewards)
-                        new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
-                        if tmp_seq_rewards.shape[0] == 0:
-                            new_seq_rewards = new_tmp_seq_rewards.reshape(1,len(rewards_per_episode))
-                        else:
-                            new_seq_rewards = new_tmp_seq_rewards.reshape(tmp_seq_rewards.shape[0]+1,tmp_seq_rewards.shape[1])
-                        seq_rewards = new_seq_rewards.tolist()
+                    
+                    tmp_seq_rewards = np.array(seq_rewards)
+                    new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
+                    if tmp_seq_rewards.shape[0] == 0:
+                        new_seq_rewards = new_tmp_seq_rewards.reshape(1,len(rewards_per_episode))
+                    else:
+                        new_seq_rewards = new_tmp_seq_rewards.reshape(tmp_seq_rewards.shape[0]+1,tmp_seq_rewards.shape[1])
+                    seq_rewards = new_seq_rewards.tolist()
 
-                        tmp_seq_steps = np.array(seq_steps)
-                        new_tmp_seq_steps = np.array(np.append(tmp_seq_steps.ravel(),np.array(steps_per_episode)))
-                        if tmp_seq_steps.shape[0] == 0:
-                            new_seq_steps = new_tmp_seq_steps.reshape(1,len(steps_per_episode))
-                        else:
-                            new_seq_steps = new_tmp_seq_steps.reshape(tmp_seq_steps.shape[0]+1,tmp_seq_steps.shape[1])
-                        seq_steps = new_seq_steps.tolist()
+                    tmp_seq_steps = np.array(seq_steps)
+                    new_tmp_seq_steps = np.array(np.append(tmp_seq_steps.ravel(),np.array(steps_per_episode)))
+                    if tmp_seq_steps.shape[0] == 0:
+                        new_seq_steps = new_tmp_seq_steps.reshape(1,len(steps_per_episode))
+                    else:
+                        new_seq_steps = new_tmp_seq_steps.reshape(tmp_seq_steps.shape[0]+1,tmp_seq_steps.shape[1])
+                    seq_steps = new_seq_steps.tolist()
 
-                        # tmp_q_tables = np.array(q_tables)
-                        # tmp_q_table = q_table.copy()
-                        # print(q_tables, q_table)
-                        q_tables[sim] = q_table
-                        # new_tmp_q_tables = np.array(np.append(tmp_q_tables.ravel(),np.array(tmp_q_table).ravel()))
-                        # new_q_tables = new_tmp_q_tables.reshape(seq+1, state_space_size, action_space_size)
-                        # q_tables = new_q_tables.tolist()
-
-                    # print("\n\n********Q-table********\n")
-                    # print(q_table)
-
-                    # if debug_flag:
-                    #     path = os.getcwd()
-                    #     path = PATH
-
-                    #     file_name = "learning_curve%s α=%s, γ=%s, ϵ=%s.png" %(str(sim), str(learning_rate[lr_i]), str(discount_rate[dr_i]), str(exploration_rate[er_i]))
-                    #     plt.savefig(os.path.join(path, file_name))
-                    #     plt.close()
-
-                    #     #print(grid_step)
-
-                    #     #folder = "Episode %s" %(str(episode_cycle))
-                    #     #temp_path = os.path.join(path, folder)
-
-                    #     if num_sims == 1:
-
-                    #         episode = episode_cycle
-
-                    #         for i in np.arange(len(all_grids)):
-                    #             if grid_step[i] == 0 and i != 0: episode += episode_cycle
-
-                    #             PR = print_results(all_grids[i], env.grid.shape[0], env.grid.shape[1])
-                                
-                    #             # Debug comments
-                    #             # print(episode, " - ", step)
-                    #             # print(all_grids[i])
-
-                    #             PR.print_graph(episode, grid_step[i])
-                                
-                    #             file_name = "plot%s-%s.png" %(str(episode),grid_step[i])
-                                
-                    #             #plt.savefig(os.path.join(temp_path, file_name))
-                    #             plt.savefig(os.path.join(path, file_name))
-
-                    #             plt.close()
+                    q_tables[sim] = q_table
 
                     sim += 1
         tmp_rewards = np.array(all_rewards)
@@ -443,8 +362,8 @@ if debug_flag != 2:
 if debug_flag == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
     debug_q3 = input("Policy number?")
     policy = int(debug_q3)
-    correct_path = save_path
-    if debug_flag == 2: correct_path = PATH
+    if debug_flag == 2: correct_path = load_path
+    else: correct_path = save_path
     q_table_list, maze = extract_values(correct_path, policy)
 
     q_table = np.array(q_table_list)

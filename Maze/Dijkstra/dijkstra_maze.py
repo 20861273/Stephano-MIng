@@ -275,20 +275,20 @@ class MazeAI:
                                 [[npgrid.shape[1]/4*3-1,npgrid.shape[1]-1],   [npgrid.shape[0]/4*3-1,npgrid.shape[0]-1]]], dtype=int)
         
         indices = np.argwhere(npgrid == States.OBS.value)
-        starting_pos = Point(indices[0,1], indices[0,0])
+        self.starting_pos = Point(indices[0,1], indices[0,0])
         
-        while npgrid[starting_pos.y, starting_pos.x] != States.UNEXP.value:
-            starting_pos = Point(random.randint(quadrants[s_quadrant,0,0],quadrants[s_quadrant,0,1]),
+        while npgrid[self.starting_pos.y, self.starting_pos.x] != States.UNEXP.value:
+            self.starting_pos = Point(random.randint(quadrants[s_quadrant,0,0],quadrants[s_quadrant,0,1]),
                                     random.randint(quadrants[s_quadrant,1,0],quadrants[s_quadrant,1,1]))
         
         indices = np.argwhere(npgrid == States.OBS.value)
-        exit = Point(indices[0,1], indices[0,0])
-        while npgrid[exit.y, exit.x] != States.UNEXP.value:
-            exit = Point(random.randint(quadrants[g_quadrant,0,0],quadrants[g_quadrant,0,1]),
+        self.exit = Point(indices[0,1], indices[0,0])
+        while npgrid[self.exit.y, self.exit.x] != States.UNEXP.value:
+            self.exit = Point(random.randint(quadrants[g_quadrant,0,0],quadrants[g_quadrant,0,1]),
                             random.randint(quadrants[g_quadrant,1,0],quadrants[g_quadrant,1,1]))
 
-        npgrid[starting_pos.y, starting_pos.x] = States.ROBOT.value
-        npgrid[exit.y, exit.x] = States.EXIT.value
+        npgrid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
+        npgrid[self.exit.y, self.exit.x] = States.EXIT.value
 
         # Remove 50% of walls
         possible_indexes = np.argwhere(npgrid == States.OBS.value)
@@ -310,12 +310,10 @@ class MazeAI:
         if sim == 0 and episode == 0:
             # Generates grid
             self.grid = self.generate_grid()
-            index = np.argwhere(self.grid == States.ROBOT.value)
-            self.starting_pos = Point(index[0,1], index[0,0])
             self.pos = self.starting_pos
-            index = np.argwhere(self.grid == States.EXIT.value)
-            self.exit = Point(index[0,1], index[0,0])
-
+            self.grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
+            self.grid[self.exit.y, self.exit.x] = States.EXIT.value
+            pass
             
         else:
             # Setup robot starting position

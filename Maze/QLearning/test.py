@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-a = "exit:awdadw"
-print(a[0:5])
+hi = 1
+
+if hi:
+    print("hi")
