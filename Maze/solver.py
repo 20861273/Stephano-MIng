@@ -1,5 +1,6 @@
 from dijkstra import run_dijkstra
 from qlearning import run_qlearning
+from astar import Astar
 
 
 method = input("With which method would you like to solve the maze?\n1. Q-learning\n2. DQN\n3. Dijkstra's algorithm\n4. A* algorithm\nSelect method:")
@@ -12,4 +13,5 @@ elif method_flag == 2:
 elif method_flag == 3:
     run_dijkstra()
 elif method_flag == 4:
-    pass
+    astar = Astar()
+    astar.run_astar()

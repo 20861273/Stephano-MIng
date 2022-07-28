@@ -34,6 +34,7 @@ BLACK = (0,0,0)
 
 BLOCK_SIZE = 20
 SPEED = 20
+DENSITY = 30 # percentage
 
 class Maze:
     
@@ -291,10 +292,10 @@ class Maze:
         npgrid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
         npgrid[self.exit.y, self.exit.x] = States.EXIT.value
 
-        # Remove 50% of walls
+        # Remove DENSITY % of walls
         possible_indexes = np.argwhere(npgrid == States.OBS.value)
         np.random.shuffle(possible_indexes)
-        indices = possible_indexes[0:int(len(possible_indexes)*0.6)]
+        indices = possible_indexes[0:int(len(possible_indexes)*((100-DENSITY)/100))]
         for index in indices:
             npgrid[index[1], index[0]] = States.UNEXP.value
 

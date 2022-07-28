@@ -1,5 +1,4 @@
 from maze import HEIGHT, WIDTH, Maze, States
-#from test import HEIGHT, WIDTH, MazeAI, States
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -44,6 +43,10 @@ def run_dijkstra():
         file_name = "plot-%s.png" %(i)
         plt.savefig(os.path.join(save_path, file_name))
         plt.close()
+    
+    f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
+    f.write(str("Maze shape: %s\nStarting position: %s\nExit: %s\nMaze:\n%s" %(str(env.grid.shape), str(env.starting_pos), str(env.exit), str(env.grid))))  
+    f.close()
 
 def reset(env):
     # Generates grid
@@ -123,6 +126,7 @@ def dijkstra_search(graph, start, goal):
                 priority = new_cost
                 frontier.put(next, priority)
                 came_from[next] = current
+                pass
     
     return came_from, cost_so_far
 
