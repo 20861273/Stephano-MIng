@@ -1,12 +1,8 @@
 """
-
 A* grid planning
-
 author: Atsushi Sakai(@Atsushi_twi)
         Nikos Kanargias (nkana@tee.gr)
-
 See Wikipedia article (https://en.wikipedia.org/wiki/A*_search_algorithm)
-
 """
 
 import math
@@ -21,7 +17,6 @@ class AStarPlanner:
     def __init__(self, ox, oy, resolution, rr):
         """
         Initialize grid map for a star planning
-
         ox: x position list of Obstacles [m]
         oy: y position list of Obstacles [m]
         resolution: grid resolution [m]
@@ -51,13 +46,11 @@ class AStarPlanner:
     def planning(self, sx, sy, gx, gy):
         """
         A star path search
-
         input:
             s_x: start x position [m]
             s_y: start y position [m]
             gx: goal x position [m]
             gy: goal y position [m]
-
         output:
             rx: x position list of the final path
             ry: y position list of the final path
@@ -70,27 +63,17 @@ class AStarPlanner:
 
         open_set, closed_set = dict(), dict()
         open_set[self.calc_grid_index(start_node)] = start_node
-        count = 0
 
         while 1:
             if len(open_set) == 0:
                 print("Open set is empty..")
                 break
-            
-            if count == 0:
-                c_id = min(
-                    open_set,
-                    key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node,
-                                                                        open_set[o],
-                                                                        open_set[o])
-                                                                        )
-            else:
-                c_id = min(
-                    open_set,
-                    key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node,
-                                                                        open_set[o],
-                                                                        current)
-                                                                        )
+
+            c_id = min(
+                open_set,
+                key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node,
+                                                                     open_set[
+                                                                         o]))
             current = open_set[c_id]
 
             # show graph
@@ -136,7 +119,7 @@ class AStarPlanner:
                     if open_set[n_id].cost > node.cost:
                         # This path is the best until now. record it
                         open_set[n_id] = node
-            count += 1
+                pass
 
         rx, ry = self.calc_final_path(goal_node, closed_set)
 
@@ -156,24 +139,14 @@ class AStarPlanner:
         return rx, ry
 
     @staticmethod
-    def calc_heuristic(n1, n2, pn2):
+    def calc_heuristic(n1, n2):
         w = 1.0  # weight of heuristic
         d = w * math.hypot(n1.x - n2.x, n1.y - n2.y)
-        if pn2.x == n2.x and pn2.y == n2.y:
-            return d
-        else:
-            if pn2.x != n2.x:
-                d += 1
-            if pn2.y != n2.y:
-                d += 1
-        print("Curr(x,y)=", n2.x, ",", n2.y)
-        print("Prev(x,y)=", pn2.x, ",", pn2.y, "\n")
         return d
 
     def calc_grid_position(self, index, min_position):
         """
         calc grid position
-
         :param index:
         :param min_position:
         :return:
@@ -254,10 +227,10 @@ def main():
     print(__file__ + " start!!")
 
     # start and goal position
-    sx = 0.0  # [m]
-    sy = 0.0  # [m]
-    gx = 55.0  # [m]
-    gy = 0.0  # [m]
+    sx = 10.0  # [m]
+    sy = 10.0  # [m]
+    gx = 50.0  # [m]
+    gy = 50.0  # [m]
     grid_size = 2.0  # [m]
     robot_radius = 1.0  # [m]
 
@@ -275,21 +248,18 @@ def main():
     for i in range(-10, 61):
         ox.append(-10.0)
         oy.append(i)
-    for i in range(-10, 50):
-        ox.append(10.0)
+    for i in range(-10, 40):
+        ox.append(20.0)
         oy.append(i)
-    for i in range(0, 50):
-        ox.append(30.0)
+    for i in range(0, 40):
+        ox.append(40.0)
         oy.append(60.0 - i)
-    for i in range(-10, 50):
-        ox.append(50.0)
-        oy.append(i)
 
     if show_animation:  # pragma: no cover
         plt.plot(ox, oy, ".k")
         plt.plot(sx, sy, "og")
         plt.plot(gx, gy, "xb")
-        plt.grid(True, 'major')
+        plt.grid(True)
         plt.axis("equal")
 
     a_star = AStarPlanner(ox, oy, grid_size, robot_radius)

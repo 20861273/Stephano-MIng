@@ -7,39 +7,41 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import os
 
+from copy import copy
+
+class Node:
+    def __init__(self, parent, cost):
+        self.parent = parent
+        self.cost = cost
+
 class PriorityQueue:
-    def __init__(self, openlist_shape, start, f):
-        self.openlist = []
-        self.openlist_costs = np.zeros(openlist_shape)
-        self.put(start, f)
+    def __init__(self):
+        pass
 
-    def put(self, pos, f):
-        self.openlist.append(pos)
-        self.openlist_costs[pos[1], pos[0]] = f
+    def put(self, list, node, index):
+        list[index] = node
 
-    def get(self):
+    def get(self, openlist):
         lowest_f = inf
-        index = 0
-        for pos in self.openlist:
-            if self.openlist_costs[pos[1], pos[0]] < lowest_f:
-                lowest_f = self.openlist_costs[pos[1], pos[0]]
-                lowest_f_pos = pos
-            index += 1
-        return lowest_f_pos, index
+        for index in openlist:
+            if openlist[index].cost < lowest_f:
+                lowest_f = openlist[index].cost
+                lowest_f_index = index
+        return lowest_f_index
 
-    def remove(self, element):
-        self.openlist.remove(element)
+    def remove(self, openlist, index):
+        del openlist[index]
 
 class Graph:
     def __init__(self):
         pass
 
     def neighbours(self, pos, grid):
-        x = pos[0]
-        y = pos[1]
+        x = pos.x
+        y = pos.y
         neighbours = [(x+1, y), (x-1, y), (x, y-1), (x, y+1)]
 
-        neighbours = [pos for pos in neighbours if 0 <= x < WIDTH and 0 <= y < HEIGHT] # removes neighbours outside grid
+        neighbours = [pos for pos in neighbours if 0 <= pos[0] < WIDTH and 0 <= pos[1] < HEIGHT] # removes neighbours outside grid
         neighbours = [pos for pos in neighbours if grid[pos[1], pos[0]] != States.OBS.value] # removes any unoccupable space
 
         return neighbours
@@ -49,9 +51,7 @@ class Astar():
         pass
 
     def heuristic(self, a, b):
-        x1, x2 = a[0], b[0]
-        y1, y2 = a[1], b[1]
-        return abs(x1 - x2) + abs(y1 - y2)
+        return abs(a.x - b.x) + abs(a.y - b.y)
 
     def f(self, g, h):
         return g+h
@@ -66,9 +66,9 @@ class Astar():
         path = []
         if goalfound:
             current = goal
-            while current != start: # note: this will fail if no path found
+            while closedlist[current].parent != -1: # note: this will fail if no path found
                 path.append(current)
-                current = closedlist[current]
+                current = closedlist[current].parent
             path.append(start) # optional
             path.reverse() # optional
             return path
@@ -79,55 +79,145 @@ class Astar():
         env = Maze()
         graph = Graph()
 
+        print("Grid:\n", env.grid)
+        print("Starting position: ", env.starting_pos)
+        print("Goal: ", env.exit)
+
         # consists on nodes that have been visited but not expanded (meaning that sucessors have not been explored yet)
-        queue = PriorityQueue(env.grid.shape, env.starting_pos, 0)
+        queue = PriorityQueue()
+        node = Node(parent=-1, cost=0)
 
         # consists on nodes that have been visited and expanded (sucessors have been explored already and included in the open list, if this was the case)
-        closedlist = {}
-        closedlist_costs = {}
-        closedlist[env.starting_pos] = None
-        closedlist_costs[env.starting_pos] = 0
+        closedlist = dict()
+        openlist = dict()
+
+        openlist[env.starting_pos] = copy(node)
 
         goalfound = False
 
-        while queue.openlist:
-            current, current_index = queue.get()
+        while openlist:
+            current_pos = queue.get(openlist)
+            current = openlist[current_pos]
 
-            if current == env.exit:
+            if current_pos == env.exit:
                 goalfound = True
+                closedlist[current_pos] = current
                 break
 
-            queue.remove(current)
+            queue.remove(openlist, current_pos)
+            closedlist[current_pos] = current
             
-            for successor in graph.neighbours(current, env.grid):
-                successor_f = self.f(self.g(env.starting_pos, successor), self.h(successor, env.exit))
-                queue.openlist_costs[successor[1], successor[0]] = successor_f
-                if self.g(env.starting_pos, successor) < queue.openlist_costs[successor[1], successor[0]]:
-                    closedlist_costs[next] = successor_f
-                    closedlist[successor] = current
-                    queue.put(successor, successor_f)
-                    if successor not in queue.openlist: queue.put(successor, successor_f)
+            for successor_pos in graph.neighbours(current_pos, env.grid):
+                successor_pos = Point(successor_pos[0], successor_pos[1])
+                successor_f = self.f(self.g(env.starting_pos, successor_pos), self.h(successor_pos, env.exit))
+
+                if successor_pos in closedlist.keys(): continue
+                
+                if successor_pos not in openlist.keys():
+                    node.parent = current_pos
+                    node.cost = successor_f
+                    openlist[successor_pos] = copy(node)
+                else:
+                    if self.g(env.starting_pos, successor_pos) < successor_f:
+                        node.parent = current_pos
+                        node.cost = successor_f
+                        openlist[successor_pos] = copy(node)
+                        pass
         
-        path = self.reconstruct_path(closedlist, env.starting_pos, env.exit, goalfound)
-        if not path:
+        path_taken = self.reconstruct_path(closedlist, env.starting_pos, env.exit, goalfound)
+        if not path_taken:
             print("Path could not be found")
         else:
-            pass
-        # cost_so_far = dict()
-        # came_from[start] = None
-        # cost_so_far[start] = 0
+            PATH = os.getcwd()
+            PATH = os.path.join(PATH, 'Results')
+            PATH = os.path.join(PATH, 'Astar')
+            date_and_time = datetime.now()
+            save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+            if not os.path.exists(save_path): os.makedirs(save_path)
 
-        # while not frontier.empty():
-        # current = frontier.get()
+            for i in np.arange(len(path_taken)):
+                if i != 0:
+                    env.grid[path_taken[i-1].y, path_taken[i-1].x] = States.EXP.value
+                    env.grid[path_taken[i].y, path_taken[i].x] = States.ROBOT.value
 
-        # if current == goal:
-        #     break
-        
-        # for next in graph.neighbors(current):
-        #     new_cost = cost_so_far[current] + graph.cost(current, next)
-        #     if next not in cost_so_far or new_cost < cost_so_far[next]:
-        #         cost_so_far[next] = new_cost
-        #         priority = new_cost + heuristic(goal, next)
-        #         frontier.put(next, priority)
-        #         came_from[next] = current
+                PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
+                PR.print_graph(i)
+                
+                file_name = "plot-%s.png" %(i)
+                plt.savefig(os.path.join(save_path, file_name))
+                plt.close()
+            
+            f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
+            f.write(str("Maze shape: %s\nStarting position: %s\nExit: %s\nMaze:\n%s" %(str(env.grid.shape), str(env.starting_pos), str(env.exit), str(env.grid))))  
+            f.close()
         return 0
+
+class print_results:
+    """
+    A class used to print the results
+    ...
+    Attributes
+    ----------
+    grid : int
+        3D array of grid-based environment at each time step. (grid[time_step, y, x])
+    rows : int
+        number of rows in the environment
+    cols : int
+        number of columns in the environment
+    n_r : int
+        the number of robots
+    Methods
+    -------
+    def print_graph(self):
+        prints the grid environment
+    """
+
+    def __init__(self,grid,rows,cols):
+        self.grid = grid
+        self.rows = rows
+        self.cols = cols
+    def print_graph(self, step):
+        """
+        Prints the grid environment
+        """
+
+        plt.rc('font', size=12)
+        plt.rc('axes', titlesize=15) 
+
+        # Prints graph
+        fig,ax = plt.subplots(figsize=(8, 8))
+
+        # Set tick locations
+        ax.set_xticks(np.arange(-0.5, self.cols*2+0.5, step=2),minor=False)
+        ax.set_yticks(np.arange(-0.5, self.rows*2+0.5, step=2),minor=False)
+        
+        plt.xticks(rotation=90)
+    
+        xticks = list(map(str,np.arange(0, self.cols+1, step=1)))
+        yticks = list(map(str,np.arange(0, self.rows+1, step=1)))
+        ax.set_xticklabels(xticks)
+        ax.set_yticklabels(yticks)
+
+        # Set grid
+        plt.grid(which='major',axis='both', color='k')
+
+        # Print
+        for j in range(self.rows):
+            for i in range(self.cols):
+                x1 = (i-0.5)*2 + 0.5
+                x2 = (i+0.5)*2 + 0.5
+                y1 = (self.rows - (j-0.5) - 1)*2 + 0.5
+                y2 = (self.rows - (j+0.5) - 1)*2 + 0.5
+                if self.grid[j][i] == 0:
+                    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'w', alpha=0.75)
+                elif self.grid[j][i] == 1:
+                    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'b', alpha=0.75)
+                elif self.grid[j][i] == 2:
+                    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'g', alpha=0.75)
+                elif self.grid[j][i] == 3:
+                    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'r', alpha=0.75)
+                #elif self.grid[j][i] == 4:
+                #    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'b', alpha=0.75)
+
+        plt_title = "Dijkstra's Algorithm Results: Step %s" %(str(step))
+        plt.title(plt_title)
