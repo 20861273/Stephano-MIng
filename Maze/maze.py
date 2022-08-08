@@ -4,8 +4,8 @@ import numpy as np
 import random
 
 # Maze characteristics
-HEIGHT = 100
-WIDTH = 100
+HEIGHT = 10
+WIDTH = 10
 
 # Direction states
 class Direction(Enum):

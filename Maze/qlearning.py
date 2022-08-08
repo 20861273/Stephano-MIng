@@ -95,7 +95,7 @@ def plot(q_tables, rewards, steps, learning_rate, discount_rate, exploration_rat
     l = []
     cnt = 0
 
-    f.write(str("Maze shape: %s\nStarting position: %s\nExit: %s\nMaze:\n%s" %(str(env.grid.shape), str(env.starting_pos), str(env.exit), str(env.grid))))
+    f.write(str("Starting position: %s\nExit: %s" %(str(env.starting_pos), str(env.exit))))
     for lr_i in np.arange(len(learning_rate)):
         for dr_i in np.arange(len(discount_rate)):
             for er_i in np.arange(len(exploration_rate)):
@@ -118,6 +118,9 @@ def plot(q_tables, rewards, steps, learning_rate, discount_rate, exploration_rat
                 cnt += 1      
     
     f.close()
+
+    file_name = "maze.txt"
+    np.savetxt(os.path.join(save_path, file_name), env.grid)
 
     for i in range(0, len(rewards)):
         ax[0].plot(np.arange(0, len(rewards[i])), rewards[i], color=c[i])
@@ -148,10 +151,8 @@ def calc_avg(rewards, steps, num_sequences, sim_num, ep_num):
     return avg_rewards.tolist(), avg_steps.tolist()
 
 def extract_values(policy_extraction, correct_path, policy, env):
-    maze = []
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
     lines = f.readlines()
-    maze_flag = False
     WIDTH = 0
     HEIGHT = 0
 
@@ -191,25 +192,15 @@ def extract_values(policy_extraction, correct_path, policy, env):
                     elif cur_num != '': cur_line.append(int(cur_num))
                     cur_num = ''
             env.exit = Point(int(cur_line[0]),int(cur_line[1]))
-        
-        cur_num = ''
-        cur_line = []
-        if line[0:5] == "Maze:" or maze_flag:
-            maze_flag = True
-            for num in line:
-                if num.isdigit():
-                    cur_num += num
-                else:
-                    if cur_num != '':
-                        cur_line.append(int(cur_num))
-                    cur_num = ''
-            if len(cur_line) == WIDTH: maze.append(cur_line) 
+    
+    file_name = "maze.txt"
+    maze =  np.loadtxt(os.path.join(correct_path, file_name))
 
     if policy_extraction:
         file_name = "policy" + str(policy) + ".txt"
-        return np.loadtxt(os.path.join(correct_path, file_name)), np.array(maze)
+        return np.loadtxt(os.path.join(correct_path, file_name)), maze
     else:
-        return None, np.array(maze)
+        return None, maze
 
 class QLearning:
     def __init__(self):
@@ -352,7 +343,7 @@ class QLearning:
 
         #print(action, self.prev_pos, self.pos)
 
-def run_qlearning():
+def run_qlearning(mode):
     # Creating The Environment
     env = Maze()
     envM = QLearning()
@@ -369,7 +360,7 @@ def run_qlearning():
     max_steps_per_episode = 10000
     num_sequences = 1
 
-    learning_rate = np.array([0.1]) # 0.01
+    learning_rate = np.array([0.1, 0.01]) # 0.01
     discount_rate = np.array([0.99]) # 0.9
 
     exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
@@ -377,16 +368,11 @@ def run_qlearning():
     min_exploration_rate = np.array([0.01], dtype=np.float32)
     exploration_decay_rate = np.array([0.01], dtype=np.float32)
 
-    # Debug menu
-    debug_q = input("\n\nDefault training mode: 1\nGreedy policy: 2\nGenerated map: 3\nSelect mode: ")
-    # debug_q = input("Default training mode: 0\nDebug training mode: 1\nSelect mode: ")
-    debug_flag = int(debug_q)
-
     generate = True
     policy_extraction = True
-    if debug_flag == 2:
+    if mode == 2:
         generate = False
-    elif debug_flag == 3:
+    elif mode == 3:
         generate = False
         policy_extraction = False
 
@@ -407,18 +393,18 @@ def run_qlearning():
     all_grids = []
     q_tables = np.zeros((num_sims, state_space_size, action_space_size))
 
-    print("\n\nMaze: ", env.grid.shape, "\n# Training sessions: ", num_sequences, "\n# Simulations per training session: ", num_sims, "\n# Episodes per simulation: ", num_episodes)
+    print("\n\nMaze: ", env.grid, "\n# Training sessions: ", num_sequences, "\n# Simulations per training session: ", num_sims, "\n# Episodes per simulation: ", num_episodes)
     print("Hyperparameters:\nLearning rate (α): ", learning_rate, "\nDiscount rate (γ): ", discount_rate, "\nExploration rate (ϵ): ", exploration_rate, "\nExploration decay rate: ", exploration_decay_rate)
 
-    if debug_flag != 1:
+    if mode != 1:
         PATH = os.getcwd()
         PATH = os.path.join(PATH, 'Results')
         PATH = os.path.join(PATH, 'QLearning')
         load_path = os.path.join(PATH, 'saved_data')
         if not os.path.exists(load_path): os.makedirs(load_path)
-    if debug_flag == 3:
+    if mode == 3:
         _, env.grid = extract_values(policy_extraction, load_path, None, env)
-    if debug_flag != 2:
+    if mode != 2:
         PATH = os.getcwd()
         PATH = os.path.join(PATH, 'Results')
         PATH = os.path.join(PATH, 'QLearning')
@@ -426,8 +412,10 @@ def run_qlearning():
         save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
         if not os.path.exists(save_path): os.makedirs(save_path)
 
-    if debug_flag == 1 or debug_flag == 3:
+    if mode == 1 or mode == 3:
         # Training loop
+        state = envM.reset(env, generate)
+        generate = False
         for seq_i in range(0, num_sequences):
             print("Training session: ", seq)
             seq_rewards = []
@@ -488,12 +476,12 @@ def run_qlearning():
                                     (max_exploration_rate[er_i] - min_exploration_rate[er_i]) * np.exp(-exploration_decay_rate[er_i]*episode)
 
                             # Add current episode reward to total rewards list
-                            if debug_flag:
+                            if mode:
                                 if not done:
                                     rewards_per_episode.append(rewards_current_episode)
                                     steps_per_episode.append(step+1)
 
-                        if debug_flag:
+                        if mode:
                             tmp_seq_rewards = np.array(seq_rewards)
                             new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
                             if tmp_seq_rewards.shape[0] == 0:
@@ -531,11 +519,11 @@ def run_qlearning():
         debug_q2 = input("See optimal policy?\nY/N?")
         debug_flag2 = str(debug_q2)
 
-    if debug_flag == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
+    if mode == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
         policy_extraction = True
         debug_q3 = input("Policy number?")
         policy = int(debug_q3)
-        if debug_flag == 2: correct_path = load_path
+        if mode == 2: correct_path = load_path
         else: correct_path = save_path
         q_table_list, maze = extract_values(policy_extraction, correct_path, policy, env)
 
@@ -572,7 +560,7 @@ def run_qlearning():
         done = False
 
         for step in range(max_steps_per_episode):
-            if debug_flag: all_grids.append(env.grid.copy())       
+            if mode: all_grids.append(env.grid.copy())       
             # Show current state of environment on screen
             # Choose action with highest Q-value for current state (Greedy policy)     
             # Take new action
@@ -580,13 +568,13 @@ def run_qlearning():
             new_state, reward, done, info = envM.step(env, action)
             
             if done:
-                if debug_flag: all_grids.append(env.grid.copy())
+                if mode: all_grids.append(env.grid.copy())
                 break
 
             # Set new state
             state = new_state
 
-        if debug_flag:        
+        if mode:        
             for i in np.arange(len(all_grids)):
                 PR = print_results(all_grids[i], env.grid.shape[0], env.grid.shape[1])
                 PR.print_graph(episode, i)

@@ -1,4 +1,4 @@
-from maze import HEIGHT, WIDTH, Maze, States
+from maze import HEIGHT, WIDTH, Maze, States, Point
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,26 +8,30 @@ import os
 
 import heapq
 
-def run_dijkstra():
-    env = Maze()
-
-    g = Graph(env.grid)
-    print("Grid:\n", env.grid)
-    print("Starting position: ", env.starting_pos)
-    print("Goal: ", env.exit)
-    start, goal = (env.starting_pos.x, env.starting_pos.y), (env.exit.x, env.exit.y)
-    #print(start, goal, "\n",env.grid)
-
-    came_from, cost_so_far = dijkstra_search(g, start, goal)
-
-    path_taken = reconstruct_path(came_from, start=start, goal=goal)
-    #print(path_taken)
+def run_dijkstra(mode):
     PATH = os.getcwd()
     PATH = os.path.join(PATH, 'Results')
     PATH = os.path.join(PATH, 'Dijkstra')
     date_and_time = datetime.now()
     save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
     if not os.path.exists(save_path): os.makedirs(save_path)
+
+    env = Maze()
+    if mode != 1:
+        PATH = os.getcwd()
+        PATH = os.path.join(PATH, 'Results')
+        load_path = os.path.join(PATH, 'Dijkstra')
+        env.grid = extract_values(load_path, env)
+
+    g = Graph(env.grid)
+    print("Grid:\n", env.grid)
+    print("Starting position: ", env.starting_pos)
+    print("Goal: ", env.exit)
+    start, goal = (env.starting_pos.x, env.starting_pos.y), (env.exit.x, env.exit.y)
+
+    came_from, cost_so_far = dijkstra_search(g, start, goal)
+
+    path_taken = reconstruct_path(came_from, start=start, goal=goal)    
 
     env.grid[path_taken[0][1], path_taken[0][0]] = States.ROBOT.value
     env.grid[env.exit.y, env.exit.x] = States.EXIT.value
@@ -45,8 +49,10 @@ def run_dijkstra():
         plt.close()
     
     f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
-    f.write(str("Maze shape: %s\nStarting position: %s\nExit: %s\nMaze:\n%s" %(str(env.grid.shape), str(env.starting_pos), str(env.exit), str(env.grid))))  
+    f.write(str("Starting position: %s\nExit: %s" %(str(env.starting_pos), str(env.exit))))  
     f.close()
+    file_name = "maze.txt"
+    np.savetxt(os.path.join(save_path, file_name), env.grid)
 
 def reset(env):
     # Generates grid
@@ -211,3 +217,36 @@ class print_results:
         plt_title = "Dijkstra's Algorithm Results: Step %s" %(str(step))
         plt.title(plt_title)
 
+def extract_values(load_path, env):
+    f = open(os.path.join(load_path,"saved_data.txt"), "r")
+    lines = f.readlines()
+    WIDTH = 0
+    HEIGHT = 0
+
+    for line in lines:
+        cur_num = ''
+        cur_line = []
+        if line[0:18] == "Starting position:":
+            for num in line:
+                if num.isdigit():
+                    cur_num += num
+                else:
+                    if cur_num != '': cur_line.append(int(cur_num))
+                    cur_num = ''
+            env.starting_pos = Point(int(cur_line[0]),int(cur_line[1]))
+
+        cur_num = ''
+        cur_line = []
+        if line[0:5] == "Exit:":
+            for num in line:
+                if num.isdigit():
+                    cur_num += num
+                else:
+                    if cur_num == ',':
+                        cur_line = []
+                    elif cur_num != '': cur_line.append(int(cur_num))
+                    cur_num = ''
+            env.exit = Point(int(cur_line[0]),int(cur_line[1]))
+
+    file_name = "maze.txt"
+    return np.loadtxt(os.path.join(load_path, file_name))

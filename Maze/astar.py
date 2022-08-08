@@ -75,8 +75,20 @@ class Astar():
         else:
             return path
 
-    def run_astar(self):
+    def run_astar(self, mode):
+        PATH = os.getcwd()
+        PATH = os.path.join(PATH, 'Results')
+        PATH = os.path.join(PATH, 'Dijkstra')
+        date_and_time = datetime.now()
+        save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+        if not os.path.exists(save_path): os.makedirs(save_path)
+
         env = Maze()
+        if mode != 1:
+            PATH = os.getcwd()
+            PATH = os.path.join(PATH, 'Results')
+            load_path = os.path.join(PATH, 'Dijkstra')
+            env.grid = extract_values(load_path, env)
         graph = Graph()
 
         print("Grid:\n", env.grid)
@@ -128,13 +140,8 @@ class Astar():
         if not path_taken:
             print("Path could not be found")
         else:
-            PATH = os.getcwd()
-            PATH = os.path.join(PATH, 'Results')
-            PATH = os.path.join(PATH, 'Astar')
-            date_and_time = datetime.now()
-            save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
-            if not os.path.exists(save_path): os.makedirs(save_path)
-
+            env.grid[env.starting_pos.y, env.starting_pos.x] = States.ROBOT.value
+            env.grid[env.exit.y, env.exit.x] = States.EXIT.value
             for i in np.arange(len(path_taken)):
                 if i != 0:
                     env.grid[path_taken[i-1].y, path_taken[i-1].x] = States.EXP.value
@@ -148,8 +155,10 @@ class Astar():
                 plt.close()
             
             f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
-            f.write(str("Maze shape: %s\nStarting position: %s\nExit: %s\nMaze:\n%s" %(str(env.grid.shape), str(env.starting_pos), str(env.exit), str(env.grid))))  
+            f.write(str("Starting position: %s\nExit: %s" %(str(env.starting_pos), str(env.exit))))  
             f.close()
+            file_name = "maze.txt"
+            np.savetxt(os.path.join(save_path, file_name), env.grid)
         return 0
 
 class print_results:
@@ -219,5 +228,39 @@ class print_results:
                 #elif self.grid[j][i] == 4:
                 #    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'b', alpha=0.75)
 
-        plt_title = "Dijkstra's Algorithm Results: Step %s" %(str(step))
+        plt_title = "A* Algorithm Results: Step %s" %(str(step))
         plt.title(plt_title)
+
+def extract_values(load_path, env):
+    f = open(os.path.join(load_path,"saved_data.txt"), "r")
+    lines = f.readlines()
+    WIDTH = 0
+    HEIGHT = 0
+
+    for line in lines:
+        cur_num = ''
+        cur_line = []
+        if line[0:18] == "Starting position:":
+            for num in line:
+                if num.isdigit():
+                    cur_num += num
+                else:
+                    if cur_num != '': cur_line.append(int(cur_num))
+                    cur_num = ''
+            env.starting_pos = Point(int(cur_line[0]),int(cur_line[1]))
+
+        cur_num = ''
+        cur_line = []
+        if line[0:5] == "Exit:":
+            for num in line:
+                if num.isdigit():
+                    cur_num += num
+                else:
+                    if cur_num == ',':
+                        cur_line = []
+                    elif cur_num != '': cur_line.append(int(cur_num))
+                    cur_num = ''
+            env.exit = Point(int(cur_line[0]),int(cur_line[1]))
+
+    file_name = "maze.txt"
+    return np.loadtxt(os.path.join(load_path, file_name))
