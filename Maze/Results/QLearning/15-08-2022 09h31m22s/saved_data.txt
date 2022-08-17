@@ -1,0 +1,2 @@
+Starting position: Point(x=1, y=1)
+Exit: Point(x=7, y=6)

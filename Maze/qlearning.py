@@ -7,6 +7,7 @@ from maze import Maze, HEIGHT, WIDTH, States, Direction, Point
 
 from datetime import datetime
 import os
+import time
 
 class print_results:
     """
@@ -72,8 +73,8 @@ class print_results:
                     plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'g', alpha=0.75)
                 elif self.grid[j][i] == 3:
                     plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'r', alpha=0.75)
-                #elif self.grid[j][i] == 4:
-                #    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'b', alpha=0.75)
+                elif self.grid[j][i] == 4:
+                    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'y', alpha=0.75)
 
         plt_title = "Q-learning Results: Episode %s, step %s" %(str(episode), str(step)) 
         plt.title(plt_title)
@@ -220,6 +221,7 @@ class QLearning:
             env.prev_pos = env.starting_pos
             env.pos = env.prev_pos
         else:
+            # Constant starting position
             # Setup robot starting position
             env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
             env.pos = env.starting_pos
@@ -228,6 +230,20 @@ class QLearning:
 
             # Setup maze exit
             env.grid[env.exit.y, env.exit.x] = States.EXIT.value
+
+
+            # Random starting position
+            # env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+
+            # # Setup maze exit
+            # env.grid[env.exit.y, env.exit.x] = States.EXIT.value
+
+            # # Setup robot starting position
+            # start_indices = np.argwhere(env.grid == States.UNEXP.value)
+            # np.random.shuffle(start_indices)
+            # env.pos = Point(start_indices[0,1], start_indices[0,1])
+            # env.prev_pos = env.pos
+            # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
         
         #print(self.grid)
         env.direction = (Direction.RIGHT).value
@@ -247,7 +263,7 @@ class QLearning:
         self._move(env, action) # update the robot
             
         # 3. check if game over
-        reward = 0
+        self.score = 0
         self.score -= 0.1
         game_over = False
 
@@ -300,7 +316,7 @@ class QLearning:
             env.grid[env.pos.y,env.pos.x] = States.ROBOT.value
         else:
             # Update robot position(s) on grid
-            env.grid[env.prev_pos.y,env.prev_pos.x] = States.UNEXP.value
+            env.grid[env.prev_pos.y,env.prev_pos.x] = States.EXP.value
             env.grid[env.pos.y,env.pos.x] = States.ROBOT.value
             
 
@@ -358,10 +374,10 @@ def run_qlearning(mode):
     # Initializing Q-Learning Parameters
     num_episodes = 1000
     max_steps_per_episode = 10000
-    num_sequences = 1
+    num_sequences = 5
 
-    learning_rate = np.array([0.1, 0.01]) # 0.01
-    discount_rate = np.array([0.99]) # 0.9
+    learning_rate = np.array([0.1]) # 0.01
+    discount_rate = np.array([0.99, 0.95, 0.9]) # 0.9
 
     exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
     max_exploration_rate = np.array([0.01], dtype=np.float32)
@@ -375,8 +391,6 @@ def run_qlearning(mode):
     elif mode == 3:
         generate = False
         policy_extraction = False
-
-    
 
     # Result parameters
     num_sims = len(learning_rate) * len(discount_rate) * len(exploration_rate)
@@ -414,8 +428,9 @@ def run_qlearning(mode):
 
     if mode == 1 or mode == 3:
         # Training loop
-        state = envM.reset(env, generate)
+        training_time = time.time()
         generate = False
+        state = envM.reset(env, generate)
         for seq_i in range(0, num_sequences):
             print("Training session: ", seq)
             seq_rewards = []
@@ -436,7 +451,7 @@ def run_qlearning(mode):
 
                         # Q-learning algorithm
                         for episode in range(num_episodes):
-                            # print("Episode: ", episode)
+                            if episode % 100 == 0: print("Episode: ", episode)
                             
                             # Initialize new episode params
                             state = envM.reset(env, generate)
@@ -514,6 +529,8 @@ def run_qlearning(mode):
             seq += 1
 
         avg_rewards, avg_steps = calc_avg(new_rewards, new_steps, num_sequences, num_sims, num_episodes)
+        training_time = time.time() - training_time
+        print("Time to train policy: ", training_time)
         plot(q_tables, avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, save_path, env)
 
         debug_q2 = input("See optimal policy?\nY/N?")
@@ -557,6 +574,10 @@ def run_qlearning(mode):
         print (f"Success rate = {nb_success}%")
 
         state = envM.reset(env, generate)
+        env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+        env.prev_pos = env.starting_pos
+        env.pos = env.prev_pos
+        env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
         done = False
 
         for step in range(max_steps_per_episode):

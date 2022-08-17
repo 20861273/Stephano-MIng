@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime
 import os
+import time
 
 from copy import copy
 
@@ -78,7 +79,7 @@ class Astar():
     def run_astar(self, mode):
         PATH = os.getcwd()
         PATH = os.path.join(PATH, 'Results')
-        PATH = os.path.join(PATH, 'Dijkstra')
+        PATH = os.path.join(PATH, 'Astar')
         date_and_time = datetime.now()
         save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
         if not os.path.exists(save_path): os.makedirs(save_path)
@@ -94,6 +95,8 @@ class Astar():
         print("Grid:\n", env.grid)
         print("Starting position: ", env.starting_pos)
         print("Goal: ", env.exit)
+
+        computation_time = time.time()
 
         # consists on nodes that have been visited but not expanded (meaning that sucessors have not been explored yet)
         queue = PriorityQueue()
@@ -137,6 +140,8 @@ class Astar():
                         pass
         
         path_taken = self.reconstruct_path(closedlist, env.starting_pos, env.exit, goalfound)
+        computation_time = time.time() - computation_time
+        print("Computation time", computation_time)
         if not path_taken:
             print("Path could not be found")
         else:
@@ -225,8 +230,8 @@ class print_results:
                     plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'g', alpha=0.75)
                 elif self.grid[j][i] == 3:
                     plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'r', alpha=0.75)
-                #elif self.grid[j][i] == 4:
-                #    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'b', alpha=0.75)
+                elif self.grid[j][i] == 4:
+                    plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'y', alpha=0.75)
 
         plt_title = "A* Algorithm Results: Step %s" %(str(step))
         plt.title(plt_title)

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 from datetime import datetime
 import os
+import time
 
 import heapq
 
@@ -29,9 +30,12 @@ def run_dijkstra(mode):
     print("Goal: ", env.exit)
     start, goal = (env.starting_pos.x, env.starting_pos.y), (env.exit.x, env.exit.y)
 
+    computation_time = time.time()
     came_from, cost_so_far = dijkstra_search(g, start, goal)
 
     path_taken = reconstruct_path(came_from, start=start, goal=goal)    
+    computation_time = time.time() - computation_time
+    print("Computation time", computation_time)
 
     env.grid[path_taken[0][1], path_taken[0][0]] = States.ROBOT.value
     env.grid[env.exit.y, env.exit.x] = States.EXIT.value

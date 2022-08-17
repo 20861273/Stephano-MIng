@@ -1,0 +1,2 @@
+Starting position: Point(x=3, y=36)
+Exit: Point(x=40, y=8)
