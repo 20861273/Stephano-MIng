@@ -372,7 +372,7 @@ def run_qlearning(mode):
     q_table = np.zeros((state_space_size, action_space_size))
 
     # Initializing Q-Learning Parameters
-    num_episodes = 1000
+    num_episodes = 800
     max_steps_per_episode = 10000
     num_sequences = 5
 
