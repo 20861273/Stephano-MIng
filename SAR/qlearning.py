@@ -93,30 +93,79 @@ class QLearning:
             env.pos = env.prev_pos
         else:
             if training:
-            #     # Constant starting position
-            #     # Setup robot starting position
-            #     env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-            #     env.pos = env.starting_pos
-            #     env.prev_pos = env.pos
-            #     env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+                # Constant goal, varied starting pos
+                # # Setup goal
+                # env.grid[env.goal.y, env.goal.x] = States.GOAL.value
 
-            #     visited = np.argwhere(env.grid == States.EXP.value)
-            #     for i in visited:
-            #         env.grid[i[0], i[1]] = States.UNEXP.value
+                # visited = np.argwhere(env.grid == States.EXP.value)
+                # for i in visited:
+                #     env.grid[i[0], i[1]] = States.UNEXP.value
 
-            #     # Setup goal
-            #     # Set goal position at least 20% of grid size away from robot(s)
-            #     env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
-            #     distance_to = 0
-            #     while distance_to < env.grid.shape[0]*0.6:
-            #         indices = np.argwhere(env.grid == States.UNEXP.value)
-            #         np.random.shuffle(indices)
-            #         env.goal = Point(indices[0,1], indices[0,0])
-            #         distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
-            #                         (env.starting_pos.y - env.goal.y)**2)
+                # # Setup robot starting position
+                # env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+
+                # distance_to = 0
+                # while distance_to < env.grid.shape[0]*0.6:
+                #     indices = np.argwhere(env.grid == States.UNEXP.value)
+                #     np.random.shuffle(indices)
+                #     env.starting_pos = Point(indices[0,1], indices[0,0])
+                #     distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
+                #                     (env.starting_pos.y - env.goal.y)**2)
+
+                # env.pos = env.starting_pos
+                # env.prev_pos = env.pos
+                # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+
+
+                # Constant starting pos, varied goal
+                # # Setup goal
+                # env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+                # env.pos = env.starting_pos
+                # env.prev_pos = env.pos
+                # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+
+                # visited = np.argwhere(env.grid == States.EXP.value)
+                # for i in visited:
+                #     env.grid[i[0], i[1]] = States.UNEXP.value
+
+                # # Setup goal
+                # # Set goal position at least 20% of grid size away from robot(s)
+                # env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
+                # distance_to = 0
+                # while distance_to < env.grid.shape[0]*0.6:
+                #     indices = np.argwhere(env.grid == States.UNEXP.value)
+                #     np.random.shuffle(indices)
+                #     env.goal = Point(indices[0,1], indices[0,0])
+                #     distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
+                #                     (env.starting_pos.y - env.goal.y)**2)
                 
-            #     env.grid[env.goal.y, env.goal.x] = States.GOAL.value
-            # else:
+                # env.grid[env.goal.y, env.goal.x] = States.GOAL.value
+
+                # Varied starting pos and goal
+                visited = np.argwhere(env.grid == States.EXP.value)
+                for i in visited:
+                    env.grid[i[0], i[1]] = States.UNEXP.value
+
+                env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+                indices = np.argwhere(env.grid == States.UNEXP.value)
+                np.random.shuffle(indices)
+                env.starting_pos = Point(indices[0,1], indices[0,0])
+                env.pos = env.starting_pos
+                env.prev_pos = env.pos
+                env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+
+                env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
+                distance_to = 0
+                while distance_to < env.grid.shape[0]*0.2:
+                    indices = np.argwhere(env.grid == States.UNEXP.value)
+                    np.random.shuffle(indices)
+                    env.goal = Point(indices[0,1], indices[0,0])
+                    distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
+                                    (env.starting_pos.y - env.goal.y)**2)
+                
+                env.grid[env.goal.y, env.goal.x] = States.GOAL.value
+
+            else:
                 # Constant starting position
                 # Setup robot starting position
                 env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
@@ -159,7 +208,7 @@ class QLearning:
 
         # 5. Check exit condition
         if env.pos == env.goal:
-            self.score += env.grid.shape[0]*env.grid.shape[1]
+            self.score += env.grid.shape[0]*env.grid.shape[1]*3
             reward = self.score
             game_over = True
             return state, reward, game_over, self.score
@@ -243,12 +292,12 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 5000
+        num_episodes = 10000
         max_steps_per_episode = env.grid.shape[0]*env.grid.shape[1]*10
         num_sequences = 1
 
-        learning_rate = np.array([0.1]) # 0.01
-        discount_rate = np.array([0.99]) # 0.9
+        learning_rate = np.array([0.01]) # 0.01
+        discount_rate = np.array([0.7]) # 0.9
 
         exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
         max_exploration_rate = np.array([0.01], dtype=np.float32)
@@ -283,6 +332,7 @@ class QLearning:
 
         if mode != 1:
             PATH = os.getcwd()
+            PATH = os.path.join(PATH, 'SAR')
             PATH = os.path.join(PATH, 'Results')
             PATH = os.path.join(PATH, 'QLearning')
             load_path = os.path.join(PATH, 'Saved_data')
