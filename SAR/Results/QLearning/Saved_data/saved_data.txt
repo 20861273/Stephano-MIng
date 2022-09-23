@@ -1,0 +1,2 @@
+Starting position: Point(x=2, y=0)
+Goal: Point(x=9, y=9)

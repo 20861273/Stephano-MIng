@@ -228,6 +228,10 @@ class QLearning:
             env.prev_pos = env.pos
             env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
 
+            visited = np.argwhere(env.grid == States.EXP.value)
+            for i in visited:
+                env.grid[i[0], i[1]] = States.UNEXP.value
+
             # Setup maze exit
             env.grid[env.exit.y, env.exit.x] = States.EXIT.value
 
