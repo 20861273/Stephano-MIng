@@ -1,7 +1,9 @@
+from tkinter import LEFT
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import math
+import pandas as pd
 
 from environment import Environment, HEIGHT, WIDTH, States, Direction, Point
 from save_results import print_results
@@ -25,7 +27,18 @@ def calc_avg(rewards, steps, num_sequences, sim_num, ep_num):
         avg_rewards[i] = avg_rewards[i]/num_sequences
         avg_steps[i] = avg_steps[i]/num_sequences
 
-    return avg_rewards.tolist(), avg_steps.tolist()
+    cum_avg_rewards = np.zeros(avg_rewards.shape)
+    cum_avg_steps = np.zeros(avg_steps.shape)
+    for i in range(len(avg_rewards)):
+        r_numbers_series = pd.Series(avg_rewards[i])
+        sim_avg_rewards = r_numbers_series.rolling(window=100).mean()
+        s_numbers_series = pd.Series(avg_steps[i])
+        sim_avg_steps = s_numbers_series.rolling(window=100).mean()
+        
+        cum_avg_rewards[i] = sim_avg_rewards
+        cum_avg_steps[i] = sim_avg_steps
+
+    return cum_avg_rewards.tolist(), cum_avg_steps.tolist()
 
 def extract_values(policy_extraction, correct_path, policy, env):
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
@@ -84,7 +97,7 @@ class QLearning:
         self.score = 0
         self.frame_iteration = 0
 
-    def reset(self, env, generate, training):
+    def reset(self, env, generate):
         # init game state
         if generate:
             # Generates grid
@@ -92,91 +105,78 @@ class QLearning:
             env.prev_pos = env.starting_pos
             env.pos = env.prev_pos
         else:
-            if training:
-                # Constant goal, varied starting pos
-                # # Setup goal
-                # env.grid[env.goal.y, env.goal.x] = States.GOAL.value
-
-                # visited = np.argwhere(env.grid == States.EXP.value)
-                # for i in visited:
-                #     env.grid[i[0], i[1]] = States.UNEXP.value
-
-                # # Setup robot starting position
-                # env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-
-                # distance_to = 0
-                # while distance_to < env.grid.shape[0]*0.6:
-                #     indices = np.argwhere(env.grid == States.UNEXP.value)
-                #     np.random.shuffle(indices)
-                #     env.starting_pos = Point(indices[0,1], indices[0,0])
-                #     distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
-                #                     (env.starting_pos.y - env.goal.y)**2)
-
-                # env.pos = env.starting_pos
-                # env.prev_pos = env.pos
-                # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+            # # Code that spawns target a certain distance away from agent
+            # distance_to = 0
+            # while distance_to < env.grid.shape[0]*0.2:
+            #     indices = np.argwhere(env.grid == States.UNEXP.value)
+            #     np.random.shuffle(indices)
+            #     env.goal = Point(indices[0,1], indices[0,0])
+            #     distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
+            #                     (env.starting_pos.y - env.goal.y)**2)
 
 
-                # Constant starting pos, varied goal
-                # # Setup goal
-                # env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-                # env.pos = env.starting_pos
-                # env.prev_pos = env.pos
-                # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+            # Constant goal, varied starting pos
+            # # Setup goal
+            # env.grid[env.goal.y, env.goal.x] = States.GOAL.value
 
-                # visited = np.argwhere(env.grid == States.EXP.value)
-                # for i in visited:
-                #     env.grid[i[0], i[1]] = States.UNEXP.value
+            # visited = np.argwhere(env.grid == States.EXP.value)
+            # for i in visited:
+            #     env.grid[i[0], i[1]] = States.UNEXP.value
 
-                # # Setup goal
-                # # Set goal position at least 20% of grid size away from robot(s)
-                # env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
-                # distance_to = 0
-                # while distance_to < env.grid.shape[0]*0.6:
-                #     indices = np.argwhere(env.grid == States.UNEXP.value)
-                #     np.random.shuffle(indices)
-                #     env.goal = Point(indices[0,1], indices[0,0])
-                #     distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
-                #                     (env.starting_pos.y - env.goal.y)**2)
-                
-                # env.grid[env.goal.y, env.goal.x] = States.GOAL.value
+            # # Setup robot starting position
+            # env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
 
-                # Varied starting pos and goal
-                visited = np.argwhere(env.grid == States.EXP.value)
-                for i in visited:
-                    env.grid[i[0], i[1]] = States.UNEXP.value
+            # distance_to = 0
+            # while distance_to < env.grid.shape[0]*0.6:
+            #     indices = np.argwhere(env.grid == States.UNEXP.value)
+            #     np.random.shuffle(indices)
+            #     env.starting_pos = Point(indices[0,1], indices[0,0])
+            #     distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
+            #                     (env.starting_pos.y - env.goal.y)**2)
 
-                env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-                indices = np.argwhere(env.grid == States.UNEXP.value)
-                np.random.shuffle(indices)
-                env.starting_pos = Point(indices[0,1], indices[0,0])
-                env.pos = env.starting_pos
-                env.prev_pos = env.pos
-                env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+            # env.pos = env.starting_pos
+            # env.prev_pos = env.pos
+            # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
 
-                env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
-                distance_to = 0
-                while distance_to < env.grid.shape[0]*0.2:
-                    indices = np.argwhere(env.grid == States.UNEXP.value)
-                    np.random.shuffle(indices)
-                    env.goal = Point(indices[0,1], indices[0,0])
-                    distance_to = math.sqrt((env.starting_pos.x - env.goal.x)**2 +
-                                    (env.starting_pos.y - env.goal.y)**2)
-                
-                env.grid[env.goal.y, env.goal.x] = States.GOAL.value
 
-            else:
-                # Constant starting position
-                # Setup robot starting position
-                env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-                env.pos = env.starting_pos
-                env.prev_pos = env.pos
-                env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
-                env.grid[env.goal.y, env.goal.x] = States.GOAL.value
+            # # Constant starting pos, varied goal
+            # # Setup agent
+            # env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+            # env.pos = env.starting_pos
+            # env.prev_pos = env.pos
+            # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
 
-                visited = np.argwhere(env.grid == States.EXP.value)
-                for i in visited:
-                    env.grid[i[0], i[1]] = States.UNEXP.value
+            # visited = np.argwhere(env.grid == States.EXP.value)
+            # for i in visited:
+            #     env.grid[i[0], i[1]] = States.UNEXP.value
+
+            # # Setup goal
+            # env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
+            # indices = np.argwhere(env.grid == States.UNEXP.value)
+            # np.random.shuffle(indices)
+            # env.goal = Point(indices[0,1], indices[0,0])
+            # env.grid[env.goal.y, env.goal.x] = States.GOAL.value
+
+            # Varied starting pos and goal
+            visited = np.argwhere(env.grid == States.EXP.value)
+            for i in visited:
+                env.grid[i[0], i[1]] = States.UNEXP.value
+
+            # Setup agent
+            env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+            indices = np.argwhere(env.grid == States.UNEXP.value)
+            np.random.shuffle(indices)
+            env.starting_pos = Point(indices[0,1], indices[0,0])
+            env.pos = env.starting_pos
+            env.prev_pos = env.pos
+            env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+
+            # Setup goal
+            env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
+            indices = np.argwhere(env.grid == States.UNEXP.value)
+            np.random.shuffle(indices)
+            env.goal = Point(indices[0,1], indices[0,0])
+            env.grid[env.goal.y, env.goal.x] = States.GOAL.value
         
         env.direction = (Direction.RIGHT).value
                 
@@ -208,7 +208,7 @@ class QLearning:
 
         # 5. Check exit condition
         if env.pos == env.goal:
-            self.score += env.grid.shape[0]*env.grid.shape[1]*3
+            self.score += 100
             reward = self.score
             game_over = True
             return state, reward, game_over, self.score
@@ -293,11 +293,15 @@ class QLearning:
 
         # Initializing Q-Learning Parameters
         num_episodes = 10000
-        max_steps_per_episode = env.grid.shape[0]*env.grid.shape[1]*10
+        max_steps_per_episode = 200
         num_sequences = 1
 
-        learning_rate = np.array([0.01]) # 0.01
-        discount_rate = np.array([0.7]) # 0.9
+        learning_rate = np.array([0.01])
+        discount_rate = np.array([0.1, 0.2, 0.3, 0.7, 0.8, 0.9]) # 0.9
+        # Optimal hyperparameters:
+        # 5x5: lr=0.02, dr=0.7
+        # 8x8: lr= ,dr=
+        pos_reward = env.grid.shape[0]*env.grid.shape[1]*5
 
         exploration_rate = np.array([0.01], dtype=np.float32) # 0.01
         max_exploration_rate = np.array([0.01], dtype=np.float32)
@@ -337,6 +341,9 @@ class QLearning:
             PATH = os.path.join(PATH, 'QLearning')
             load_path = os.path.join(PATH, 'Saved_data')
             if not os.path.exists(load_path): os.makedirs(load_path)
+            date_and_time = datetime.now()
+            save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+            if not os.path.exists(save_path): os.makedirs(save_path)
         if mode == 3:
             _, env.grid = extract_values(policy_extraction, load_path, None, env)
         if mode != 2:
@@ -354,7 +361,7 @@ class QLearning:
             # Training loop
             training_time = time.time()
             generate = False
-            state = QL.reset(env, generate, True)
+            state = QL.reset(env, generate)
             for seq_i in range(0, num_sequences):
                 print("Training session: ", seq)
                 seq_rewards = []
@@ -375,10 +382,10 @@ class QLearning:
 
                             # Q-learning algorithm
                             for episode in range(num_episodes):
-                                if episode % 100 == 0: print("Episode: ", episode)
+                                if episode % 1000 == 0: print("Episode: ", episode)
                                 
                                 # Initialize new episode params
-                                state = QL.reset(env, generate, True)
+                                state = QL.reset(env, generate)
                                 done = False
                                 rewards_current_episode = 0
                                 reward = 0
@@ -457,7 +464,18 @@ class QLearning:
             print("Time to train policy: ", training_time)
 
             results = print_results(env.grid, HEIGHT, WIDTH)
+            QL.reset(env, generate)
             results.plot(q_tables, avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env)
+
+            test_tab = np.empty(shape=env.grid.shape).tolist()
+            for s in range(env.grid.shape[0]*env.grid.shape[1]):
+                a = np.argmax(q_table[s,:])
+                if a == Direction.RIGHT.value: test_tab[s] = '→'
+                elif a == Direction.LEFT.value: test_tab[s] = '←'
+                elif a == Direction.UP.value: test_tab[s] = '↑'
+                elif a == Direction.DOWN.value: test_tab[s] = '↓'
+
+            print(test_tab)
 
             debug_q2 = input("See optimal policy?\nY/N?")
             debug_flag2 = str(debug_q2)
@@ -475,10 +493,10 @@ class QLearning:
 
             nb_success = 0
             # Display percentage successes
-            for episode in range(100):
-                print("Episode", episode)
+            for episode in range(1000):
+                if episode % 100 == 0: print("Episode: ", episode)
                 # initialize new episode params
-                state = QL.reset(env, generate, False)
+                state = QL.reset(env, generate)
                 #print(env.grid)
                 #print(env.grid)
                 done = False
@@ -486,7 +504,7 @@ class QLearning:
                     # Show current state of environment on screen
                     # Choose action with highest Q-value for current state (Greedy policy)     
                     # Take new action
-                    action = np.argmax(q_table[state,:])  
+                    action = np.argmax(q_table[state,:])
                     new_state, reward, done, info = QL.step(env, action)
                     
                     if done:   
@@ -497,9 +515,9 @@ class QLearning:
                     state = new_state
 
             # Let's check our success rate!
-            print (f"Success rate = {nb_success}%")
+            print (f"Success rate = {nb_success/10}%")
 
-            state = QL.reset(env, generate, False)
+            state = QL.reset(env, generate)
             env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
             env.prev_pos = env.starting_pos
             env.pos = env.prev_pos
@@ -511,7 +529,7 @@ class QLearning:
                 # Show current state of environment on screen
                 # Choose action with highest Q-value for current state (Greedy policy)     
                 # Take new action
-                action = np.argmax(q_table[state,:])  
+                action = np.argmax(q_table[state,:]) 
                 new_state, reward, done, info = QL.step(env, action)
                 
                 if done:
