@@ -6,7 +6,7 @@ import math
 
 # Environment characteristics
 HEIGHT = 5
-WIDTH = 5
+WIDTH = 6
 # DENSITY = 30 # percentage
 
 # Direction states

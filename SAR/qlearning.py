@@ -1,4 +1,3 @@
-from tkinter import LEFT
 import numpy as np
 import random
 import matplotlib.pyplot as plt
@@ -29,9 +28,9 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 400000
+        num_episodes = 100000
         max_steps_per_episode = 200
-        num_sequences = 3
+        num_sequences = 1
 
         # learning_rate = np.array([0.00070055])
         # discount_rate = np.array([0.905, 0.91, 0.915])
@@ -47,10 +46,10 @@ class QLearning:
         # 8x8: lr= ,dr=
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
 
-        exploration_rate = np.array([1], dtype=np.float32) # 0.01
-        max_exploration_rate = np.array([1], dtype=np.float32)
-        min_exploration_rate = np.array([0.01], dtype=np.float32)
-        exploration_decay_rate = np.array([0.01], dtype=np.float32)
+        exploration_rate = np.array([0.05, 0.05], dtype=np.float32) # 0.01
+        max_exploration_rate = np.array([0.05, 0.05], dtype=np.float32)
+        min_exploration_rate = np.array([0.05, 0.01], dtype=np.float32)
+        exploration_decay_rate = np.array([0, 0.01], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -473,7 +472,7 @@ class QLearning:
         return state, reward, game_over, self.score
 
     def get_state(self, env):
-        return env.pos.x*env.grid.shape[1] + env.pos.y
+        return env.pos.x*env.grid.shape[0] + env.pos.y
     
     def _is_collision(self, env, pt=None):
         if pt is None:

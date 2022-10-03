@@ -377,7 +377,7 @@ def run_qlearning(mode):
 
     # Initializing Q-Learning Parameters
     num_episodes = 800
-    max_steps_per_episode = 10000
+    max_steps_per_episode = 100
     num_sequences = 5
 
     learning_rate = np.array([0.1]) # 0.01
