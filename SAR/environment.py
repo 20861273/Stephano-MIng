@@ -37,10 +37,7 @@ class Environment:
         # Set robot(s) position
         self.pos = self.starting_pos
 
-        print("\n\nGrid size: ", self.grid.shape,
-                "\nStarting position: ", self.starting_pos,
-                "\nGoal: ", self.goal,
-                "\nGrid:\n", self.grid)
+        print("\nGrid size: ", self.grid.shape)
 
     def generate_grid(self):        
         # Ggenerate grid of zeros 

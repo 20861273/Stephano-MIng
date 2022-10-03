@@ -28,7 +28,7 @@ class print_results:
         self.grid = grid
         self.rows = rows
         self.cols = cols
-    def print_graph(self, episode, step):
+    def print_graph(self, step):
         """
         Prints the grid environment
         """
@@ -71,7 +71,7 @@ class print_results:
                 elif self.grid[j][i] == 4:
                     plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'y', alpha=0.75)
 
-        plt_title = "Q-learning Results: Episode %s, step %s" %(str(episode), str(step)) 
+        plt_title = "Q-learning Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
     def plot(self, q_tables, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env):
