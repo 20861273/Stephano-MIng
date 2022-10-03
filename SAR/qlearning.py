@@ -3,7 +3,6 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import math
-import pandas as pd
 
 from environment import Environment, HEIGHT, WIDTH, States, Direction, Point
 from save_results import print_results
@@ -32,7 +31,7 @@ class QLearning:
         # Initializing Q-Learning Parameters
         num_episodes = 400000
         max_steps_per_episode = 200
-        num_sequences = 1
+        num_sequences = 3
 
         # learning_rate = np.array([0.00070055])
         # discount_rate = np.array([0.905, 0.91, 0.915])
