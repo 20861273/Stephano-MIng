@@ -5,8 +5,8 @@ import random
 import math
 
 # Environment characteristics
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 8
+WIDTH = 8
 # DENSITY = 30 # percentage
 
 # Direction states
