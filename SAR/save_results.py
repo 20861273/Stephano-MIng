@@ -74,12 +74,12 @@ class print_results:
         plt_title = "Q-learning Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
-    def plot(self, q_tables, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env):
+    def plot(self, q_tables, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
 
         fig, ax = plt.subplots(1, 2, figsize=(30, 15))
         
-        ax[0].set_title('Rewards per episode')
+        ax[0].set_title('Rewards per episode\nTraining time: %sm %ss' %(divmod(t_time, 60)))
         ax[0].set_xlabel('Episode')
         ax[0].set_ylabel('Rewards')
 

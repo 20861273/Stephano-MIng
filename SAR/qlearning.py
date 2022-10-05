@@ -2,6 +2,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import math
+import winsound
 
 from environment import Environment, HEIGHT, WIDTH, States, Direction, Point
 from save_results import print_results
@@ -9,6 +10,7 @@ from save_results import print_results
 from datetime import datetime
 import os
 import time
+import shutil
 
 class QLearning:
     def __init__(self):
@@ -36,7 +38,7 @@ class QLearning:
         # discount_rate = np.array([0.905, 0.91, 0.915])
 
         learning_rate = np.array([0.00075])
-        discount_rate = np.array([0.001])
+        discount_rate = np.array([0.002])
 
         # learning_rate = np.array([0.9])
         # discount_rate = np.array([0.5, 0.7, 0.9]) # 0.9
@@ -46,10 +48,10 @@ class QLearning:
         # 8x8: lr= ,dr=
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
 
-        exploration_rate = np.array([0.05, 0.05], dtype=np.float32) # 0.01
-        max_exploration_rate = np.array([0.05, 0.05], dtype=np.float32)
-        min_exploration_rate = np.array([0.05, 0.01], dtype=np.float32)
-        exploration_decay_rate = np.array([0, 0.01], dtype=np.float32)
+        exploration_rate = np.array([0.03], dtype=np.float32) # 0.01
+        max_exploration_rate = np.array([0.03], dtype=np.float32)
+        min_exploration_rate = np.array([0.03], dtype=np.float32)
+        exploration_decay_rate = np.array([0.03], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -125,7 +127,7 @@ class QLearning:
 
                             # Q-learning algorithm
                             for episode in range(num_episodes):
-                                if episode % 1000 == 0: print("Episode: ", episode)
+                                if episode % 10000 == 0: print("Episode: ", episode)
                                 
                                 # Initialize new episode params
                                 state = QL.reset(env, generate)
@@ -204,11 +206,11 @@ class QLearning:
             
             avg_rewards, avg_steps = calc_avg(new_rewards, new_steps, num_sequences, num_sims)
             training_time = time.time() - training_time
-            print("Time to train policy: ", training_time)
+            print("Time to train policy: %sm %ss" %(divmod(training_time, 60)))
 
             results = print_results(env.grid, HEIGHT, WIDTH)
             QL.reset(env, generate)
-            results.plot(q_tables, avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env)
+            results.plot(q_tables, avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env, training_time)
 
             for i in range(0, q_tables.shape[0]):
                 print("\nTrajectories of policy %s:" %(i))
@@ -222,7 +224,7 @@ class QLearning:
                     elif a == Direction.UP.value: 
                         test_tab[s] = "^"
                     elif a == Direction.DOWN.value: 
-                        test_tab[s] = "ˇ"
+                        test_tab[s] = "v"
             
                 print(np.reshape(test_tab, env.grid.shape).T)
 
@@ -253,6 +255,8 @@ class QLearning:
 
                 # Let's check our success rate!
                 print ("Success rate of policy %s = %s %%" % (i, nb_success/100))
+
+            winsound.Beep(1000, 500)
 
             debug_q2 = input("See optimal policy?\nY/N?")
             debug_flag2 = str(debug_q2)
@@ -307,7 +311,7 @@ class QLearning:
                 elif a == Direction.UP.value: 
                     test_tab[s] = "^"
                 elif a == Direction.DOWN.value: 
-                    test_tab[s] = "ˇ"
+                    test_tab[s] = "v"
         
             print(np.reshape(test_tab, env.grid.shape).T)
 
@@ -341,6 +345,13 @@ class QLearning:
                 file_name = "plot-%s.png" %(i)
                 plt.savefig(os.path.join(save_path, file_name))
                 plt.close()
+
+        else:   
+            if len(os.listdir(save_path)):
+                try:
+                    shutil.rmtree(save_path)
+                except OSError as e:
+                    print("Tried to delete folder that doesn't exist.")
 
 
     def reset(self, env, generate):
