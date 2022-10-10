@@ -1,2 +1,1 @@
-Starting position: Point(x=3, y=4)
-Goal: Point(x=2, y=4)
+(6, 6)

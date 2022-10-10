@@ -91,7 +91,7 @@ class print_results:
         l = []
         cnt = 0
 
-        f.write(str("Starting position: %s\nGoal: %s" %(str(env.starting_pos), str(env.goal))))
+        f.write(str(env.grid.shape))
         for lr_i in np.arange(len(learning_rate)):
             for dr_i in np.arange(len(discount_rate)):
                 for er_i in np.arange(len(exploration_rate)):

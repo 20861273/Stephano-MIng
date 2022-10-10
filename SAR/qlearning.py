@@ -32,7 +32,7 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 200000
+        num_episodes = 400000
         max_steps_per_episode = 200
         num_sequences = 1
 
@@ -92,7 +92,7 @@ class QLearning:
             save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
             if not os.path.exists(save_path): os.makedirs(save_path)
         if mode == 3:
-            _, env.grid = extract_values(policy_extraction, load_path, None, env)
+            _, env.grid.shape = extract_values(policy_extraction, load_path, None, env)
         if mode != 2:
             PATH = os.getcwd()
             PATH = os.path.join(PATH, 'SAR')
@@ -269,10 +269,10 @@ class QLearning:
             policy = int(debug_q3)
             if mode == 2: correct_path = load_path
             else: correct_path = save_path
-            q_table_list, maze = extract_values(policy_extraction, load_path, policy, env)
+            q_table_list, env_shape = extract_values(policy_extraction, load_path, policy, env)
 
             q_table = np.array(q_table_list)
-            env.grid = np.array(maze)
+            env.grid = np.empty((int(env_shape[0]), int(env_shape[1])))
 
             if mode == 2:
                 print("\nTesting policy %s:" % (policy))
@@ -579,53 +579,17 @@ def calc_avg(rewards, steps, num_sequences, num_sims):
 def extract_values(policy_extraction, correct_path, policy, env):
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
     lines = f.readlines()
-    WIDTH = 0
-    HEIGHT = 0
 
     for line in lines:
-        cur_num = ''
         cur_line = []
-        if line[0:11] == "Grid shape:":
-            for num in line:
-                if num.isdigit():
-                    cur_num += num
-                else:
-                    if cur_num != '': cur_line.append(int(cur_num))
-                    cur_num = ''
-            WIDTH = int(cur_line[1])
-            HEIGHT = int(cur_line[0])
-
-        cur_num = ''
-        cur_line = []
-        if line[0:18] == "Starting position:":
-            for num in line:
-                if num.isdigit():
-                    cur_num += num
-                else:
-                    if cur_num != '': cur_line.append(int(cur_num))
-                    cur_num = ''
-            env.starting_pos = Point(int(cur_line[0]),int(cur_line[1]))
-
-        cur_num = ''
-        cur_line = []
-        if line[0:5] == "Goal:":
-            for num in line:
-                if num.isdigit():
-                    cur_num += num
-                else:
-                    if cur_num == ',':
-                        cur_line = []
-                    elif cur_num != '': cur_line.append(int(cur_num))
-                    cur_num = ''
-            env.exit = Point(int(cur_line[0]),int(cur_line[1]))
-    
-    file_name = "maze.txt"
-    maze =  np.loadtxt(os.path.join(correct_path, file_name))
+        for char in line:
+            if char.isdigit():
+                cur_line.append(char)
 
     if policy_extraction:
         file_name = "policy" + str(policy) + ".txt"
-        return np.loadtxt(os.path.join(correct_path, file_name)), maze
+        return np.loadtxt(os.path.join(correct_path, file_name)), cur_line
     else:
-        return None, maze
+        return None, cur_line
 
                     
