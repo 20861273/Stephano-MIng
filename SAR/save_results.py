@@ -108,12 +108,13 @@ class print_results:
         
         f.close()
 
-        file_name = "maze.txt"
-        np.savetxt(os.path.join(save_path, file_name), env.grid)
+        for i in range(0, len(rewards)):
+            file_name = "policy_rewards" + str(i) + ".txt"
+            np.savetxt(os.path.join(save_path, file_name), rewards[i])
 
         for i in range(0, len(rewards)):
-            ax[0].plot(np.arange(0, len(rewards[i])), rewards[i], color=c[i])
-            ax[1].plot(np.arange(0, len(steps[i])), steps[i], color=c[i])
+            ax[0].plot(np.arange(0, len(rewards[i]), 500), rewards[i][::500], color=c[i])
+            ax[1].plot(np.arange(0, len(steps[i]), 500), steps[i][::500], color=c[i])
 
         ax[0].legend(l)
         ax[1].legend(l)

@@ -18,6 +18,8 @@ class QLearning:
         self.frame_iteration = 0
 
     def run_qlearning(self, mode):
+        # Number of seekers
+
         # Creating The Environment
         env = Environment()
         QL = QLearning()
@@ -30,7 +32,7 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 400000
+        num_episodes = 200000
         max_steps_per_episode = 200
         num_sequences = 1
 
@@ -38,7 +40,7 @@ class QLearning:
         # discount_rate = np.array([0.905, 0.91, 0.915])
 
         learning_rate = np.array([0.00075])
-        discount_rate = np.array([0.0015, 0.9])
+        discount_rate = np.array([0.002])
 
         # learning_rate = np.array([0.9])
         # discount_rate = np.array([0.5, 0.7, 0.9]) # 0.9
@@ -48,7 +50,7 @@ class QLearning:
         # 8x8: lr= ,dr=
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
 
-        exploration_rate = np.array([0.03], dtype=np.float32) # 0.01
+        exploration_rate = np.array([0.03], dtype=np.float32)
         max_exploration_rate = np.array([0.03], dtype=np.float32)
         min_exploration_rate = np.array([0.03], dtype=np.float32)
         exploration_decay_rate = np.array([0.03], dtype=np.float32)
@@ -226,7 +228,7 @@ class QLearning:
                     elif a == Direction.DOWN.value: 
                         test_tab[s] = "v"
             
-                print(np.reshape(test_tab, env.grid.shape).T)
+            print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
 
             for i in range(0, q_tables.shape[0]):
                 print("\nTesting policy %s:" % (i))
@@ -255,7 +257,7 @@ class QLearning:
 
                 # Let's check our success rate!
                 print ("Success rate of policy %s = %s %%" % (i, nb_success/100))
-
+            
             winsound.Beep(1000, 500)
 
             debug_q2 = input("See optimal policy?\nY/N?")
@@ -313,7 +315,7 @@ class QLearning:
                 elif a == Direction.DOWN.value: 
                     test_tab[s] = "v"
         
-            print(np.reshape(test_tab, env.grid.shape).T)
+            print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
 
             state = QL.reset(env, generate)
             env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
@@ -457,11 +459,12 @@ class QLearning:
         #print(self.pos, self.prev_pos, action)
         #print(self.grid,"\n")
         self.frame_iteration += 1
+        self.p_reward = pos_reward
+        self.score = 0
         # 2. Do action
         self._move(env, action) # update the robot
             
         # 3. Update score and get state
-        self.score = 0
         self.score -= 0.1
         game_over = False
 
@@ -474,7 +477,7 @@ class QLearning:
 
         # 5. Check exit condition
         if env.pos == env.goal:
-            self.score += pos_reward
+            self.score += self.p_reward
             reward = self.score
             game_over = True
             return state, reward, game_over, self.score
@@ -493,6 +496,7 @@ class QLearning:
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
             return True
         elif pt.y < 0 or pt.y > env.grid.shape[0]-1 or pt.x < 0 or pt.x > env.grid.shape[1]-1:
+            self.score -= self.p_reward*2
             return True
         
         return False
@@ -566,10 +570,11 @@ def calc_avg(rewards, steps, num_sequences, num_sims):
     mov_avg_steps = np.empty(avg_steps.shape)
 
     for i in range(0, num_sims):
-        mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 1000)
-        mov_avg_steps[i] = moving_avarage_smoothing(avg_steps[i], 1000)
+        mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 100)
+        mov_avg_steps[i] = moving_avarage_smoothing(avg_steps[i], 100)
 
     return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
+    # return avg_rewards.tolist(), avg_steps.tolist()
 
 def extract_values(policy_extraction, correct_path, policy, env):
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
