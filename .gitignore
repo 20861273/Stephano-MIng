@@ -1,0 +1,11 @@
+# Ignore folders
+/SAR/__pycache__
+
+/Maze/__pycache__
+/Maze/include
+/Maze/Lib
+/Maze/Scripts
+/Maze/share
+
+# Ignore IDE giles
+/.vscode
