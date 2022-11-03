@@ -9,3 +9,5 @@
 
 # Ignore IDE giles
 /.vscode
+
+/SAR/hello.txt
