@@ -1,10 +1,16 @@
 import math
 import numpy as np
-import torch
+import os
 
-a = np.zeros((4,5))
-print(a.shape[1])
+PATH = os.getcwd()
+PATH = os.path.join(PATH, 'SAR')
+PATH = os.path.join(PATH, 'Results')
+PATH = os.path.join(PATH, 'QLearning')
+PATH = os.path.join(PATH, '31-10-2022 16h33m22s')
 
-a[2,3] = 1
+file_name = "policy_rewards0.txt"
+p=np.loadtxt(os.path.join(PATH, file_name))
 
-print(a)
+np.savetxt(os.path.join(PATH, file_name), p[::500])
+
+

@@ -32,9 +32,9 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 400000
+        num_episodes = 300000
         max_steps_per_episode = 200
-        num_epochs = 5
+        num_sequences = 5
 
         # learning_rate = np.array([0.00070055])
         # discount_rate = np.array([0.905, 0.91, 0.915])
@@ -50,10 +50,10 @@ class QLearning:
         # 8x8: lr= ,dr=
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
 
-        exploration_rate = np.array([0.05], dtype=np.float32)
-        max_exploration_rate = np.array([0.05], dtype=np.float32)
-        min_exploration_rate = np.array([0.05], dtype=np.float32)
-        exploration_decay_rate = np.array([0.05], dtype=np.float32)
+        exploration_rate = np.array([0.03], dtype=np.float32)
+        max_exploration_rate = np.array([0.03], dtype=np.float32)
+        min_exploration_rate = np.array([0.03], dtype=np.float32)
+        exploration_decay_rate = np.array([0.03], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -78,7 +78,7 @@ class QLearning:
         all_grids = []
         q_tables = np.zeros((num_sims, state_space_size, action_space_size))
 
-        print("\n# Epochs: ", num_epochs, "\n# Training sessions per epoch: ", num_sims, "\n# Episodes per training session: ", num_episodes)
+        print("\n# Training sessions: ", num_sequences, "\n# Simulations per training session: ", num_sims, "\n# Episodes per simulation: ", num_episodes)
         print("\nHyperparameters:\nLearning rate (α): ", learning_rate, "\nDiscount rate (γ): ", discount_rate, "\nExploration rate (ϵ): ", exploration_rate, "\nExploration decay rate: ", exploration_decay_rate, "\n")
 
         if mode != 1:
@@ -109,7 +109,7 @@ class QLearning:
             training_time = time.time()
             generate = False
             state = QL.reset(env, generate)
-            for seq_i in range(0, num_epochs):
+            for seq_i in range(0, num_sequences):
                 print("Training session: ", seq)
                 seq_rewards = []
                 seq_steps = []
@@ -164,7 +164,7 @@ class QLearning:
                                         steps_per_episode.append(step+1)
                                         break
 
-                                    # Exploration rate decay (Exponential decay)
+                                    # Exploration rate decay 
                                     ep_exploration_rate[er_i] = min_exploration_rate[er_i] + \
                                         (max_exploration_rate[er_i] - min_exploration_rate[er_i]) * np.exp(-exploration_decay_rate[er_i]*episode)
 
@@ -206,13 +206,13 @@ class QLearning:
 
                 seq += 1
             
-            avg_rewards, avg_steps = calc_avg(new_rewards, new_steps, num_epochs, num_sims)
+            avg_rewards, avg_steps = calc_avg(new_rewards, new_steps, num_sequences, num_sims)
             training_time = time.time() - training_time
             print("Time to train policy: %sm %ss" %(divmod(training_time, 60)))
 
             results = print_results(env.grid, HEIGHT, WIDTH)
             QL.reset(env, generate)
-            trajs = []
+            results.plot(q_tables, avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env, training_time)
 
             for i in range(0, q_tables.shape[0]):
                 print("\nTrajectories of policy %s:" %(i))
@@ -227,13 +227,8 @@ class QLearning:
                         test_tab[s] = "^"
                     elif a == Direction.DOWN.value: 
                         test_tab[s] = "v"
-
-                trajs.append(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
-                print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
-
-            results.plot(q_tables, avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env, training_time, trajs)
-
             
+            print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
 
             for i in range(0, q_tables.shape[0]):
                 print("\nTesting policy %s:" % (i))
@@ -433,12 +428,18 @@ class QLearning:
             for i in robot:
                 env.grid[i[0], i[1]] = States.UNEXP.value
             # Set new starting pos
-            indices = np.argwhere(env.grid == States.UNEXP.value)
-            np.random.shuffle(indices)
-            env.starting_pos = Point(indices[0,1], indices[0,0])
+            # indices = np.argwhere(env.grid == States.UNEXP.value)
+            # np.random.shuffle(indices)
+            # env.starting_pos = Point(indices[0,1], indices[0,0])
+            # env.pos = env.starting_pos
+            # env.prev_pos = env.pos
+            # env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+
+            env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
             env.pos = env.starting_pos
             env.prev_pos = env.pos
             env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+
 
             # Setup goal
             # Clear all goal blocks
@@ -564,12 +565,12 @@ def moving_avarage_smoothing(X,k):
 	return S
 
 # Calculates average rewards and steps
-def calc_avg(rewards, steps, num_epochs, num_sims):
+def calc_avg(rewards, steps, num_sequences, num_sims):
     avg_rewards = np.sum(np.array(rewards), axis=0)
     avg_steps = np.sum(np.array(steps), axis=0)
 
-    avg_rewards = np.divide(avg_rewards, num_epochs)
-    avg_steps = np.divide(avg_steps, num_epochs)
+    avg_rewards = np.divide(avg_rewards, num_sequences)
+    avg_steps = np.divide(avg_steps, num_sequences)
 
     mov_avg_rewards = np.empty(avg_rewards.shape)
     mov_avg_steps = np.empty(avg_steps.shape)

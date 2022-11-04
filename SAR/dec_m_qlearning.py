@@ -15,9 +15,9 @@ import shutil
 
 class QLearning:
     def __init__(self,env):
-        self.score = 0
         self.frame_iteration = 0
         self.nr = 2
+        self.score = [0]*self.nr
         self.starting_pos = env.starting_pos
         self.pos = env.pos
         self.prev_pos = env.prev_pos
@@ -29,27 +29,27 @@ class QLearning:
 
         # Creating The Q-Table
         action_space_size = len(Direction)
-        state_space_size = (env.grid.shape[1] * env.grid.shape[0])**2
+        state_space_size = (env.grid.shape[1] * env.grid.shape[0])
         #print(state_space_size, action_space_size)
 
-        q_table = np.zeros((state_space_size, action_space_size))
+        q_table = np.zeros((self.nr, state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 5000000
+        num_episodes = 200000
         max_steps_per_episode = 200
         num_epochs = 1
 
         learning_rate = np.array([0.00075])
-        discount_rate = np.array([0.1, 0.5, 0.9])
+        discount_rate = np.array([0.002])
 
         # pos_reward = env.grid.shape[0]*env.grid.shape[1]
         pos_reward = 1
         n_tests = 50
 
-        exploration_rate = np.array([1, 0.7], dtype=np.float32)
-        max_exploration_rate = np.array([1, 0.7], dtype=np.float32)
-        min_exploration_rate = np.array([0.03, 0.03], dtype=np.float32)
-        exploration_decay_rate = np.array([0.000001, 0.00001], dtype=np.float32)
+        exploration_rate = np.array([0.03], dtype=np.float32)
+        max_exploration_rate = np.array([0.03], dtype=np.float32)
+        min_exploration_rate = np.array([0.03], dtype=np.float32)
+        exploration_decay_rate = np.array([0.03], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -73,7 +73,7 @@ class QLearning:
         all_steps = []
         all_grids = []
         action = np.empty((self.nr,), dtype=np.int8)
-        q_tables = np.zeros((num_sims, state_space_size, action_space_size))
+        q_tables = np.zeros((num_sims, self.nr, state_space_size, action_space_size))
 
         print("\n# Epochs: ", num_epochs, "\n# Training sessions per epoch: ", num_sims, "\n# Episodes per training session: ", num_episodes)
         print("\nHyperparameters:\nLearning rate (α): ", learning_rate, "\nDiscount rate (γ): ", discount_rate, "\nExploration rate (ϵ): ", exploration_rate, "\nExploration decay rate: ", exploration_decay_rate, "\n")
@@ -116,7 +116,7 @@ class QLearning:
                             print("Simulation: ", sim)
                             # Reinitialize some variables
                             ep_exploration_rate = np.copy(exploration_rate)
-                            q_table = np.zeros((state_space_size, action_space_size))
+                            q_table = np.zeros((self.nr, state_space_size, action_space_size))
 
                             # Training Loop
                             episode_len = []
@@ -138,7 +138,7 @@ class QLearning:
                                         # Exploration-exploitation trade-off
                                         exploration_rate_threshold = random.uniform(0, 1)
                                         if exploration_rate_threshold > ep_exploration_rate[er_i]:
-                                            action[i] = np.argmax(q_table[state[i],:])
+                                            action[i] = np.argmax(q_table[i, state[i],:])
                                         else:
                                             action_space_actual_size = action_space_size-1
                                             action[i] = random.randint(0, action_space_actual_size)
@@ -147,8 +147,9 @@ class QLearning:
                                     new_state, reward, done, info = self.step(env, action, pos_reward, step)
 
                                     # Update Q-table
-                                    q_table[state, action] = q_table[state, action] * (1 - learning_rate[lr_i]) + \
-                                        learning_rate[lr_i] * (reward + discount_rate[dr_i] * np.max(q_table[new_state, :]))
+                                    for i in range(0, self.nr):
+                                        q_table[i, state[i], action] = q_table[i, state[i], action] * (1 - learning_rate[lr_i]) + \
+                                            learning_rate[lr_i] * (reward[i] + discount_rate[dr_i] * np.max(q_table[i, new_state[i], :]))
 
                                     # Set new state
                                     state = new_state
@@ -248,8 +249,8 @@ class QLearning:
                                 # Show current state of environment on screen
                                 # Choose action with highest Q-value for current state (Greedy policy)     
                                 # Take new action
-                                action[0] = np.argmax(q_table[state0,:])
-                                action[1] = np.argmax(q_table[state1,:])
+                                action[0] = np.argmax(q_table[0, state0,:])
+                                action[1] = np.argmax(q_table[1, state1,:])
                                 new_state, reward, done, info = self.step(env, action, pos_reward, step)
                                 
                                 if done:   
@@ -327,8 +328,8 @@ class QLearning:
                             # Show current state of environment on screen
                             # Choose action with highest Q-value for current state (Greedy policy)     
                             # Take new action
-                            action[0] = np.argmax(q_table[state0,:])
-                            action[1] = np.argmax(q_table[state1,:])
+                            action[0] = np.argmax(q_table[0, state0,:])
+                            action[1] = np.argmax(q_table[1, state1,:])
                             new_state, reward, done, info = self.step(env, action, pos_reward, step)
                             
                             if done:   
@@ -371,7 +372,7 @@ class QLearning:
                 # Choose action with highest Q-value for current state (Greedy policy)     
                 for i in range(0, self.nr):  
                     # Take new action
-                    action[i] = np.argmax(q_table[state[i],:])
+                    action[i] = np.argmax(q_table[i, state[i],:])
                 # print(env.grid)
                 new_state, reward, done, info = self.step(env, action, pos_reward, step)
                 # print(self.pos, env.goal)
@@ -499,7 +500,7 @@ class QLearning:
         
         self.direction = [(Direction.RIGHT).value]*self.nr
                 
-        self.score = 0
+        self.score = [0]*self.nr
         self.frame_iteration = 0
 
         state = self.get_state(env)
@@ -511,7 +512,7 @@ class QLearning:
         #print(self.grid,"\n")
         self.frame_iteration += 1
         self.p_reward = pos_reward
-        self.score = 0
+        self.score = [0]*self.nr
         # 2. Do action
         self._move(env, action) # update the robot
             
@@ -527,11 +528,14 @@ class QLearning:
         self._update_env(env)
 
         # 5. Check exit condition
-        if any(pos == self.goal for pos in self.pos):
-            #print(self.pos[i], env.goal)
-            self.score += self.p_reward*2
-            # self.score = (env.grid.shape[1]*env.grid.shape[0]/2) / step
-            reward = self.score
+        if self.pos[0] == self.goal:
+            self.score[0] += self.p_reward*2
+            reward[0] = self.score[0]
+            game_over = True
+            return state, reward, game_over, self.score
+        if self.pos[1] == self.goal:
+            self.score[1] += self.p_reward*2
+            reward[1] = self.score[1]
             game_over = True
             return state, reward, game_over, self.score
 
@@ -541,14 +545,9 @@ class QLearning:
     def get_state(self, env):
         state = np.empty((self.nr,), dtype=np.int8)
         for i in range(0, self.nr):
-            state[i] = (self.pos[i].x*env.grid.shape[0] + self.pos[i].y) #/ (env.grid.shape[1]*env.grid.shape[0])
-        #return state
-        # s = [(state[0]*env.grid.shape[0]*env.grid.shape[1] + state[1]) / (env.grid.shape[1]*env.grid.shape[0])**self.nr,
-        #     (state[1]*env.grid.shape[0]*env.grid.shape[1] + state[0]) / (env.grid.shape[1]*env.grid.shape[0])**self.nr]
-        s = [(state[0]*env.grid.shape[0]*env.grid.shape[1] + state[1]),
-            (state[1]*env.grid.shape[0]*env.grid.shape[1] + state[0])]
+            state[i] = (self.pos[i].x*env.grid.shape[0] + self.pos[i].y)
         
-        return s
+        return state
 
     
     def _is_collision(self, env, i, pt=None):

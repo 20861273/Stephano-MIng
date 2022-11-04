@@ -5,7 +5,7 @@ import random
 import math
 
 # Environment characteristics
-HEIGHT = 7
+HEIGHT = 5
 WIDTH = 6
 # DENSITY = 30 # percentage
 
