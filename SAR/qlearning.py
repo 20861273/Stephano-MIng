@@ -32,9 +32,9 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 400000
+        num_episodes = 5000
         max_steps_per_episode = 200
-        num_epochs = 5
+        num_epochs = 1
 
         # learning_rate = np.array([0.00070055])
         # discount_rate = np.array([0.905, 0.91, 0.915])

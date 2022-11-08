@@ -74,7 +74,7 @@ class print_results:
         plt_title = "Q-learning Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
-    def plot(self, q_tables, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time, trajs):
+    def plot(self, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
 
         c = cm.rainbow(np.linspace(0, 1, len(rewards)))
@@ -84,10 +84,7 @@ class print_results:
         f.write(str(env.grid.shape))
         for lr_i in np.arange(len(learning_rate)):
             for dr_i in np.arange(len(discount_rate)):
-                for er_i in np.arange(len(exploration_rate)):
-                    file_name = "policy" + str(cnt) + ".txt"
-                    np.savetxt(os.path.join(save_path, file_name), q_tables[cnt])
-                    
+                for er_i in np.arange(len(exploration_rate)):                    
                     l.append("%s: α=%s, γ=%s, ϵ=%s" %(
                             str(cnt),
                             str(learning_rate[lr_i]), 
@@ -101,10 +98,6 @@ class print_results:
         for i in range(0, len(rewards)):
             file_name = "policy_rewards" + str(i) + ".txt"
             np.savetxt(os.path.join(save_path, file_name), rewards[i])
-
-        for i in range(0, len(trajs)):
-            file_name = "trajectories" + str(i) + ".txt"
-            np.savetxt(os.path.join(save_path, file_name), trajs[i], fmt='%s')
         
         sim_len = (len(learning_rate) * len(discount_rate) * len(exploration_rate))
         plot_len = int(sim_len/3)

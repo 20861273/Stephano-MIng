@@ -2,10 +2,14 @@ import numpy as np
 import random 
 from collections import namedtuple, deque
 import matplotlib.pyplot as plt
+import time
+from datetime import datetime
+import os
 
 ##Importing the model (function approximator for Q-table)
 from model import QNetwork
-from dqn_environment import Environment
+from dqn_environment import Environment, HEIGHT, WIDTH
+from dqn_save_results import print_results
 
 import torch
 import torch.nn.functional as F
@@ -13,9 +17,6 @@ import torch.optim as optim
 
 BUFFER_SIZE = int(1e5)  #replay buffer size
 BATCH_SIZE = 64         # minibatch size
-GAMMA = 0.002           # discount factor
-TAU = 1e-3              # for soft update of target parameters
-LR = 0.00075               # learning rate
 UPDATE_EVERY = 4        # how often to update the network
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,7 +24,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Agent():
     """Interacts with and learns form environment."""
     
-    def __init__(self, state_size, action_size, seed):
+    def __init__(self, learning_rate, state_size, action_size, seed):
         """Initialize an Agent object.
         
         Params
@@ -42,14 +43,14 @@ class Agent():
         self.qnetwork_local = QNetwork(state_size, action_size, seed).to(device)
         self.qnetwork_target = QNetwork(state_size, action_size, seed).to(device)
         
-        self.optimizer = optim.Adam(self.qnetwork_local.parameters(),lr=LR)
+        self.optimizer = optim.Adam(self.qnetwork_local.parameters(),lr=learning_rate)
         
         # Replay memory 
         self.memory = ReplayBuffer(action_size, BUFFER_SIZE,BATCH_SIZE,seed)
         # Initialize time step (for updating every UPDATE_EVERY steps)
         self.t_step = 0
         
-    def step(self, state, action, reward, next_step, done):
+    def step(self, state, action, reward, next_step, done, discount_rate, learning_rate):
         # Save experience in replay memory
         self.memory.add(state, action, reward, next_step, done)
 
@@ -60,7 +61,7 @@ class Agent():
 
             if len(self.memory)>BATCH_SIZE:
                 experience = self.memory.sample()
-                self.learn(experience, GAMMA)
+                self.learn(experience, discount_rate, learning_rate)
     def act(self, state, eps = 0):
         """Returns action for given state as per current policy
         Params
@@ -80,7 +81,7 @@ class Agent():
         else:
             return random.choice(np.arange(self.action_size))
             
-    def learn(self, experiences, gamma):
+    def learn(self, experiences, gamma, tau):
         """Update value parameters using given batch of experience tuples.
         Params
         =======
@@ -100,7 +101,7 @@ class Agent():
         predicted_targets = self.qnetwork_local(states).gather(1,actions)
     
         with torch.no_grad():
-            labels_next = self.qnetwork_target(next_state).detach().max(1)[0].unsqueeze(1)
+            labels_next = self.qnetwork_target(next_state).detach().max(1)[0].unsqueeze(1) # unsqueeze(1) converts the dimension from (batch_size) to (batch_size,1)
 
         # .detach() ->  Returns a new Tensor, detached from the current graph.
         labels = rewards + (gamma* labels_next*(1-dones))
@@ -111,7 +112,7 @@ class Agent():
         self.optimizer.step()
 
         # ------------------- update target network ------------------- #
-        self.soft_update(self.qnetwork_local,self.qnetwork_target,TAU)
+        self.soft_update(self.qnetwork_local,self.qnetwork_target,tau)
             
     def soft_update(self, local_model, target_model, tau):
         """Soft update model parameters.
@@ -170,12 +171,7 @@ class ReplayBuffer:
         """Return the current size of internal memory."""
         return len(self.memory)
 
-
-
-agent = Agent(state_size=1,action_size=4,seed=0)
-
-def dqn(n_episodes= 300000, max_t = 200, eps_start=0.03, eps_end = 0.03,
-       eps_decay=0.996):
+def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_path):
     """Deep Q-Learning
     
     Params
@@ -189,47 +185,150 @@ def dqn(n_episodes= 300000, max_t = 200, eps_start=0.03, eps_end = 0.03,
     """
     mode = True
     all_grids = []
+    all_rewards = []
+    all_steps = []
     scores = [] # list containing score from each episode
     scores_window = deque(maxlen=100) # last 100 scores
-    eps = eps_start
-    env = Environment()
-    for i_episode in range(1, n_episodes+1):
-        state = env.reset()
-        score = 0
-        for t in range(max_t):
-            if i_episode == 0 and mode: all_grids.append(env.grid.copy())   
-            action = agent.act(state,eps)
-            next_state,reward,done,_ = env.step(action)
-            agent.step(state,action,reward,next_state,done)
-            ## above step decides whether we will train(learn) the network
-            ## actor (local_qnetwork) or we will fill the replay buffer
-            ## if len replay buffer is equal to the batch size then we will
-            ## train the network or otherwise we will add experience tuple in our 
-            ## replay buffer.
-            state = next_state
-            score += reward
-            if done:
-                if i_episode == 0 and mode: all_grids.append(env.grid.copy())
-                break
-            scores_window.append(score) ## save the most recent score
-            scores.append(score) ## sae the most recent score
-            eps = max(eps*eps_decay,eps_end)## decrease the epsilon
-            #print('\rEpisode {}\tAverage Score {:.2f}'.format(i_episode,np.mean(scores_window)), end="")
-            if i_episode %10000==0:
-                print('\rEpisode {}\tAverage Score {:.2f}'.format(i_episode,np.mean(scores_window)))
-                
-            if np.mean(scores_window)>=20.0:
-                print('\nEnvironment solve in {:d} epsiodes!\tAverage score: {:.2f}'.format(i_episode,np.mean(scores_window)))
-                torch.save(agent.qnetwork_local.state_dict(),'checkpoint.pth')
-                break
-    return scores
+    rewards_per_episode = []
+    training_time = time.time()
+    print("Training starting...")
+    for ts_i in range(0, n_ts):
+        print("Training session: ", ts_i)
+        seq_rewards = []
+        seq_steps = []
+        sim = 0
+        for lr_i in np.arange(len(learning_rate)):
+            for dr_i in np.arange(len(discount_rate)):
+                for er_i in np.arange(len(exploration_rate)):
+                    print("Training simulation: %s\nLearning rate = %s\nDiscount rate = %s\nExploration rate = %s\nExploration rate min = %s\nExploration rate max = %s\nExploration decay rate = %s"
+                            %(sim, learning_rate[lr_i], discount_rate[dr_i], exploration_rate[er_i], min_exploration_rate[er_i], max_exploration_rate[er_i], exploration_decay_rate[er_i]))
+                    agent = Agent(learning_rate[lr_i], state_size=1,action_size=1,seed=0)
+                    eps = eps_start[er_i]
+                    env = Environment()
+                    rewards_per_episode = []
+                    steps_per_episode = [] 
+                    for i_episode in range(0, n_episodes):
+                        if i_episode % 1000 == 0 or i_episode == 0: print("Episode: ", i_episode)
+                        state = env.reset()
+                        score = 0
+                        rewards_current_episode = 0
+                        done = False
+                        for t in range(max_t):
+                            if i_episode == 0 and mode: all_grids.append(env.grid.copy())
+                            action = agent.act(state,eps)
+                            next_state,reward,done,_ = env.step(action)
+                            agent.step(state,action,reward,next_state,done,discount_rate[dr_i],learning_rate[lr_i])
 
-scores= dqn()
+                            ## above step decides whether we will train(learn) the network
+                            ## actor (local_qnetwork) or we will fill the replay buffer
+                            ## if len replay buffer is equal to the batch size then we will
+                            ## train the network or otherwise we will add experience tuple in our 
+                            ## replay buffer.
+                            state = next_state
+                            score += reward
+                            rewards_current_episode += reward
+                            if done:
+                                rewards_per_episode.append(rewards_current_episode)
+                                steps_per_episode.append(t+1)
+                                if i_episode == 0 and mode: all_grids.append(env.grid.copy())
+                                break
+                            scores_window.append(score) ## save the most recent score
+                            scores.append(score) ## sae the most recent score
+                            eps = max(eps*eps_decay[er_i],eps_end[er_i])## decrease the epsilon
+                                                                
+                            if np.mean(scores_window)>=20.0:
+                                print('\nEnvironment solve in {:d} epsiodes!\tAverage score: {:.2f}'.format(i_episode,np.mean(scores_window)))
+                                torch.save(agent.qnetwork_local.state_dict(),'checkpoint.pth')
+                                break
+                        if i_episode % 1000==0 and not i_episode == 0:
+                            print('\rEpisode {}\tAverage Score {:.2f}'.format(i_episode,np.mean(scores_window)))
+                        if mode:
+                            if not done:
+                                rewards_per_episode.append(rewards_current_episode)
+                                steps_per_episode.append(t+1)
+                    if mode:
+                        tmp_seq_rewards = np.array(seq_rewards)
+                        new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
+                        if tmp_seq_rewards.shape[0] == 0:
+                            new_seq_rewards = new_tmp_seq_rewards.reshape(1,len(rewards_per_episode))
+                        else:
+                            new_seq_rewards = new_tmp_seq_rewards.reshape(tmp_seq_rewards.shape[0]+1,tmp_seq_rewards.shape[1])
+                        seq_rewards = new_seq_rewards.tolist()
 
-#plot the scores
-fig = plt.figure()
-ax = fig.add_subplot(111)
-plt.plot(np.arange(len(scores)),scores)
-plt.ylabel('Score')
-plt.xlabel('Epsiode #')
-plt.show()
+                        tmp_seq_steps = np.array(seq_steps)
+                        new_tmp_seq_steps = np.array(np.append(tmp_seq_steps.ravel(),np.array(steps_per_episode)))
+                        if tmp_seq_steps.shape[0] == 0:
+                            new_seq_steps = new_tmp_seq_steps.reshape(1,len(steps_per_episode))
+                        else:
+                            new_seq_steps = new_tmp_seq_steps.reshape(tmp_seq_steps.shape[0]+1,tmp_seq_steps.shape[1])
+                        seq_steps = new_seq_steps.tolist()
+                    sim += 1
+    
+        tmp_rewards = np.array(all_rewards)
+        new_tmp_rewards = np.array(np.append(tmp_rewards.ravel(),np.array(seq_rewards).ravel()))
+        new_rewards = new_tmp_rewards.reshape(ts_i+1,sim,n_episodes)
+        all_rewards = new_rewards.tolist()
+
+        tmp_steps = np.array(all_steps)
+        new_tmp_steps = np.array(np.append(tmp_steps.ravel(),np.array(seq_steps).ravel()))
+        new_steps = new_tmp_steps.reshape(ts_i+1,sim,num_episodes)
+        all_steps = new_steps.tolist()
+
+    avg_rewards, avg_steps = calc_avg(new_rewards, new_steps, len(learning_rate)*len(discount_rate*len(exploration_rate)))
+    training_time = time.time() - training_time
+    print("Time to train policy: %sm %ss" %(divmod(training_time, 60)))
+
+    results = print_results(env.grid, HEIGHT, WIDTH)
+
+    results.plot(avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env, training_time)
+
+def moving_avarage_smoothing(X,k):
+	S = np.zeros(X.shape[0])
+	for t in range(X.shape[0]):
+		if t < k:
+			S[t] = np.mean(X[:t+1])
+		else:
+			S[t] = np.sum(X[t-k:t])/k
+	return S
+
+# Calculates average rewards and steps
+def calc_avg(rewards, steps, num_sims):
+    avg_rewards = np.sum(np.array(rewards), axis=0)
+    avg_steps = np.sum(np.array(steps), axis=0)
+
+    avg_rewards = np.divide(avg_rewards, num_sims)
+    avg_steps = np.divide(avg_steps, num_sims)
+
+    mov_avg_rewards = np.empty(avg_rewards.shape)
+    mov_avg_steps = np.empty(avg_steps.shape)
+
+    for i in range(0, num_sims):
+        mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 100)
+        mov_avg_steps[i] = moving_avarage_smoothing(avg_steps[i], 100)
+
+    return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
+
+# Initializing Q-Learning Parameters
+num_episodes = 50000
+max_steps_per_episode = 200
+num_sims = 1
+
+learning_rate = np.array([0.00075, 0.1])
+discount_rate = np.array([0.1, 0.5, 0.9])
+
+exploration_rate = np.array([0.03], dtype=np.float32)
+max_exploration_rate = np.array([0.03], dtype=np.float32)
+min_exploration_rate = np.array([0.03], dtype=np.float32)
+exploration_decay_rate = np.array([0.03], dtype=np.float32)
+
+PATH = os.getcwd()
+PATH = os.path.join(PATH, 'SAR')
+PATH = os.path.join(PATH, 'Results')
+PATH = os.path.join(PATH, 'DQN')
+load_path = os.path.join(PATH, 'Saved_data')
+if not os.path.exists(load_path): os.makedirs(load_path)
+date_and_time = datetime.now()
+save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+if not os.path.exists(save_path): os.makedirs(save_path)
+
+dqn(num_sims, num_episodes, max_steps_per_episode, exploration_rate, min_exploration_rate, exploration_decay_rate, load_path, save_path)

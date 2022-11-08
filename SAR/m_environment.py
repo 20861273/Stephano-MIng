@@ -6,7 +6,7 @@ import math
 
 # Environment characteristics
 HEIGHT = 4
-WIDTH = 4
+WIDTH = 3
 # DENSITY = 30 # percentage
 
 # Direction states
@@ -63,22 +63,22 @@ class Environment:
         #     grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         #     self.pos = self.starting_pos
-
         # Set robot(s) start position
         self.starting_pos = [0]*nr
         indices = np.argwhere(grid == States.UNEXP.value)
         np.random.shuffle(indices)
         i = 0
         self.starting_pos[0] = Point(indices[i,1], indices[i,0])
-        while self.starting_pos[0].y < self.grid.shape[0]/2:
+        self.starting_pos[1] = self.starting_pos[0]
+        while not self.starting_pos[0].y < grid.shape[0]/2:
             self.starting_pos[0] = Point(indices[i,1], indices[i,0])
             i += 1
-        while self.starting_pos[0].y >= self.grid.shape[0]/2:
+        while not self.starting_pos[1].y >= grid.shape[0]/2:
             self.starting_pos[1] = Point(indices[i,1], indices[i,0])
             i += 1
 
         for i in range(0, nr):
-            self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+            grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos
 
