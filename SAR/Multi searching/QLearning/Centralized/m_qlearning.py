@@ -31,20 +31,21 @@ class QLearning:
 
         # Creating The Q-Table
         action_space_size = len(Direction)
-        state_space_size = (env.grid.shape[1] * env.grid.shape[0])
-        #print(state_space_size, action_space_size)
+        state_space_size = (env.grid.shape[1] * env.grid.shape[0])**2
 
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
         num_episodes = 200000
         max_steps_per_episode = 200
-        num_epochs = 1
+        epochs = 1
 
         learning_rate = np.array([0.00075])
         discount_rate = np.array([0.002])
 
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
+        n_tests = 50	
+        interval = 5000
 
         exploration_rate = np.array([0.03], dtype=np.float32)
         max_exploration_rate = np.array([0.03], dtype=np.float32)
@@ -60,22 +61,19 @@ class QLearning:
             policy_extraction = False
 
         # Result parameters
-        num_sims = len(learning_rate) * len(discount_rate) * len(exploration_rate)
-        sim = 0
-        seq = 0
-        steps_per_episode = []
+        experiments = len(learning_rate) * len(discount_rate) * len(exploration_rate)
+        exp = 0
+        epoch_cnt = 0
+        
         rewards_per_episode = []
         seq_rewards = []
-        seq_steps = []
         avg_rewards = []
-        avg_steps = []
         all_rewards = []
-        all_steps = []
         all_grids = []
         action = np.empty((self.nr,), dtype=np.int8)
-        q_tables = np.zeros((num_sims, state_space_size, action_space_size))
+        q_tables = np.zeros((experiments, state_space_size, action_space_size))
 
-        print("\n# Epochs: ", num_epochs, "\n# Training sessions per epoch: ", num_sims, "\n# Episodes per training session: ", num_episodes)
+        print("\n# Epochs: ", epochs, "\n# Experiments: ", experiments, "\n# Episodes per training session: ", num_episodes)
         print("\nHyperparameters:\nLearning rate (α): ", learning_rate, "\nDiscount rate (γ): ", discount_rate, "\nExploration rate (ϵ): ", exploration_rate, "\nExploration decay rate: ", exploration_decay_rate, "\n")
 
         if mode != 1:
@@ -106,22 +104,20 @@ class QLearning:
             training_time = time.time()
             generate = False
             state = self.reset(env, generate)
-            for seq_i in range(0, num_epochs):
-                print("Training session: ", seq)
+            for seq_i in range(0, epochs):
+                print("Epoch: ", epoch_cnt)
                 seq_rewards = []
                 seq_steps = []
-                sim = 0
+                exp = 0
                 for lr_i in np.arange(len(learning_rate)):
                     for dr_i in np.arange(len(discount_rate)):
                         for er_i in np.arange(len(exploration_rate)):
-                            print("Simulation: ", sim)
+                            print("Experiment: ", exp)
                             # Reinitialize some variables
                             ep_exploration_rate = np.copy(exploration_rate)
                             q_table = np.zeros((state_space_size, action_space_size))
 
                             # Training Loop
-                            episode_len = []
-                            steps_per_episode = []
                             rewards_per_episode = []                
 
                             # Q-learning algorithm
@@ -159,7 +155,6 @@ class QLearning:
 
                                     if done == True:
                                         rewards_per_episode.append(rewards_current_episode)
-                                        steps_per_episode.append(step+1)
                                         break
 
                                     # Exploration rate decay 
@@ -170,9 +165,10 @@ class QLearning:
                                 if mode:
                                     if not done:
                                         rewards_per_episode.append(rewards_current_episode)
-                                        steps_per_episode.append(step+1)
+                                        rewards_per_episode = rewards_per_episode[::interval]
 
                             if mode:
+                                rewards_per_episode = rewards_per_episode[::interval]
                                 tmp_seq_rewards = np.array(seq_rewards)
                                 new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
                                 if tmp_seq_rewards.shape[0] == 0:
@@ -180,31 +176,18 @@ class QLearning:
                                 else:
                                     new_seq_rewards = new_tmp_seq_rewards.reshape(tmp_seq_rewards.shape[0]+1,tmp_seq_rewards.shape[1])
                                 seq_rewards = new_seq_rewards.tolist()
-
-                                tmp_seq_steps = np.array(seq_steps)
-                                new_tmp_seq_steps = np.array(np.append(tmp_seq_steps.ravel(),np.array(steps_per_episode)))
-                                if tmp_seq_steps.shape[0] == 0:
-                                    new_seq_steps = new_tmp_seq_steps.reshape(1,len(steps_per_episode))
-                                else:
-                                    new_seq_steps = new_tmp_seq_steps.reshape(tmp_seq_steps.shape[0]+1,tmp_seq_steps.shape[1])
-                                seq_steps = new_seq_steps.tolist()
                                 
-                                q_tables[sim] = q_table
+                                q_tables[exp] = q_table
 
-                            sim += 1
+                            exp += 1
                 tmp_rewards = np.array(all_rewards)
                 new_tmp_rewards = np.array(np.append(tmp_rewards.ravel(),np.array(seq_rewards).ravel()))
-                new_rewards = new_tmp_rewards.reshape(seq+1,sim,num_episodes)
+                new_rewards = new_tmp_rewards.reshape(epoch_cnt+1,exp,num_episodes/interval)
                 all_rewards = new_rewards.tolist()
 
-                tmp_steps = np.array(all_steps)
-                new_tmp_steps = np.array(np.append(tmp_steps.ravel(),np.array(seq_steps).ravel()))
-                new_steps = new_tmp_steps.reshape(seq+1,sim,num_episodes)
-                all_steps = new_steps.tolist()
-
-                seq += 1
+                epoch_cnt += 1
             
-            avg_rewards, avg_steps = calc_avg(new_rewards, new_steps, num_epochs, num_sims)
+            avg_rewards = calc_avg(new_rewards, epochs, experiments)
             training_time = time.time() - training_time
             print("Time to train policy: %sm %ss" %(divmod(training_time, 60)))
 
@@ -229,36 +212,41 @@ class QLearning:
                 trajs.append(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
                 print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
 
-            results.plot(q_tables, avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env, training_time, trajs)
+            results.plot_and_save(q_tables, avg_rewards, learning_rate, discount_rate, exploration_rate, load_path, env, training_time, trajs)
 
             for i in range(0, q_tables.shape[0]):
                 print("\nTesting policy %s:" % (i))
-                nb_success = 0
+                nb_success = [0]*n_tests
+                zeros = [0]*n_tests
                 # Display percentage successes
-                for episode in range(10000):
-                    if episode % 1000 == 0: print("Episode: ", episode)
-                    # initialize new episode params
-                    state = self.reset(env, generate)
-                    #print(env.grid)
-                    #print(env.grid)
-                    done = False
-                    for step in range(max_steps_per_episode):   
-                        # Show current state of environment on screen
-                        # Choose action with highest Q-value for current state (Greedy policy)     
-                        for j in range(0, self.nr):  
-                            # Take new action
-                            action[j] = np.argmax(q_tables[i, state[j],:])
-                        new_state, reward, done, info = self.step(env, action, pos_reward)
-                        
-                        if done:   
-                            nb_success += 1
-                            break
+                for j in range(0, n_tests):
+                    if j % 10 == 0: print("Testing...", j)
+                    tmp_zeros0 = [a for a in q_tables[i, state0] if a == 0]
+                    zeros[j] += len(tmp_zeros0)
+                    for state0 in range(0, env.grid.shape[0]*env.grid.shape[1]):
+                        for state1 in range(0, env.grid.shape[0]*env.grid.shape[1]):
+                            # initialize new episode params
+                            _ = self.reset(env, True)
+                            for step in range(1, max_steps_per_episode+1):
+                                # Choose action with highest Q-value for current state (Greedy policy)     
+                                # Take new action
+                                action[0] = np.argmax(q_tables[i, [state0, state1],:])
+                                action[1] = np.argmax(q_tables[i, [state1, state1],:])
+                                new_state, reward, done, _ = self.step(env, action, pos_reward, step)
+                                
+                                if done:   
+                                    nb_success[j] += 1
+                                    break
 
-                        # Set new state
-                        state = new_state
+                                # Set new state
+                                state = new_state
 
                 # Let's check our success rate!
-                print ("Success rate of policy %s = %s %%" % (i, nb_success/100))
+                success = sum(nb_success)/n_tests
+
+                # Let's check our success rate!
+                print ("Success rate of policy %s: %s / %s * 100 = %s %%" % (i, success, state_space_size, success/state_space_size*100))
+                print("Agent: %s\nOut of: %s" %(str(zeros), str(state_space_size*action_space_size)))
             
             winsound.Beep(1000, 500)
 
@@ -562,22 +550,18 @@ def moving_avarage_smoothing(X,k):
 	return S
 
 # Calculates average rewards and steps
-def calc_avg(rewards, steps, num_epochs, num_sims):
+def calc_avg(rewards, num_epochs, num_sims):
     avg_rewards = np.sum(np.array(rewards), axis=0)
-    avg_steps = np.sum(np.array(steps), axis=0)
 
     avg_rewards = np.divide(avg_rewards, num_epochs)
-    avg_steps = np.divide(avg_steps, num_epochs)
 
     mov_avg_rewards = np.empty(avg_rewards.shape)
-    mov_avg_steps = np.empty(avg_steps.shape)
 
     for i in range(0, num_sims):
         mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 100)
-        mov_avg_steps[i] = moving_avarage_smoothing(avg_steps[i], 100)
 
-    return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
-    # return avg_rewards.tolist(), avg_steps.tolist()
+    return mov_avg_rewards.tolist()
+    # return avg_rewards.tolist()
 
 def extract_values(policy_extraction, correct_path, policy, env):
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")

@@ -1,10 +1,13 @@
 import math
 import numpy as np
+import os
 
-x = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29]
+asb_path = os.getcwd()
+asb_path = os.path.join(asb_path, 'SAR')
+asb_path = os.path.join(asb_path, 'Results')
+asb_path = os.path.join(asb_path, 'QLearning')
 
-y = np.reshape(np.array(x), (6,5))
-
-print(y.T)
-
-
+walk = list(os.walk(asb_path))
+for path, _, _ in walk[::1]:
+    if len(os.listdir(path)) == 0:
+        os.rmdir(path)

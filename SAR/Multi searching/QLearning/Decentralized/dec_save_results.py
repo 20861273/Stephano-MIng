@@ -74,7 +74,7 @@ class print_results:
         plt_title = "Q-learning Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
-    def plot(self, q_tables, rewards, steps, learning_rate, discount_rate, exploration_rate, max_exploration_rate, min_exploration_rate, exploration_decay_rate, save_path, env, t_time):
+    def plot_and_save(self, q_tables, rewards, learning_rate, discount_rate, exploration_rate, max_exploration_rate, min_exploration_rate, exploration_decay_rate, save_path, env, t_time):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
 
         c = cm.rainbow(np.linspace(0, 1, len(rewards)))
@@ -89,7 +89,7 @@ class print_results:
                         file_name = "policy" + str(cnt) + "," + str(j) + ".txt"
                         np.savetxt(os.path.join(save_path, file_name), q_tables[cnt, j])
                     
-                    l.append("%s: α=%s, γ=%s, ϵ=%s, ϵ_min=%s, ϵ_max, ϵ_d=%s=%s" %(
+                    l.append("%s: α=%s, γ=%s, ϵ=%s, ϵ_min=%s, ϵ_max=%s, ϵ_d=%s" %(
                             str(cnt),
                             str(learning_rate[lr_i]), 
                             str(discount_rate[dr_i]), 
@@ -105,13 +105,12 @@ class print_results:
         for j in range(0, 2):
             for i in range(0, len(rewards)):
                 file_name = "policy_rewards" + str(i) + "," + str(j) + ".txt"
-                np.savetxt(os.path.join(save_path, file_name), rewards[0][j][::500])
+                np.savetxt(os.path.join(save_path, file_name), rewards[i][j])
         
         sim_len = (len(learning_rate) * len(discount_rate) * len(exploration_rate))
         plot_len = int(sim_len/3)
         plot_rem = sim_len % 3
         cnt = 0
-        interval = 5000
         for i in range(0, plot_len):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 15))
 
@@ -122,11 +121,14 @@ class print_results:
             ax2.set_title('Steps per episode')
             ax2.set_xlabel('Episode')
             ax2.set_ylabel('#Steps')
+
+            ax1.set_ylim([-20, 30])
+            ax2.set_ylim([-20, 30])
             
             
             for j in range(0, 3):
-                ax1.plot(np.arange(0, len(rewards[i*3+j][0]), interval), rewards[i*3+j][0][::interval], color=c[i*3+j])
-                ax2.plot(np.arange(0, len(rewards[i*3+j][1]), interval), rewards[i*3+j][1][::interval], color=c[i*3+j])
+                ax1.plot(np.arange(0, len(rewards[i*3+j][0])), rewards[i*3+j][0], color=c[i*3+j])
+                ax2.plot(np.arange(0, len(rewards[i*3+j][1])), rewards[i*3+j][1], color=c[i*3+j])
                 cnt += 1
 
             ax1.legend(l[i*3:i*3+3])
@@ -147,9 +149,12 @@ class print_results:
             ax2.set_xlabel('Episode')
             ax2.set_ylabel('Rewards')
 
+            ax1.set_ylim([-20, 30])
+            ax2.set_ylim([-20, 30])
+
             for i in range(sim_len-plot_rem, sim_len):
-                ax1.plot(np.arange(0, len(rewards[i][0]), interval), rewards[i][0][::interval], color=c[i])
-                ax2.plot(np.arange(0, len(rewards[i][1]), interval), rewards[i][1][::interval], color=c[i])
+                ax1.plot(np.arange(0, len(rewards[i][0])), rewards[i][0], color=c[i])
+                ax2.plot(np.arange(0, len(rewards[i][1])), rewards[i][1], color=c[i])
 
             ax1.legend(l[cnt:])
             ax2.legend(l[cnt:])

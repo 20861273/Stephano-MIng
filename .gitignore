@@ -1,6 +1,8 @@
 # Ignore folders
-/SAR/__pycache__
-/SAR/Results
+/SAR/__pycache__/*
+/SAR/Results/*
+/SAR/Multi searching/QLearning/Centralized/__pycache__/*
+/SAR/Multi searching/QLearning/Decentralized/__pycache__/*
 
 /Maze/__pycache__
 /Maze/include
