@@ -224,23 +224,25 @@ class QLearning:
             for i in range(0, q_tables.shape[0]):
                 print("\nTesting policy %s:" % (i))
                 nb_success = [0]*n_tests
-                zeros0 = [0]*n_tests
-                zeros1 = [0]*n_tests
+                zeros0 = [0]*q_tables.shape[0]
+                zeros1 = [0]*q_tables.shape[0]
                 # Display percentage successes
                 for j in range(0, n_tests):
                     if j % 10 == 0: print("Testing...", j)
+                    zeros0[i] = 0
+                    zeros1[i] = 0
                     for state0 in range(0, env.grid.shape[0]*env.grid.shape[1]):
                         for state1 in range(0, env.grid.shape[0]*env.grid.shape[1]):
                             # if episode % 1000 == 0: print("Episode: ", episode)
                             # initialize new episode params
                             _ = self.reset(env, True)
-                            tmp_zeros0 = [a for a in q_tables[i, 0, state0] if a == 0]
-                            zeros0[j] += len(tmp_zeros0)
-                            tmp_zeros1 = [a for a in q_tables[i, 1, state0] if a == 0]
-                            zeros1[j] += len(tmp_zeros1)
-                            # print(state0, state1)
-                            #print(env.grid)
-                            #print(env.grid)
+                            state = [(state0*env.grid.shape[0]*env.grid.shape[1] + state1),
+                                (state1*env.grid.shape[0]*env.grid.shape[1] + state0)]
+                            tmp_zeros0 = [a for a in q_tables[i, 0, state[0]] if a == 0]
+                            zeros0[i] += len(tmp_zeros0)
+                            tmp_zeros1 = [a for a in q_tables[i, 1, state[0]] if a == 0]
+                            zeros1[i] += len(tmp_zeros1)
+                            
                             for step in range(1, max_steps_per_episode+1):   
                                 # Show current state of environment on screen
                                 # Choose action with highest Q-value for current state (Greedy policy)     
@@ -261,7 +263,7 @@ class QLearning:
 
                 # Let's check our success rate!
                 print ("Success rate of policy %s: %s / %s * 100 = %s %%" % (i, success, state_space_size, success/state_space_size*100))
-                print("Agent 0: %s\nAgent 1: %s\nOut of: %s" %(str(zeros0), str(zeros1), str(state_space_size*action_space_size)))
+                print("Agent 0: %s\nAgent 1: %s\nOut of: %s" %(str(zeros0[i]), str(zeros1[i]), str(state_space_size*action_space_size**2)))
 
             winsound.Beep(1000, 500)
 
@@ -320,7 +322,7 @@ class QLearning:
 
             # Let's check our success rate!
             print ("Success rate of policy %s: %s / %s * 100 = %s %%" % (i, success, state_space_size, success/state_space_size*100))
-            print("Agent 0: %s\nAgent 1: %s\nOut of: %s" %(str(zeros0), str(zeros1), str(state_space_size*action_space_size)))
+            print("Agent 0: %s\nAgent 1: %s\nOut of: %s" %(str(zeros0[i]), str(zeros1[i]), str(state_space_size*action_space_size)))
 
             if mode == 3:
                 for step in range(1, max_steps_per_episode+1):
@@ -484,7 +486,8 @@ class QLearning:
         self._update_env(env)
 
         # 5. Check exit condition
-        if any(pos == self.goal for pos in self.pos):
+        check = env.goal if env.goal in self.pos else None
+        if check:
             self.score[0] += self.p_reward*2
             self.score[1] += self.p_reward*2
             reward[0] = self.score[0]
@@ -497,15 +500,13 @@ class QLearning:
 
     def get_state(self, env):
         state = np.empty((self.nr,), dtype=np.int8)
-        for i in range(0, self.nr):
-            state[i] = (self.pos[i].x*env.grid.shape[0] + self.pos[i].y)
+        state[0] = self.pos[0].x*env.grid.shape[1] + self.pos[1].y
+        state[1] = self.pos[1].x*env.grid.shape[1] + self.pos[0].y
         
-        # return state
         s = [(state[0]*env.grid.shape[0]*env.grid.shape[1] + state[1]),
             (state[1]*env.grid.shape[0]*env.grid.shape[1] + state[0])]
         
         return s
-
     
     def _is_collision(self, env, i, pt=None):
         if pt is None:

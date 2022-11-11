@@ -36,21 +36,21 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 200000
+        num_episodes = 1000000
         max_steps_per_episode = 200
         epochs = 1
 
-        learning_rate = np.array([0.00075])
-        discount_rate = np.array([0.002])
+        learning_rate = np.array([0.1])
+        discount_rate = np.array([0.1, 0.5, 0.9])
 
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
-        n_tests = 50	
-        interval = 5000
+        n_tests = 50
+        interval = 2
 
-        exploration_rate = np.array([0.03], dtype=np.float32)
-        max_exploration_rate = np.array([0.03], dtype=np.float32)
-        min_exploration_rate = np.array([0.03], dtype=np.float32)
-        exploration_decay_rate = np.array([0.03], dtype=np.float32)
+        exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
+        max_exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
+        min_exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
+        exploration_decay_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -73,7 +73,7 @@ class QLearning:
         action = np.empty((self.nr,), dtype=np.int8)
         q_tables = np.zeros((experiments, state_space_size, action_space_size))
 
-        print("\n# Epochs: ", epochs, "\n# Experiments: ", experiments, "\n# Episodes per training session: ", num_episodes)
+        print("\n# Epochs: ", epochs, "\n# Experiments: ", experiments, "\n# Episodes per experiment: ", num_episodes)
         print("\nHyperparameters:\nLearning rate (α): ", learning_rate, "\nDiscount rate (γ): ", discount_rate, "\nExploration rate (ϵ): ", exploration_rate, "\nExploration decay rate: ", exploration_decay_rate, "\n")
 
         if mode != 1:
@@ -165,16 +165,15 @@ class QLearning:
                                 if mode:
                                     if not done:
                                         rewards_per_episode.append(rewards_current_episode)
-                                        rewards_per_episode = rewards_per_episode[::interval]
 
                             if mode:
                                 rewards_per_episode = rewards_per_episode[::interval]
                                 tmp_exp_rewards = np.array(exp_rewards)
-                                new_tmp_seq_rewards = np.array(np.append(tmp_exp_rewards.ravel(),np.array(rewards_per_episode)))
+                                new_tmp_exp_rewards = np.array(np.append(tmp_exp_rewards.ravel(),np.array(rewards_per_episode)))
                                 if tmp_exp_rewards.shape[0] == 0:
-                                    new_exp_rewards = new_tmp_seq_rewards.reshape(1,len(rewards_per_episode))
+                                    new_exp_rewards = new_tmp_exp_rewards.reshape(1,len(rewards_per_episode))
                                 else:
-                                    new_exp_rewards = new_tmp_seq_rewards.reshape(tmp_exp_rewards.shape[0]+1,tmp_exp_rewards.shape[1])
+                                    new_exp_rewards = new_tmp_exp_rewards.reshape(new_exp_rewards.shape[0]+1, new_exp_rewards.shape[1])
                                 exp_rewards = new_exp_rewards.tolist()
                                 
                                 q_tables[exp] = q_table
@@ -182,7 +181,7 @@ class QLearning:
                             exp += 1
                 tmp_rewards = np.array(all_rewards)
                 new_tmp_rewards = np.array(np.append(tmp_rewards.ravel(),np.array(exp_rewards).ravel()))
-                new_rewards = new_tmp_rewards.reshape(epoch_cnt+1,exp,num_episodes/interval)
+                new_rewards = new_tmp_rewards.reshape(epoch_cnt+1,exp,int(num_episodes/interval))
                 all_rewards = new_rewards.tolist()
 
                 epoch_cnt += 1
@@ -217,22 +216,26 @@ class QLearning:
             for i in range(0, q_tables.shape[0]):
                 print("\nTesting policy %s:" % (i))
                 nb_success = [0]*n_tests
-                zeros = [0]*n_tests
+                zeros = [0]*q_tables.shape[0]
                 # Display percentage successes
                 for j in range(0, n_tests):
                     if j % 10 == 0: print("Testing...", j)
-                    tmp_zeros0 = [a for a in q_tables[i, state0] if a == 0]
-                    zeros[j] += len(tmp_zeros0)
+                    zeros[i] = 0
                     for state0 in range(0, env.grid.shape[0]*env.grid.shape[1]):
                         for state1 in range(0, env.grid.shape[0]*env.grid.shape[1]):
                             # initialize new episode params
                             _ = self.reset(env, True)
+
+                            state = [(state0*env.grid.shape[0]*env.grid.shape[1] + state1),
+                                (state1*env.grid.shape[0]*env.grid.shape[1] + state0)]
+                            tmp_zeros0 = [a for a in q_tables[i, state[0]] if a == 0]
+                            zeros[i] += len(tmp_zeros0)
                             for step in range(1, max_steps_per_episode+1):
                                 # Choose action with highest Q-value for current state (Greedy policy)     
                                 # Take new action
-                                action[0] = np.argmax(q_tables[i, [state0, state1],:])
-                                action[1] = np.argmax(q_tables[i, [state1, state1],:])
-                                new_state, reward, done, _ = self.step(env, action, pos_reward, step)
+                                action[0] = np.argmax(q_tables[i, state[0],:])
+                                action[1] = np.argmax(q_tables[i, state[1],:])
+                                new_state, reward, done, _ = self.step(env, action, pos_reward)
                                 
                                 if done:   
                                     nb_success[j] += 1
@@ -246,7 +249,7 @@ class QLearning:
 
                 # Let's check our success rate!
                 print ("Success rate of policy %s: %s / %s * 100 = %s %%" % (i, success, state_space_size, success/state_space_size*100))
-                print("Agent: %s\nOut of: %s" %(str(zeros), str(state_space_size*action_space_size)))
+                print("Policy %s agent: %s\nOut of: %s" %(str(i), str(zeros[i]), str(state_space_size*action_space_size**2)))
             
             winsound.Beep(1000, 500)
 
@@ -322,7 +325,7 @@ class QLearning:
                 for i in range(0, self.nr):  
                     # Take new action
                     action[i] = np.argmax(q_table[state[i],:])
-                new_state, reward, done, info = self.step(env, action, pos_reward)
+                new_state, reward, done, _ = self.step(env, action, pos_reward)
                 
                 if done:
                     if mode: all_grids.append(env.grid.copy())
@@ -352,7 +355,7 @@ class QLearning:
         # init game state
         if generate:
             # Generates grid
-            env.grid = env.generate_grid()
+            env.grid = env.generate_grid(self.nr)
             self.prev_pos = self.starting_pos
             self.pos = self.prev_pos
 
@@ -426,10 +429,12 @@ class QLearning:
             np.random.shuffle(indices)
             i = 0
             self.starting_pos[0] = Point(indices[i,1], indices[i,0])
-            while self.starting_pos[0].y < self.grid.shape[0]/2:
+            self.starting_pos[1] = self.starting_pos[0]
+
+            while self.starting_pos[0].y < env.grid.shape[0]/2:
                 self.starting_pos[0] = Point(indices[i,1], indices[i,0])
                 i += 1
-            while self.starting_pos[0].y >= self.grid.shape[0]/2:
+            while self.starting_pos[1].y >= env.grid.shape[0]/2:
                 self.starting_pos[1] = Point(indices[i,1], indices[i,0])
                 i += 1
             
@@ -471,7 +476,8 @@ class QLearning:
         self._update_env(env)
 
         # 5. Check exit condition
-        if self.pos == env.goal:
+        check = env.goal if env.goal in self.pos else None
+        if check:
             self.score += self.p_reward
             reward = self.score
             game_over = True
@@ -482,8 +488,14 @@ class QLearning:
 
     def get_state(self, env):
         state = np.empty((self.nr,), dtype=np.int8)
-        for i in range(0, self.nr):
-            state[i] = self.pos[i].x*env.grid.shape[0] + self.pos[i].y
+        state[0] = self.pos[0].x*env.grid.shape[1] + self.pos[1].y
+        state[1] = self.pos[1].x*env.grid.shape[1] + self.pos[0].y
+
+        s = [(state[0]*env.grid.shape[0]*env.grid.shape[1] + state[1]),
+            (state[1]*env.grid.shape[0]*env.grid.shape[1] + state[0])]
+        
+        return s
+
         return state
     
     def _is_collision(self, env, i, pt=None):
