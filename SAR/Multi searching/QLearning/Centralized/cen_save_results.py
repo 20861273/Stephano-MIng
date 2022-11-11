@@ -117,7 +117,7 @@ class print_results:
             ax1.set_ylabel('Rewards')
             
             for j in range(0, 3):
-                ax1.plot(np.arange(0, len(rewards[i*3+j]), 500), rewards[i*3+j][::500], color=c[i*3+j])
+                ax1.plot(np.arange(0, len(rewards[i*3+j])), rewards[i*3+j], color=c[i*3+j])
 
             ax1.legend(l)
 
@@ -133,7 +133,7 @@ class print_results:
             ax1.set_ylabel('Rewards')
 
             for i in range(sim_len-plot_rem, sim_len):
-                ax1.plot(np.arange(0, len(rewards[i]), 500), rewards[i][::500], color=c[i])
+                ax1.plot(np.arange(0, len(rewards[i])), rewards[i], color=c[i])
 
             ax1.legend(l)
 

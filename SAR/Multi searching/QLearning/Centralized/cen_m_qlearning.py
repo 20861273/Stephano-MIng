@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import math
 import winsound
 
-from m_environment import Environment, HEIGHT, WIDTH, States, Direction, Point
-from save_results import print_results
+from cen_m_environment import Environment, HEIGHT, WIDTH, States, Direction, Point
+from cen_save_results import print_results
 
 from datetime import datetime
 import os
@@ -66,7 +66,7 @@ class QLearning:
         epoch_cnt = 0
         
         rewards_per_episode = []
-        seq_rewards = []
+        exp_rewards = []
         avg_rewards = []
         all_rewards = []
         all_grids = []
@@ -106,7 +106,7 @@ class QLearning:
             state = self.reset(env, generate)
             for seq_i in range(0, epochs):
                 print("Epoch: ", epoch_cnt)
-                seq_rewards = []
+                exp_rewards = []
                 seq_steps = []
                 exp = 0
                 for lr_i in np.arange(len(learning_rate)):
@@ -169,19 +169,19 @@ class QLearning:
 
                             if mode:
                                 rewards_per_episode = rewards_per_episode[::interval]
-                                tmp_seq_rewards = np.array(seq_rewards)
-                                new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
-                                if tmp_seq_rewards.shape[0] == 0:
-                                    new_seq_rewards = new_tmp_seq_rewards.reshape(1,len(rewards_per_episode))
+                                tmp_exp_rewards = np.array(exp_rewards)
+                                new_tmp_seq_rewards = np.array(np.append(tmp_exp_rewards.ravel(),np.array(rewards_per_episode)))
+                                if tmp_exp_rewards.shape[0] == 0:
+                                    new_exp_rewards = new_tmp_seq_rewards.reshape(1,len(rewards_per_episode))
                                 else:
-                                    new_seq_rewards = new_tmp_seq_rewards.reshape(tmp_seq_rewards.shape[0]+1,tmp_seq_rewards.shape[1])
-                                seq_rewards = new_seq_rewards.tolist()
+                                    new_exp_rewards = new_tmp_seq_rewards.reshape(tmp_exp_rewards.shape[0]+1,tmp_exp_rewards.shape[1])
+                                exp_rewards = new_exp_rewards.tolist()
                                 
                                 q_tables[exp] = q_table
 
                             exp += 1
                 tmp_rewards = np.array(all_rewards)
-                new_tmp_rewards = np.array(np.append(tmp_rewards.ravel(),np.array(seq_rewards).ravel()))
+                new_tmp_rewards = np.array(np.append(tmp_rewards.ravel(),np.array(exp_rewards).ravel()))
                 new_rewards = new_tmp_rewards.reshape(epoch_cnt+1,exp,num_episodes/interval)
                 all_rewards = new_rewards.tolist()
 
@@ -558,10 +558,9 @@ def calc_avg(rewards, num_epochs, num_sims):
     mov_avg_rewards = np.empty(avg_rewards.shape)
 
     for i in range(0, num_sims):
-        mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 100)
+        mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 50)
 
     return mov_avg_rewards.tolist()
-    # return avg_rewards.tolist()
 
 def extract_values(policy_extraction, correct_path, policy, env):
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")

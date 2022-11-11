@@ -35,7 +35,7 @@ class QLearning:
         q_table = np.zeros((self.nr, state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 10000
+        num_episodes = 1000000
         max_steps_per_episode = 200
         epochs = 1
 
@@ -571,19 +571,18 @@ def moving_avarage_smoothing(X,k):
 	return S
 
 # Calculates average rewards and steps
-def calc_avg(rewards, num_epochs, num_sims, nr):
+def calc_avg(rewards, num_epochs, num_exp, nr):
     avg_rewards = np.sum(np.array(rewards), axis=0)
 
     avg_rewards = np.divide(avg_rewards, num_epochs)
 
     mov_avg_rewards = np.empty(avg_rewards.shape)
 
-    for i in range(0, num_sims):
+    for i in range(0, num_exp):
         for j in range(0, nr):
-            mov_avg_rewards[i,j] = moving_avarage_smoothing(avg_rewards[i,j], 1000)
+            mov_avg_rewards[i,j] = moving_avarage_smoothing(avg_rewards[i,j], 50)
 
-    # return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
-    return avg_rewards.tolist()
+    return mov_avg_rewards.tolist()
 
 def extract_values(policy_extraction, correct_path, policy, env):
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
