@@ -25,7 +25,7 @@ class States(Enum):
     EXP = 4
 
 # Setup position variable of robot as point
-Point = namedtuple('Point', 'x, y')
+Point = namedtuple('Point', 'y, x')
 
 
 class Environment:
@@ -34,7 +34,7 @@ class Environment:
         self.pos = [0]*nr
         self.prev_pos = [0]*nr
         self.starting_pos = [0]*nr
-        self.pos = self.starting_pos
+        self.pos = self.starting_pos.copy()
 
         # Generates grid (Grid[y,x])
         self.grid = self.generate_grid(nr)
@@ -68,25 +68,17 @@ class Environment:
         indices = np.argwhere(grid == States.UNEXP.value)
         np.random.shuffle(indices)
         i = 0
-        self.starting_pos[0] = Point(indices[i,1], indices[i,0])
-        self.starting_pos[1] = self.starting_pos[0]
-        while not self.starting_pos[0].y < grid.shape[0]/2:
-            self.starting_pos[0] = Point(indices[i,1], indices[i,0])
-            i += 1
-        while not self.starting_pos[1].y >= grid.shape[0]/2:
-            self.starting_pos[1] = Point(indices[i,1], indices[i,0])
-            i += 1
+        self.starting_pos[0] = Point(indices[0,0], indices[0,1])
+        self.starting_pos[1] = Point(indices[1,0], indices[1,1])  
 
         for i in range(0, nr):
             grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
-        self.pos = self.starting_pos
+        self.pos = self.starting_pos.copy()
 
         # Set goal position
         indices = np.argwhere(grid == States.UNEXP.value)
         np.random.shuffle(indices)
-        self.goal = Point(indices[0,1], indices[0,0])
-        
-        grid[self.goal.y, self.goal.x] = States.GOAL.value
+        self.goal = Point(indices[0,0], indices[0,1])
 
         return grid

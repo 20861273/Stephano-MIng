@@ -118,7 +118,7 @@ class print_results:
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 
-            ax2.set_title('Steps per episode')
+            ax2.set_title('Rewards per episode')
             ax2.set_xlabel('Episode')
             ax2.set_ylabel('#Steps')
 

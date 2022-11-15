@@ -35,22 +35,22 @@ class QLearning:
         q_table = np.zeros((self.nr, state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 1000000
+        num_episodes = 5000000
         max_steps_per_episode = 200
         epochs = 1
 
-        learning_rate = np.array([0.1])
-        discount_rate = np.array([0.1, 0.5, 0.9])
+        learning_rate = np.array([0.01])
+        discount_rate = np.array([0.9])
 
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
         # pos_reward = 1
         n_tests = 50
         interval = 5000
 
-        exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
-        max_exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
-        min_exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
-        exploration_decay_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
+        exploration_rate = np.array([0.1, 1], dtype=np.float32)
+        max_exploration_rate = np.array([0.1, 1], dtype=np.float32)
+        min_exploration_rate = np.array([0.1, 0.1], dtype=np.float32)
+        exploration_decay_rate = np.array([0.1, 0.001], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -92,6 +92,7 @@ class QLearning:
             PATH = os.path.join(PATH, 'SAR')
             PATH = os.path.join(PATH, 'Results')
             PATH = os.path.join(PATH, 'QLearning')
+            PATH = os.path.join(PATH, 'Decentralized')
             load_path = os.path.join(PATH, 'Saved_data')
             if not os.path.exists(load_path): os.makedirs(load_path)
             date_and_time = datetime.now()
@@ -167,7 +168,6 @@ class QLearning:
                                 if mode:
                                     if not done:
                                         rewards_per_episode.append(rewards_current_episode)
-                                        rewards_per_episode = rewards_per_episode[::interval]
 
                             if mode:
                                 # Adds epoch rewards to training session rewards variable
@@ -180,7 +180,7 @@ class QLearning:
                                 if tmp_exp_rewards.shape[0] == 0:
                                     new_exp_rewards = new_tmp_exp_rewards.reshape(1,self.nr, len(rewards_per_episode))
                                 else:
-                                    new_exp_rewards = new_tmp_exp_rewards.reshape(tmp_exp_rewards.shape[0]+1, self.nr, tmp_exp_rewards.shape[2])
+                                    new_exp_rewards = new_tmp_exp_rewards.reshape(new_exp_rewards.shape[0]+1, self.nr, new_exp_rewards.shape[2])
                                 exp_rewards = new_exp_rewards.tolist()
                                 
                                 q_tables[exp] = q_table
@@ -219,7 +219,7 @@ class QLearning:
                     trajs.append(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
                     print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
 
-            results.plot_and_save(q_tables, avg_rewards, learning_rate, discount_rate, exploration_rate, max_exploration_rate, min_exploration_rate, exploration_decay_rate, load_path, env, training_time)
+            results.plot_and_save(q_tables, avg_rewards, learning_rate, discount_rate, exploration_rate, max_exploration_rate, min_exploration_rate, exploration_decay_rate, save_path, env, training_time)
 
             for i in range(0, q_tables.shape[0]):
                 print("\nTesting policy %s:" % (i))
@@ -247,8 +247,8 @@ class QLearning:
                                 # Show current state of environment on screen
                                 # Choose action with highest Q-value for current state (Greedy policy)     
                                 # Take new action
-                                action[0] = np.argmax(q_tables[i, 0, state0,:])
-                                action[1] = np.argmax(q_tables[i, 1, state1,:])
+                                action[0] = np.argmax(q_tables[i, 0, state[0],:])
+                                action[1] = np.argmax(q_tables[i, 1, state[1],:])
                                 new_state, reward, done, info = self.step(env, action, pos_reward, step)
                                 
                                 if done:   
@@ -445,11 +445,11 @@ class QLearning:
         indices = np.argwhere(env.grid == States.UNEXP.value)
         np.random.shuffle(indices)
         
-        self.starting_pos[0] = Point(indices[0,1], indices[0,0])
+        self.starting_pos[0] = Point(indices[0,0], indices[0,1])
         self.starting_pos[1] = self.starting_pos[0]
         while not self.starting_pos[1] == self.starting_pos[0]:
             np.random.shuffle(indices)
-            self.starting_pos[1] = Point(indices[0,1], indices[0,0])
+            self.starting_pos[1] = Point(indices[0,0], indices[0,1])
         
         for i in range(0, self.nr):
             env.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
