@@ -17,9 +17,9 @@ class QLearning:
         self.score = 0
         self.frame_iteration = 0
         self.nr = 2
-        self.starting_pos = env.starting_pos
-        self.pos = env.pos
-        self.prev_pos = env.prev_pos
+        self.starting_pos = env.starting_pos.copy()
+        self.pos = env.pos.copy()
+        self.prev_pos = env.prev_pos.copy()
 
         indices = np.argwhere(env.grid == States.UNEXP.value)
         np.random.shuffle(indices)
@@ -41,16 +41,16 @@ class QLearning:
         epochs = 1
 
         learning_rate = np.array([0.01])
-        discount_rate = np.array([0.1, 0.5, 0.9])
+        discount_rate = np.array([0.9])
 
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
         n_tests = 50
         interval = 5000
 
-        exploration_rate = np.array([0.05, 0.3, 1], dtype=np.float32)
-        max_exploration_rate = np.array([0.05, 0.3, 1], dtype=np.float32)
-        min_exploration_rate = np.array([0.05, 0.3, 0.05], dtype=np.float32)
-        exploration_decay_rate = np.array([0.05, 0.3, 0.0001], dtype=np.float32)
+        exploration_rate = np.array([0.05, 1], dtype=np.float32)
+        max_exploration_rate = np.array([0.05,1], dtype=np.float32)
+        min_exploration_rate = np.array([0.05, 0.05], dtype=np.float32)
+        exploration_decay_rate = np.array([0.05,0.00001], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -88,7 +88,7 @@ class QLearning:
             save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
             if not os.path.exists(save_path): os.makedirs(save_path)
         if mode == 3:
-            _, env.grid.shape = extract_values(policy_extraction, load_path, None, env)
+            _, env.grid.shape = extract_values(load_path, None)
         if mode != 2:
             PATH = os.getcwd()
             PATH = os.path.join(PATH, 'SAR')
@@ -103,19 +103,17 @@ class QLearning:
 
         if mode == 1 or mode == 3:
             # Training loop
-            arr = np.zeros((experiments, 144))
-            s1 = []
             training_time = time.time()
             generate = False
             state = self.reset(env, generate)
-            for seq_i in range(0, epochs):
+            for epoch_i in range(0, epochs):
                 print("Epoch: ", epoch_cnt)
                 exp_rewards = []
                 seq_steps = []
                 exp = 0
-                exp_exploration_rate = np.copy(exploration_rate)
                 for lr_i in np.arange(len(learning_rate)):
                     for dr_i in np.arange(len(discount_rate)):
+                        exp_exploration_rate = np.copy(exploration_rate)
                         for er_i in np.arange(len(exploration_rate)):
                             print("Experiment: ", exp)
                             # Reinitialize some variables
@@ -130,9 +128,6 @@ class QLearning:
                                 
                                 # Initialize new episode params
                                 if not episode == 0: state = self.reset(env, generate)
-
-                                arr[exp, state[0]] += 1
-                                arr[exp, state[1]] += 1
                                 done = False
                                 rewards_current_episode = 0
                                 reward = 0
@@ -149,11 +144,6 @@ class QLearning:
 
                                     # Take new action
                                     new_state, reward, done, info = self.step(env, action, pos_reward)
-                                    tmp_arr = np.copy(arr)
-                                    arr[state[0]] = 1
-                                    arr[state[1]] = 1
-                                    if tmp_arr[state[0]] == 0: s1.append(state[0])
-                                    if tmp_arr[state[1]] == 0: s1.append(state[1])
 
                                     # Update Q-table
                                     q_table[state[0], action[0]] = q_table[state[0], action[0]] * (1 - learning_rate[lr_i]) + \
@@ -210,8 +200,8 @@ class QLearning:
             trajs = []
             for i in range(0, q_tables.shape[0]):
                 print("\nTrajectories of policy %s:" %(i))
-                test_tab = [None] * (env.grid.shape[1]*env.grid.shape[0])
-                for s in range(env.grid.shape[0]*env.grid.shape[1]):
+                test_tab = np.array(state_space_size)
+                for s in range(env.grid.shape[0]*env.grid.shape[1]**2):
                     a = np.argmax(q_tables[i,s,:])
                     if a == Direction.RIGHT.value:
                         test_tab[s] = ">"
@@ -227,8 +217,6 @@ class QLearning:
 
             results.plot_and_save(q_tables, avg_rewards, learning_rate, discount_rate, exploration_rate, min_exploration_rate, max_exploration_rate, exploration_decay_rate, save_path, env, training_time, trajs, interval)
 
-            print(arr)
-            print(s1)
             for i in range(0, q_tables.shape[0]):
                 print("\nTesting policy %s:" % (i))
                 nb_success = [0]*n_tests
@@ -273,12 +261,14 @@ class QLearning:
             debug_flag2 = str(debug_q2)
 
         if mode == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
-            policy_extraction = True
             debug_q3 = input("Policy number?")
             policy = int(debug_q3)
-            if mode == 2: correct_path = load_path
-            else: correct_path = save_path
-            q_table_list, env_shape = extract_values(policy_extraction, load_path, policy, env)
+            load_path = save_path
+            if mode == 2:
+                debug_q3 = input("Enter path:")
+                folder = str(debug_q3)
+                load_path = PATH = os.path.join(PATH, folder)
+            q_table_list, env_shape = extract_values(load_path, policy)
 
             q_table = np.array(q_table_list)
             env.grid = np.zeros((int(env_shape[0]), int(env_shape[1])))
@@ -571,8 +561,8 @@ def calc_avg(rewards, num_epochs, num_sims):
 
     return mov_avg_rewards.tolist()
 
-def extract_values(policy_extraction, correct_path, policy, env):
-    f = open(os.path.join(correct_path,"saved_data.txt"), "r")
+def extract_values(correct_path, policy):
+    f = open(os.path.join(correct_path,"env_shape.txt"), "r")
     lines = f.readlines()
 
     for line in lines:
@@ -581,9 +571,6 @@ def extract_values(policy_extraction, correct_path, policy, env):
             if char.isdigit():
                 cur_line.append(char)
 
-    if policy_extraction:
-        file_name = "policy" + str(policy) + ".txt"
-        return np.loadtxt(os.path.join(correct_path, file_name)), cur_line
-    else:
-        return None, cur_line
+    file_name = "policy" + str(policy) + ".txt"
+    return np.loadtxt(os.path.join(correct_path, file_name)), cur_line
 

@@ -75,7 +75,7 @@ class print_results:
         plt.title(plt_title)
 
     def plot_and_save(self, q_tables, rewards, learning_rate, discount_rate, exploration_rate, min_exploration_rate, max_exploration_rate, exploration_decay_rate, save_path, env, t_time, trajs, interval):
-        f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
+        f = open(os.path.join(save_path,"env_shape.txt"), "w", encoding="utf-8")
 
         c = cm.rainbow(np.linspace(0, 1, len(rewards)))
         l = []
