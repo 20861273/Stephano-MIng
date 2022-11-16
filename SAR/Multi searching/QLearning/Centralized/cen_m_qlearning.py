@@ -152,8 +152,8 @@ class QLearning:
                                     grid_cnt0[self.pos[0].y, self.pos[0].x] += 1
                                     grid_cnt1[self.pos[1].y, self.pos[1].x] += 1
 
-                                    if self.dumbass_row_bool:
-                                        self.dumbass_row_bool = False
+                                    if self.dumbass:
+                                        self.dumbass = False
                                         for y1 in range(env.grid.shape[0]):
                                             for x1 in range(env.grid.shape[1]):
                                                 for y2 in range(env.grid.shape[0]):
@@ -192,6 +192,7 @@ class QLearning:
                                             if (q_table[a] == [0,0,0,0]).all():
                                                 self.the_fucking_dumb_ass_state = a
                                                 self. dumbass_row_bool = True
+                                                self. dumbass = True
                                                 print(a)
 
                                     # Update Q-table
