@@ -38,22 +38,22 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 400000
+        num_episodes = 600000
         max_steps_per_episode = 200
-        epochs = 1
+        epochs = 10
 
-        learning_rate = np.array([0.01])
-        discount_rate = np.array([0.1, 0.5, 0.9])
+        learning_rate = np.array([0.01, 0.1])
+        discount_rate = np.array([0.1, 0.9])
 
         # pos_reward = env.grid.shape[0]*env.grid.shape[1]
         pos_reward = 2
         n_tests = 50
         interval = 5000
 
-        exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
-        max_exploration_rate = np.array([0., 0.1, 0.3], dtype=np.float32)
-        min_exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
-        exploration_decay_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
+        exploration_rate = np.array([0.05, 1], dtype=np.float32)
+        max_exploration_rate = np.array([0.05, 1], dtype=np.float32)
+        min_exploration_rate = np.array([0.05, 0.05], dtype=np.float32)
+        exploration_decay_rate = np.array([0.05, 0.00001], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -105,9 +105,6 @@ class QLearning:
             if not os.path.exists(save_path): os.makedirs(save_path)
 
         if mode == 1 or mode == 3:
-            self.dumbass_row_bool = False
-            self.dumbass = False
-            state_checker = []
             # Training loop
             training_time = time.time()
             generate = False
@@ -127,15 +124,6 @@ class QLearning:
 
                             # Training Loop
                             rewards_per_episode = []
-                            state_cnt = np.zeros((144,))
-                            grid_cnt0 = np.copy(env.grid)
-                            grid_cnt0.fill(0)
-                            grid_cnt1 = np.copy(env.grid)
-                            grid_cnt1.fill(0)
-                            the_x1 = None
-                            the_y1 = None
-                            the_x2 = None
-                            the_y2 = None
 
                             # Q-learning algorithm
                             for episode in range(num_episodes):
@@ -149,39 +137,6 @@ class QLearning:
                                 reward = 0
 
                                 for step in range(max_steps_per_episode):
-                                    state_cnt[state[0]] += 1
-                                    state_cnt[state[1]] += 1
-                                    grid_cnt0[self.pos[0].y, self.pos[0].x] += 1
-                                    grid_cnt1[self.pos[1].y, self.pos[1].x] += 1
-                                    if self.pos[0] == self.pos[1]:
-                                        if state in state_checker:
-                                            pass
-                                        else:
-                                            state_checker.append(state)
-
-                                    if self.dumbass:
-                                        self.dumbass = False
-                                        for y1 in range(env.grid.shape[0]):
-                                            for x1 in range(env.grid.shape[1]):
-                                                for y2 in range(env.grid.shape[0]):
-                                                    for x2 in range(env.grid.shape[1]):
-                                                        s = np.empty((self.nr,), dtype=np.int8)
-                                                        s[0] = y1*env.grid.shape[1] + x1
-                                                        s[1] = y2*env.grid.shape[1] + x2
-
-                                                        s = [(s[0]*env.grid.shape[0]*env.grid.shape[1] + s[1]),
-                                                            (s[1]*env.grid.shape[0]*env.grid.shape[1] + s[0])]
-
-                                                        if s[0] == self.the_fucking_dumb_ass_state:
-                                                            the_x1 = x1
-                                                            the_y1 = y1
-                                                        elif s[1] == self.the_fucking_dumb_ass_state:
-                                                            the_x2 = x2
-                                                            the_y2 = y2
-                                    
-                                    if self.pos[0] == Point(the_y1, the_x1) and self.pos[1] == Point(the_y2, the_x2):
-                                        print("FUCK")
-
                                     # Exploration-exploitation trade-off
                                     exploration_rate_threshold = random.uniform(0, 1)
                                     for i in range(0, self.nr):
@@ -253,12 +208,6 @@ class QLearning:
 
             results = print_results(env.grid, HEIGHT, WIDTH)
             self.reset(env, generate)
-
-            print(state_cnt)
-            print(grid_cnt0)
-            print(grid_cnt1)
-            print(the_x1, the_y1, the_x2, the_y2, self.the_fucking_dumb_ass_state)
-            print(state_checker)
 
             trajs = []
             for i in range(0, q_tables.shape[0]):
@@ -631,7 +580,8 @@ def calc_avg(rewards, num_epochs, num_sims):
     for i in range(0, num_sims):
         mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 50)
 
-    return mov_avg_rewards.tolist()
+    # return mov_avg_rewards.tolist()
+    return avg_rewards.tolist()
 
 def extract_values(correct_path, policy):
     f = open(os.path.join(correct_path,"env_shape.txt"), "r")
