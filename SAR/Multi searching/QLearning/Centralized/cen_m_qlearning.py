@@ -38,22 +38,22 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 500000
+        num_episodes = 400000
         max_steps_per_episode = 200
         epochs = 1
 
         learning_rate = np.array([0.01])
-        discount_rate = np.array([0.9])
+        discount_rate = np.array([0.1, 0.5, 0.9])
 
         # pos_reward = env.grid.shape[0]*env.grid.shape[1]
         pos_reward = 2
         n_tests = 50
         interval = 5000
 
-        exploration_rate = np.array([0.05], dtype=np.float32)
-        max_exploration_rate = np.array([0.05], dtype=np.float32)
-        min_exploration_rate = np.array([0.05], dtype=np.float32)
-        exploration_decay_rate = np.array([0.05], dtype=np.float32)
+        exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
+        max_exploration_rate = np.array([0., 0.1, 0.3], dtype=np.float32)
+        min_exploration_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
+        exploration_decay_rate = np.array([0.05, 0.1, 0.3], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -106,6 +106,8 @@ class QLearning:
 
         if mode == 1 or mode == 3:
             self.dumbass_row_bool = False
+            self.dumbass = False
+            state_checker = []
             # Training loop
             training_time = time.time()
             generate = False
@@ -151,6 +153,11 @@ class QLearning:
                                     state_cnt[state[1]] += 1
                                     grid_cnt0[self.pos[0].y, self.pos[0].x] += 1
                                     grid_cnt1[self.pos[1].y, self.pos[1].x] += 1
+                                    if self.pos[0] == self.pos[1]:
+                                        if state in state_checker:
+                                            pass
+                                        else:
+                                            state_checker.append(state)
 
                                     if self.dumbass:
                                         self.dumbass = False
@@ -250,6 +257,8 @@ class QLearning:
             print(state_cnt)
             print(grid_cnt0)
             print(grid_cnt1)
+            print(the_x1, the_y1, the_x2, the_y2, self.the_fucking_dumb_ass_state)
+            print(state_checker)
 
             trajs = []
             for i in range(0, q_tables.shape[0]):
@@ -418,13 +427,6 @@ class QLearning:
                 file_name = "plot-%s.png" %(i)
                 plt.savefig(os.path.join(save_path, file_name))
                 plt.close()
-
-        else:   
-            if len(os.listdir(save_path)):
-                try:
-                    shutil.rmtree(save_path)
-                except OSError as e:
-                    print("Tried to delete folder that doesn't exist.")
 
 
     def reset(self, env, generate):
