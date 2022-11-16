@@ -120,7 +120,7 @@ class print_results:
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 
-            ax1.set_ylim([-20, 30])
+            ax1.set_ylim([-20, 3])
             
             for j in range(0, 3):
                 ax1.plot(np.arange(0, len(rewards[i*3+j]))*interval, rewards[i*3+j], color=c[i*3+j])
@@ -139,7 +139,7 @@ class print_results:
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 
-            ax1.set_ylim([-50, 30])
+            ax1.set_ylim([-20, 3])
 
             for i in range(sim_len-plot_rem, sim_len):
                 ax1.plot(np.arange(0, len(rewards[i]))*interval, rewards[i], color=c[i])

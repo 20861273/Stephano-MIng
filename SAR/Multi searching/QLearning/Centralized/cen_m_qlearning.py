@@ -25,6 +25,8 @@ class QLearning:
         np.random.shuffle(indices)
         self.goal = (Point(indices[0,0], indices[0,1]))
 
+        self.the_fucking_dumb_ass_state = None
+
     def run_qlearning(self, mode):
         # Creating The Environment
         env = Environment(self.nr)
@@ -36,21 +38,22 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 2000000
+        num_episodes = 500000
         max_steps_per_episode = 200
         epochs = 1
 
         learning_rate = np.array([0.01])
         discount_rate = np.array([0.9])
 
-        pos_reward = env.grid.shape[0]*env.grid.shape[1]
+        # pos_reward = env.grid.shape[0]*env.grid.shape[1]
+        pos_reward = 2
         n_tests = 50
         interval = 5000
 
-        exploration_rate = np.array([0.05, 1], dtype=np.float32)
-        max_exploration_rate = np.array([0.05,1], dtype=np.float32)
-        min_exploration_rate = np.array([0.05, 0.05], dtype=np.float32)
-        exploration_decay_rate = np.array([0.05,0.00001], dtype=np.float32)
+        exploration_rate = np.array([0.05], dtype=np.float32)
+        max_exploration_rate = np.array([0.05], dtype=np.float32)
+        min_exploration_rate = np.array([0.05], dtype=np.float32)
+        exploration_decay_rate = np.array([0.05], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -102,6 +105,7 @@ class QLearning:
             if not os.path.exists(save_path): os.makedirs(save_path)
 
         if mode == 1 or mode == 3:
+            self.dumbass_row_bool = False
             # Training loop
             training_time = time.time()
             generate = False
@@ -120,12 +124,22 @@ class QLearning:
                             q_table = np.zeros((state_space_size, action_space_size))
 
                             # Training Loop
-                            rewards_per_episode = []                
+                            rewards_per_episode = []
+                            state_cnt = np.zeros((144,))
+                            grid_cnt0 = np.copy(env.grid)
+                            grid_cnt0.fill(0)
+                            grid_cnt1 = np.copy(env.grid)
+                            grid_cnt1.fill(0)
+                            the_x1 = None
+                            the_y1 = None
+                            the_x2 = None
+                            the_y2 = None
 
                             # Q-learning algorithm
                             for episode in range(num_episodes):
-                                if episode % 10000 == 0: print("Episode: %s\nϵ=%s" %(episode, exp_exploration_rate[er_i]))
-                                
+                                if episode % 10000 == 0:
+                                    print("Episode: %s\nϵ=%s" %(episode, exp_exploration_rate[er_i]))
+
                                 # Initialize new episode params
                                 if not episode == 0: state = self.reset(env, generate)
                                 done = False
@@ -133,9 +147,37 @@ class QLearning:
                                 reward = 0
 
                                 for step in range(max_steps_per_episode):
+                                    state_cnt[state[0]] += 1
+                                    state_cnt[state[1]] += 1
+                                    grid_cnt0[self.pos[0].y, self.pos[0].x] += 1
+                                    grid_cnt1[self.pos[1].y, self.pos[1].x] += 1
+
+                                    if self.dumbass_row_bool:
+                                        self.dumbass_row_bool = False
+                                        for y1 in range(env.grid.shape[0]):
+                                            for x1 in range(env.grid.shape[1]):
+                                                for y2 in range(env.grid.shape[0]):
+                                                    for x2 in range(env.grid.shape[1]):
+                                                        s = np.empty((self.nr,), dtype=np.int8)
+                                                        s[0] = y1*env.grid.shape[1] + x1
+                                                        s[1] = y2*env.grid.shape[1] + x2
+
+                                                        s = [(s[0]*env.grid.shape[0]*env.grid.shape[1] + s[1]),
+                                                            (s[1]*env.grid.shape[0]*env.grid.shape[1] + s[0])]
+
+                                                        if s[0] == self.the_fucking_dumb_ass_state:
+                                                            the_x1 = x1
+                                                            the_y1 = y1
+                                                        elif s[1] == self.the_fucking_dumb_ass_state:
+                                                            the_x2 = x2
+                                                            the_y2 = y2
+                                    
+                                    if self.pos[0] == Point(the_y1, the_x1) and self.pos[1] == Point(the_y2, the_x2):
+                                        print("FUCK")
+
+                                    # Exploration-exploitation trade-off
+                                    exploration_rate_threshold = random.uniform(0, 1)
                                     for i in range(0, self.nr):
-                                        # Exploration-exploitation trade-off
-                                        exploration_rate_threshold = random.uniform(0, 1)
                                         if exploration_rate_threshold > exp_exploration_rate[er_i]:
                                             action[i] = np.argmax(q_table[state[i],:])
                                         else:
@@ -144,6 +186,13 @@ class QLearning:
 
                                     # Take new action
                                     new_state, reward, done, info = self.step(env, action, pos_reward)
+
+                                    if episode > 20000 and not self.dumbass_row_bool:
+                                        for a in range(q_table.shape[0]):
+                                            if (q_table[a] == [0,0,0,0]).all():
+                                                self.the_fucking_dumb_ass_state = a
+                                                self. dumbass_row_bool = True
+                                                print(a)
 
                                     # Update Q-table
                                     q_table[state[0], action[0]] = q_table[state[0], action[0]] * (1 - learning_rate[lr_i]) + \
@@ -197,23 +246,43 @@ class QLearning:
             results = print_results(env.grid, HEIGHT, WIDTH)
             self.reset(env, generate)
 
+            print(state_cnt)
+            print(grid_cnt0)
+            print(grid_cnt1)
+
             trajs = []
             for i in range(0, q_tables.shape[0]):
                 print("\nTrajectories of policy %s:" %(i))
-                test_tab = np.array(state_space_size)
-                for s in range(env.grid.shape[0]*env.grid.shape[1]**2):
-                    a = np.argmax(q_tables[i,s,:])
-                    if a == Direction.RIGHT.value:
-                        test_tab[s] = ">"
-                    elif a == Direction.LEFT.value: 
-                        test_tab[s] = "<"
-                    elif a == Direction.UP.value: 
-                        test_tab[s] = "^"
-                    elif a == Direction.DOWN.value: 
-                        test_tab[s] = "v"
+                test_tab = np.empty((env.grid.shape[0], env.grid.shape[1]), dtype=str)
+                self.reset(env, generate)
+                for step in range(1, 200):
+                    state = self.get_state(env)
+
+                    action[0] = np.argmax(q_tables[i, state[0],:])
+                    action[1] = np.argmax(q_tables[i, state[1],:])
+
+                    if action[0] == Direction.RIGHT.value:
+                        test_tab[self.pos[0].y, self.pos[0].x] = ">"
+                    elif action[0] == Direction.LEFT.value: 
+                        test_tab[self.pos[0].y, self.pos[0].x] = "<"
+                    elif action[0] == Direction.UP.value: 
+                        test_tab[self.pos[0].y, self.pos[0].x] = "^"
+                    elif action[0] == Direction.DOWN.value: 
+                        test_tab[self.pos[0].y, self.pos[0].x] = "v"
+
+                    if action[1] == Direction.RIGHT.value:
+                        test_tab[self.pos[1].y, self.pos[1].x] = ">"
+                    elif action[1] == Direction.LEFT.value: 
+                        test_tab[self.pos[1].y, self.pos[1].x] = "<"
+                    elif action[1] == Direction.UP.value: 
+                        test_tab[self.pos[1].y, self.pos[1].x] = "^"
+                    elif action[1] == Direction.DOWN.value: 
+                        test_tab[self.pos[1].y, self.pos[1].x] = "v"
+
+                    new_state, reward, done, _ = self.step(env, action, pos_reward)
             
-                trajs.append(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
-                print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
+                trajs.append(test_tab)
+                print(test_tab)
 
             results.plot_and_save(q_tables, avg_rewards, learning_rate, discount_rate, exploration_rate, min_exploration_rate, max_exploration_rate, exploration_decay_rate, save_path, env, training_time, trajs, interval)
 
@@ -428,7 +497,7 @@ class QLearning:
             indices = np.argwhere(env.grid == States.UNEXP.value)
             np.random.shuffle(indices)
             self.starting_pos[0] = Point(indices[0,0], indices[0,1])
-            self.starting_pos[1] = Point(indices[1,0], indices[1,1])                
+            self.starting_pos[1] = Point(indices[1,0], indices[1,1])
             
             self.pos = self.starting_pos.copy()
 
@@ -509,14 +578,14 @@ class QLearning:
         return False
         
     def _update_env(self, env):
-        for i in range(0, self.nr):
-            if self.frame_iteration == 0:
-                # Update robot position(s) on grid
+        if self.frame_iteration == 0:
+            # Update robot position(s) on grid
+            for i in range(0, self.nr):
                 env.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
-            else:
-                # Update robot position(s) on grid
-                env.grid[self.prev_pos[i].y,self.prev_pos[i].x] = States.EXP.value
-                env.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
+        else:
+            # Update robot position(s) on grid
+            for i in range(0, self.nr): env.grid[self.prev_pos[i].y,self.prev_pos[i].x] = States.EXP.value
+            for i in range(0, self.nr): env.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
             
 
     def _move(self, env, action):
