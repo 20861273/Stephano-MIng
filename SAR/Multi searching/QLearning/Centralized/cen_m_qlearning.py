@@ -36,22 +36,22 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 100000
+        num_episodes = 10000
         max_steps_per_episode = 200
-        epochs = 1
+        epochs = 100
 
-        learning_rate = np.array([0.01, 0.1])
-        discount_rate = np.array([0.1, 0.9])
+        learning_rate = np.array([0.09])
+        discount_rate = np.array([0.88])
 
         # pos_reward = env.grid.shape[0]*env.grid.shape[1]
         pos_reward = 2
         n_tests = 100
-        interval = 5000
+        interval = 50
 
-        exploration_rate = np.array([0.03], dtype=np.float32)
-        max_exploration_rate = np.array([0.03], dtype=np.float32)
-        min_exploration_rate = np.array([0.03], dtype=np.float32)
-        exploration_decay_rate = np.array([0.03], dtype=np.float32)
+        exploration_rate = np.array([0.01], dtype=np.float32)
+        max_exploration_rate = np.array([0.01], dtype=np.float32)
+        min_exploration_rate = np.array([0.01], dtype=np.float32)
+        exploration_decay_rate = np.array([0.01], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -190,75 +190,74 @@ class QLearning:
             results = print_results(env.grid, HEIGHT, WIDTH)
             self.reset(env, generate)
 
-            # trajs = []
-            # for i in range(0, q_tables.shape[0]):
-            #     print("\nTrajectories of policy %s:" %(i))
-            #     test_tab = np.empty((env.grid.shape[0], env.grid.shape[1]), dtype=str)
-            #     self.reset(env, generate)
-            #     for step in range(1, 200):
-            #         state = self.get_state(env)
+            trajs = []	
+            for i in range(0, q_tables.shape[0]):	
+                print("\nTrajectories of policy %s:" %(i))	
+                test_tab = np.empty((env.grid.shape[0], env.grid.shape[1]), dtype=str)	
+                self.reset(env, generate)	
+                for step in range(1, 200):	
+                    state = self.get_state(env)	
+                    action[0] = np.argmax(q_tables[i, state[0],:])	
+                    action[1] = np.argmax(q_tables[i, state[1],:])	
+                    if action[0] == Direction.RIGHT.value:	
+                        test_tab[self.pos[0].y, self.pos[0].x] = ">"	
+                    elif action[0] == Direction.LEFT.value: 	
+                        test_tab[self.pos[0].y, self.pos[0].x] = "<"	
+                    elif action[0] == Direction.UP.value: 	
+                        test_tab[self.pos[0].y, self.pos[0].x] = "^"	
+                    elif action[0] == Direction.DOWN.value: 	
+                        test_tab[self.pos[0].y, self.pos[0].x] = "v"	
+                    if action[1] == Direction.RIGHT.value:	
+                        test_tab[self.pos[1].y, self.pos[1].x] = ">"	
+                    elif action[1] == Direction.LEFT.value: 	
+                        test_tab[self.pos[1].y, self.pos[1].x] = "<"	
+                    elif action[1] == Direction.UP.value: 	
+                        test_tab[self.pos[1].y, self.pos[1].x] = "^"	
+                    elif action[1] == Direction.DOWN.value: 	
+                        test_tab[self.pos[1].y, self.pos[1].x] = "v"	
+                    new_state, reward, done, _ = self.step(env, action, pos_reward)	
+                	
+                trajs.append(test_tab)	
+                print(test_tab)	
 
-            #         action[0] = np.argmax(q_tables[i, state[0],:])
-            #         action[1] = np.argmax(q_tables[i, state[1],:])
+            results.plot_and_save(q_tables, avg_rewards, epochs, learning_rate, discount_rate, exploration_rate, min_exploration_rate, max_exploration_rate, exploration_decay_rate, save_path, env, hour, min, sec, interval, trajs)
 
-            #         if action[0] == Direction.RIGHT.value:
-            #             test_tab[self.pos[0].y, self.pos[0].x] = ">"
-            #         elif action[0] == Direction.LEFT.value: 
-            #             test_tab[self.pos[0].y, self.pos[0].x] = "<"
-            #         elif action[0] == Direction.UP.value: 
-            #             test_tab[self.pos[0].y, self.pos[0].x] = "^"
-            #         elif action[0] == Direction.DOWN.value: 
-            #             test_tab[self.pos[0].y, self.pos[0].x] = "v"
-
-            #         if action[1] == Direction.RIGHT.value:
-            #             test_tab[self.pos[1].y, self.pos[1].x] = ">"
-            #         elif action[1] == Direction.LEFT.value: 
-            #             test_tab[self.pos[1].y, self.pos[1].x] = "<"
-            #         elif action[1] == Direction.UP.value: 
-            #             test_tab[self.pos[1].y, self.pos[1].x] = "^"
-            #         elif action[1] == Direction.DOWN.value: 
-            #             test_tab[self.pos[1].y, self.pos[1].x] = "v"
-
-            #         new_state, reward, done, _ = self.step(env, action, pos_reward)
-            
-            #     trajs.append(test_tab)
-            #     print(test_tab)
-
-            results.plot_and_save(q_tables, avg_rewards, epochs, learning_rate, discount_rate, exploration_rate, min_exploration_rate, max_exploration_rate, exploration_decay_rate, save_path, env, hour, min, sec, interval)
-
-            for i in range(0, q_tables.shape[0]):
-                print("\nTesting policy %s:" % (i))
-                nb_success = [0]*n_tests
-                # Display percentage successes
-                for j in range(0, n_tests):
-                    if j % 10 == 0: print("Test number %s out of %s" %(j, n_tests))
+            for i in range(0, q_tables.shape[0]):	
+                print("\nTesting policy %s:" % (i))	
+                nb_success = [0]*n_tests	
+                state_cnter = 0	
+                # Display percentage successes	
+                for j in range(0, n_tests):	
+                    if j % 10 == 0: print("Test number %s out of %s" %(j, n_tests))	
+                    state_cnter = 0
                     for state0 in range(0, env.grid.shape[0]*env.grid.shape[1]**self.nr):
                         for state1 in range(0, env.grid.shape[0]*env.grid.shape[1]**self.nr):
-                            # initialize new episode params
-                            _ = self.reset(env, True)
-
-                            state = [state0, state1]
-                            for step in range(1, max_steps_per_episode+1):
-                                # Choose action with highest Q-value for current state (Greedy policy)     
-                                # Take new action
-                                action[0] = np.argmax(q_tables[i, state[0],:])
-                                action[1] = np.argmax(q_tables[i, state[1],:])
-                                new_state, reward, done, _ = self.step(env, action, pos_reward)
-                                
-                                if done:   
-                                    nb_success[j] += 1
-                                    break
-
-                                # Set new state
-                                state = new_state
-
-                    # Success rate for test j
-                    nb_success[j] = nb_success[j]/state_space_size**2*100
-                
-                # Success rate for all tests
+                            # initialize new episode params	
+                            _ = self.reset(env, True)	
+                            	
+                            state = [state0, state1]	
+                            if not state0 == state1:	
+                                state_cnter += 1	
+                                for step in range(1, max_steps_per_episode+1):	
+                                    # Choose action with highest Q-value for current state (Greedy policy)     	
+                                    # Take new action	
+                                    action[0] = np.argmax(q_tables[i, state[0],:])	
+                                    action[1] = np.argmax(q_tables[i, state[1],:])	
+                                    new_state, reward, done, _ = self.step(env, action, pos_reward)	
+                                    	
+                                    if done:   	
+                                        nb_success[j] += 1	
+                                        break	
+                                    # Set new state	
+                                    state = new_state	
+                    # Success rate for test j	
+                    nb_success[j] = nb_success[j]/state_cnter*100	
+                    	
+                    	
+                # Success rate for all tests	
                 success = sum(nb_success)/n_tests
 
-                # Success rate for policy i
+                # Success rate for policy i	
                 print ("Success rate of policy %s: %s%%" % (i, success))
             
             winsound.Beep(1000, 500)
@@ -269,6 +268,8 @@ class QLearning:
         if mode == 2 or debug_flag2 == 'Y' or debug_flag2 == 'y':
             debug_q3 = input("Policy number?")
             policy = int(debug_q3)
+            debug_q4 = input("Test policy?")
+            test_policy = int(debug_q4)
             load_path = save_path
             if mode == 2:
                 debug_q3 = input("Enter path:")
@@ -279,20 +280,73 @@ class QLearning:
             q_table = np.array(q_table_list)
             env.grid = np.zeros((int(env_shape[0]), int(env_shape[1])))
 
-            print("\nTrajectories of policy %s:" %(policy))
-            test_tab = [None] * (env.grid.shape[1]*env.grid.shape[0])
-            for s in range(env.grid.shape[0]*env.grid.shape[1]):
-                a = np.argmax(q_table[s,:])
-                if a == Direction.RIGHT.value:
-                    test_tab[s] = ">"
-                elif a == Direction.LEFT.value: 
-                    test_tab[s] = "<"
-                elif a == Direction.UP.value: 
-                    test_tab[s] = "^"
-                elif a == Direction.DOWN.value: 
-                    test_tab[s] = "v"
-        
-            print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
+            if test_policy:
+                print("\nTesting policy %s:" %(policy))
+                nb_success = [0]*n_tests	
+                state_cnter = 0	
+                # Display percentage successes	
+                for j in range(0, n_tests):	
+                    if j % 10 == 0: print("Test number %s out of %s" %(j, n_tests))	
+                    state_cnter = 0	
+                    for state0 in range(0, env.grid.shape[0]*env.grid.shape[1]**self.nr):	
+                        for state1 in range(0, env.grid.shape[0]*env.grid.shape[1]**self.nr):	
+                            # initialize new episode params	
+                            _ = self.reset(env, True)	
+                                
+                            state = [state0, state1]	
+                            if not state0 == state1:	
+                                state_cnter += 1	
+                                for step in range(1, max_steps_per_episode+1):	
+                                    # Choose action with highest Q-value for current state (Greedy policy)     	
+                                    # Take new action	
+                                    action[0] = np.argmax(q_table[state[0],:])	
+                                    action[1] = np.argmax(q_table[state[1],:])	
+                                    new_state, reward, done, _ = self.step(env, action, pos_reward)	
+                                        
+                                    if done:   	
+                                        nb_success[j] += 1	
+                                        break	
+                                    # Set new state	
+                                    state = new_state	
+                    # Success rate for test j	
+                    nb_success[j] = nb_success[j]/state_cnter*100
+                        
+                # Success rate for all tests	
+                success = sum(nb_success)/n_tests
+
+                # Success rate for policy i	
+                print ("Success rate of policy %s: %s%%" % (policy, success))
+
+            print("\nTrajectories of policy %s:" %(policy))	
+            trajs = []	
+            test_tab = np.empty((env.grid.shape[0], env.grid.shape[1]), dtype=str)	
+            self.reset(env, generate)	
+            for step in range(1, 200):	
+                state = self.get_state(env)	
+                action[0] = np.argmax(q_table[state[0],:])	
+                action[1] = np.argmax(q_table[state[1],:])
+
+                if action[0] == Direction.RIGHT.value:	
+                    test_tab[self.pos[0].y, self.pos[0].x] = ">"	
+                elif action[0] == Direction.LEFT.value: 	
+                    test_tab[self.pos[0].y, self.pos[0].x] = "<"	
+                elif action[0] == Direction.UP.value: 	
+                    test_tab[self.pos[0].y, self.pos[0].x] = "^"	
+                elif action[0] == Direction.DOWN.value: 	
+                    test_tab[self.pos[0].y, self.pos[0].x] = "v"
+
+                if action[1] == Direction.RIGHT.value:	
+                    test_tab[self.pos[1].y, self.pos[1].x] = ">"	
+                elif action[1] == Direction.LEFT.value: 	
+                    test_tab[self.pos[1].y, self.pos[1].x] = "<"	
+                elif action[1] == Direction.UP.value: 	
+                    test_tab[self.pos[1].y, self.pos[1].x] = "^"	
+                elif action[1] == Direction.DOWN.value: 	
+                    test_tab[self.pos[1].y, self.pos[1].x] = "v"	
+                new_state, reward, done, _ = self.step(env, action, pos_reward)	
+            	
+            trajs.append(test_tab)	
+            print(test_tab)
 
 
             # Save images
@@ -329,8 +383,9 @@ class QLearning:
         if generate:
             # Generates grid
             env.grid = env.generate_grid(self.nr)
-            self.prev_pos = self.starting_pos.copy()
-            self.pos = self.prev_pos.copy()
+            self.starting_pos = env.starting_pos.copy()	
+            self.pos = env.pos.copy()	
+            self.prev_pos = env.prev_pos.copy()
 
             self.goal = env.goal
             env.grid[self.goal.y, self.goal.x] = States.GOAL.value
@@ -481,7 +536,7 @@ def calc_avg(rewards, num_epochs, num_sims):
     mov_avg_rewards = np.empty(avg_rewards.shape)
 
     for i in range(0, num_sims):
-        mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 50)
+        mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 5)
 
     # return mov_avg_rewards.tolist()
     return avg_rewards.tolist()

@@ -74,7 +74,7 @@ class print_results:
         plt_title = "Q-learning Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
-    def plot_and_save(self, q_tables, rewards, epochs, learning_rate, discount_rate, exploration_rate, min_exploration_rate, max_exploration_rate, exploration_decay_rate, save_path, env, h, m, s, interval):
+    def plot_and_save(self, q_tables, rewards, epochs, learning_rate, discount_rate, exploration_rate, min_exploration_rate, max_exploration_rate, exploration_decay_rate, save_path, env, h, m, s, interval, trajs):
         f = open(os.path.join(save_path,"env_shape.txt"), "w", encoding="utf-8")
 
         c = cm.rainbow(np.linspace(0, 1, len(rewards)))
@@ -105,9 +105,9 @@ class print_results:
             file_name = "policy_rewards" + str(i) + ".txt"
             np.savetxt(os.path.join(save_path, file_name), rewards[i])
 
-        # for i in range(0, len(trajs)):
-        #     file_name = "trajectories" + str(i) + ".txt"
-        #     np.savetxt(os.path.join(save_path, file_name), trajs[i], fmt='%s')
+        for i in range(0, len(trajs)):
+            file_name = "trajectories" + str(i) + ".txt"
+            np.savetxt(os.path.join(save_path, file_name), trajs[i], fmt='%s')
         
         sim_len = (len(learning_rate) * len(discount_rate) * len(exploration_rate))
         plot_len = int(sim_len/3)
@@ -120,7 +120,7 @@ class print_results:
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 
-            ax1.set_ylim([-20, 3])
+            ax1.set_ylim([-10, 3])
             
             for j in range(0, 3):
                 ax1.plot(np.arange(0, len(rewards[i*3+j]))*interval, rewards[i*3+j], color=c[i*3+j])
@@ -139,7 +139,7 @@ class print_results:
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 
-            ax1.set_ylim([-20, 3])
+            ax1.set_ylim([-10, 3])
 
             for i in range(sim_len-plot_rem, sim_len):
                 ax1.plot(np.arange(0, len(rewards[i]))*interval, rewards[i], color=c[i])

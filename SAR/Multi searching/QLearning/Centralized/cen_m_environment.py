@@ -75,6 +75,7 @@ class Environment:
             grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos.copy()
+        self.prev_pos = self.starting_pos.copy()
 
         # Set goal position
         indices = np.argwhere(grid == States.UNEXP.value)
