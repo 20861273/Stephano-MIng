@@ -5,8 +5,8 @@ import random
 import math
 
 # Environment characteristics
-HEIGHT = 7
-WIDTH = 6
+HEIGHT = 4
+WIDTH = 3
 # DENSITY = 30 # percentage
 
 # Direction states
@@ -54,14 +54,17 @@ class Environment:
         grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
 
         # Set goal position at least 20% of grid size away from robot(s)
-        distance_to = 0
-        while distance_to < grid.shape[0]*0.2:
-            indices = np.argwhere(grid == States.UNEXP.value)
-            np.random.shuffle(indices)
-            self.goal = Point(indices[0,1], indices[0,0])
-            distance_to = math.sqrt((self.starting_pos.x - self.goal.x)**2 +
-                            (self.starting_pos.y - self.goal.y)**2)
+        # distance_to = 0
+        # while distance_to < grid.shape[0]*0.2:
+        #     indices = np.argwhere(grid == States.UNEXP.value)
+        #     np.random.shuffle(indices)
+        #     self.goal = Point(indices[0,1], indices[0,0])
+        #     distance_to = math.sqrt((self.starting_pos.x - self.goal.x)**2 +
+        #                     (self.starting_pos.y - self.goal.y)**2)
         
+        indices = np.argwhere(grid == States.UNEXP.value)
+        np.random.shuffle(indices)
+        self.goal = Point(indices[0,1], indices[0,0])
         grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         return grid

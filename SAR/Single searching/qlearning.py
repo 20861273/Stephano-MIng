@@ -32,28 +32,22 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 5000
+        num_episodes = 20000
         max_steps_per_episode = 200
-        num_epochs = 1
+        num_epochs = 10
 
-        # learning_rate = np.array([0.00070055])
-        # discount_rate = np.array([0.905, 0.91, 0.915])
+        learning_rate = np.array([0.1])
+        discount_rate = np.array([0.9])
 
-        learning_rate = np.array([0.00075])
-        discount_rate = np.array([0.002])
+        # learning_rate = np.array([0.00075])
+        # discount_rate = np.array([0.002])
 
-        # learning_rate = np.array([0.9])
-        # discount_rate = np.array([0.5, 0.7, 0.9]) # 0.9
-
-        # Optimal hyperparameters:
-        # 5x5: lr=0.02, dr=0.7
-        # 8x8: lr= ,dr=
         pos_reward = env.grid.shape[0]*env.grid.shape[1]
 
-        exploration_rate = np.array([0.05], dtype=np.float32)
-        max_exploration_rate = np.array([0.05], dtype=np.float32)
-        min_exploration_rate = np.array([0.05], dtype=np.float32)
-        exploration_decay_rate = np.array([0.05], dtype=np.float32)
+        exploration_rate = np.array([0.01], dtype=np.float32)
+        max_exploration_rate = np.array([0.01], dtype=np.float32)
+        min_exploration_rate = np.array([0.01], dtype=np.float32)
+        exploration_decay_rate = np.array([0.01], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -423,15 +417,9 @@ class QLearning:
 
             # Varied starting pos and goal
             # Clear all visited blocks
-            visited = np.argwhere(env.grid == States.EXP.value)
-            for i in visited:
-                env.grid[i[0], i[1]] = States.UNEXP.value
+            env.grid.fill(0)
 
             # Setup agent
-            # Clear all robot blocks
-            robot = np.argwhere(env.grid == States.ROBOT.value)
-            for i in robot:
-                env.grid[i[0], i[1]] = States.UNEXP.value
             # Set new starting pos
             indices = np.argwhere(env.grid == States.UNEXP.value)
             np.random.shuffle(indices)
@@ -441,10 +429,6 @@ class QLearning:
             env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
 
             # Setup goal
-            # Clear all goal blocks
-            goal = np.argwhere(env.grid == States.GOAL.value)
-            for i in goal:
-                env.grid[i[0], i[1]] = States.UNEXP.value
             # Set new goal pos
             indices = np.argwhere(env.grid == States.UNEXP.value)
             np.random.shuffle(indices)
@@ -491,7 +475,7 @@ class QLearning:
         return state, reward, game_over, self.score
 
     def get_state(self, env):
-        return env.pos.x*env.grid.shape[0] + env.pos.y
+        return env.pos.y*env.grid.shape[1] + env.pos.x
     
     def _is_collision(self, env, pt=None):
         if pt is None:
@@ -578,8 +562,8 @@ def calc_avg(rewards, steps, num_epochs, num_sims):
         mov_avg_rewards[i] = moving_avarage_smoothing(avg_rewards[i], 100)
         mov_avg_steps[i] = moving_avarage_smoothing(avg_steps[i], 100)
 
-    return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
-    # return avg_rewards.tolist(), avg_steps.tolist()
+    # return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
+    return avg_rewards.tolist(), avg_steps.tolist()
 
 def extract_values(policy_extraction, correct_path, policy, env):
     f = open(os.path.join(correct_path,"saved_data.txt"), "r")
