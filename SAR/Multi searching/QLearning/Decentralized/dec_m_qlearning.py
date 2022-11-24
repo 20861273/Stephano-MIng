@@ -188,7 +188,7 @@ class QLearning:
                             exp += 1
                 tmp_rewards = np.array(all_rewards)
                 new_tmp_rewards = np.array(np.append(tmp_rewards.ravel(),np.array(exp_rewards).ravel()))
-                new_rewards = new_tmp_rewards.reshape(epoch_cnt+1,exp,2,int(num_episodes/interval))
+                new_rewards = new_tmp_rewards.reshape(epoch_cnt+1,exp,self.nr,int(num_episodes/interval))
                 all_rewards = new_rewards.tolist()
 
                 epoch_cnt += 1

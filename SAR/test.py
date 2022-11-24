@@ -4,33 +4,24 @@ import numpy as np
 import random
 import math
 import time
-import keyboard
-import pandas as pd
 
 
 # initialize list of lists
+Point = namedtuple('Point', 'x, y')
 
-states = []
-pos = []
-exp = 7
-epoch = 2
-for i in range(12):
-    for j in range(12):
-        pos.append(i,j)
-        states.append([i*3 +j])
-data = {'state': states}
+states = np.zeros((4,3,4,3))
+cnt = 0
 
-reward = [[0]*exp]*len(states)
+for i in range(4):
+    for j in range(3):
+        for k in range(4):
+            for l in range(3):
+                states[i,j,k,l] = cnt
+                cnt += 1
 
-for i in range(epoch):
-    data['epoch %d rewards' %(i)] = reward
+print(states)
 
-  
-# Create the pandas DataFrame
-df = pd.DataFrame(data)
-
-rewards = df['epoch 0 rewards']
-  
-# print dataframe.
-for i in range(144):
-    print(i, df.loc[i,'state'])
+for i in range(4):
+    print("\n")
+    for j in range(4):
+            print(states[i,0,j], "  ", states[i,1,j], "  ", states[i,2,j])

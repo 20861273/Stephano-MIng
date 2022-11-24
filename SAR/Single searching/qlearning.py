@@ -32,9 +32,9 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 20000
+        num_episodes = 200000
         max_steps_per_episode = 200
-        num_epochs = 10
+        num_epochs = 5
 
         learning_rate = np.array([0.1])
         discount_rate = np.array([0.9])
@@ -72,7 +72,7 @@ class QLearning:
         all_grids = []
         q_tables = np.zeros((num_sims, state_space_size, action_space_size))
 
-        print("\n# Epochs: ", num_epochs, "\n# Training sessions per epoch: ", num_sims, "\n# Episodes per training session: ", num_episodes)
+        print("\n# Epochs: ", num_epochs, "\n# Experiments per epoch: ", num_sims, "\n# Episodes per experiment: ", num_episodes)
         print("\nHyperparameters:\nLearning rate (α): ", learning_rate, "\nDiscount rate (γ): ", discount_rate, "\nExploration rate (ϵ): ", exploration_rate, "\nExploration decay rate: ", exploration_decay_rate, "\n")
 
         if mode != 1:
@@ -104,14 +104,14 @@ class QLearning:
             generate = False
             state = QL.reset(env, generate)
             for seq_i in range(0, num_epochs):
-                print("Training session: ", seq)
+                print("Epoch: ", seq)
                 seq_rewards = []
                 seq_steps = []
                 sim = 0
                 for lr_i in np.arange(len(learning_rate)):
                     for dr_i in np.arange(len(discount_rate)):
                         for er_i in np.arange(len(exploration_rate)):
-                            print("Simulation: ", sim)
+                            print("Experiment: ", sim)
                             # Reinitialize some variables
                             ep_exploration_rate = np.copy(exploration_rate)
                             q_table = np.zeros((state_space_size, action_space_size))
@@ -314,7 +314,7 @@ class QLearning:
                 elif a == Direction.DOWN.value: 
                     test_tab[s] = "v"
         
-            print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
+            print(np.reshape(test_tab, (env.grid.shape[0], env.grid.shape[1])))
 
             state = QL.reset(env, generate)
             env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
