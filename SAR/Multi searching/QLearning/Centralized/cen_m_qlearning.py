@@ -36,22 +36,22 @@ class QLearning:
         q_table = np.zeros((state_space_size, action_space_size))
 
         # Initializing Q-Learning Parameters
-        num_episodes = 4000
-        max_steps_per_episode = 200
-        epochs = 1000
+        num_episodes = 20000
+        max_steps_per_episode = 20
+        epochs = 10
 
-        learning_rate = np.array([0.05, 0.1, 0.2])
+        learning_rate = np.array([0.1])
         discount_rate = np.array([0.9])
 
         # pos_reward = env.grid.shape[0]*env.grid.shape[1]
-        pos_reward = 2
+        pos_reward = np.array([2, 5])
         n_tests = 100
         interval = 50
 
-        exploration_rate = np.array([0.01], dtype=np.float32)
-        max_exploration_rate = np.array([0.01], dtype=np.float32)
-        min_exploration_rate = np.array([0.01], dtype=np.float32)
-        exploration_decay_rate = np.array([0.01], dtype=np.float32)
+        exploration_rate = np.array([0.01, 0.03, 0.05], dtype=np.float32)
+        max_exploration_rate = np.array([0.01, 0.03, 0.05], dtype=np.float32)
+        min_exploration_rate = np.array([0.01, 0.03, 0.05], dtype=np.float32)
+        exploration_decay_rate = np.array([0.01, 0.03, 0.05], dtype=np.float32)
 
         generate = True
         policy_extraction = True
@@ -62,7 +62,7 @@ class QLearning:
             policy_extraction = False
 
         # Result parameters
-        experiments = len(learning_rate) * len(discount_rate) * len(exploration_rate)
+        experiments = len(learning_rate) * len(discount_rate) * len(exploration_rate) * len(pos_reward)
         exp = 0
         epoch_cnt = 0
         
@@ -101,79 +101,80 @@ class QLearning:
                     for dr_i in np.arange(len(discount_rate)):
                         exp_exploration_rate = np.copy(exploration_rate)
                         for er_i in np.arange(len(exploration_rate)):
-                            print("Experiment: ", exp)
-                            # Reinitialize some variables
-                            q_table = np.zeros((state_space_size, action_space_size))
+                            for pos_i in np.arange(len(pos_reward)):
+                                # print("Experiment: ", exp)
+                                # Reinitialize some variables
+                                q_table = np.zeros((state_space_size, action_space_size))
 
-                            # Training Loop
-                            rewards_per_episode = []
+                                # Training Loop
+                                rewards_per_episode = []
 
-                            # Q-learning algorithm
-                            for episode in range(num_episodes):
-                                if episode % 100000 == 0:
-                                    print("Episode: %s" %(episode))
+                                # Q-learning algorithm
+                                for episode in range(num_episodes):
+                                    # if episode % 100000 == 0:
+                                    #     print("Episode: %s" %(episode))
 
-                                # Initialize new episode params
-                                if not episode == 0: state = self.reset(env, generate)
-                                done = False
-                                rewards_current_episode = [0]*self.nr
-                                reward = [0]*self.nr
+                                    # Initialize new episode params
+                                    if not episode == 0: state = self.reset(env, generate)
+                                    done = False
+                                    rewards_current_episode = [0]*self.nr
+                                    reward = [0]*self.nr
 
-                                for step in range(max_steps_per_episode):
-                                    if state[0] == state[1]:
-                                        if state not in same_state:
-                                            same_state.append(state)
-                                            
-                                    # Exploration-exploitation trade-off
-                                    exploration_rate_threshold = random.uniform(0, 1)
-                                    for i in range(0, self.nr):
-                                        if exploration_rate_threshold > exp_exploration_rate[er_i]:
-                                            action[i] = np.argmax(q_table[state[i],:])
-                                        else:
-                                            action_space_actual_size = action_space_size-1
-                                            action[i] = random.randint(0, action_space_actual_size)
+                                    for step in range(max_steps_per_episode):
+                                        if state[0] == state[1]:
+                                            if state not in same_state:
+                                                same_state.append(state)
+                                                
+                                        # Exploration-exploitation trade-off
+                                        exploration_rate_threshold = random.uniform(0, 1)
+                                        for i in range(0, self.nr):
+                                            if exploration_rate_threshold > exp_exploration_rate[er_i]:
+                                                action[i] = np.argmax(q_table[state[i],:])
+                                            else:
+                                                action_space_actual_size = action_space_size-1
+                                                action[i] = random.randint(0, action_space_actual_size)
 
-                                    # Take new action
-                                    new_state, reward, done, info = self.step(env, action, pos_reward)
+                                        # Take new action
+                                        new_state, reward, done, info = self.step(env, action, pos_reward[pos_i])
 
-                                    # Update Q-table
-                                    q_table[state[0], action[0]] = q_table[state[0], action[0]] * (1 - learning_rate[lr_i]) + \
-                                        learning_rate[lr_i] * (reward[0] + discount_rate[dr_i] * np.max(q_table[new_state[0], :]))
-                                    q_table[state[1], action[1]] = q_table[state[1], action[1]] * (1 - learning_rate[lr_i]) + \
-                                        learning_rate[lr_i] * (reward[0] + discount_rate[dr_i] * np.max(q_table[new_state[1], :]))
+                                        # Update Q-table
+                                        q_table[state[0], action[0]] = q_table[state[0], action[0]] * (1 - learning_rate[lr_i]) + \
+                                            learning_rate[lr_i] * (reward[0] + discount_rate[dr_i] * np.max(q_table[new_state[0], :]))
+                                        q_table[state[1], action[1]] = q_table[state[1], action[1]] * (1 - learning_rate[lr_i]) + \
+                                            learning_rate[lr_i] * (reward[0] + discount_rate[dr_i] * np.max(q_table[new_state[1], :]))
 
-                                    # Set new state
-                                    state = new_state
-                                    
-                                    # Add new reward  
-                                    # rewards_current_episode += reward
-                                    rewards_current_episode[0] += reward[0]
-                                    rewards_current_episode[1] += reward[1]
+                                        # Set new state
+                                        state = new_state
+                                        
+                                        # Add new reward  
+                                        # rewards_current_episode += reward
+                                        rewards_current_episode[0] += reward[0]
+                                        rewards_current_episode[1] += reward[1]
 
-                                    if done:
+                                        if done:
+                                            rewards_per_episode.append(rewards_current_episode)
+                                            break
+
+                                        # Exploration rate decay 
+                                        exp_exploration_rate[er_i] = min_exploration_rate[er_i] + \
+                                            (max_exploration_rate[er_i] - min_exploration_rate[er_i]) * np.exp(-exploration_decay_rate[er_i]*episode)
+
+                                    # Add current episode reward to total rewards list
+                                    if not done:
                                         rewards_per_episode.append(rewards_current_episode)
-                                        break
 
-                                    # Exploration rate decay 
-                                    exp_exploration_rate[er_i] = min_exploration_rate[er_i] + \
-                                        (max_exploration_rate[er_i] - min_exploration_rate[er_i]) * np.exp(-exploration_decay_rate[er_i]*episode)
+                                rewards_per_episode = rewards_per_episode[::interval]
+                                tmp_exp_rewards = np.array(exp_rewards)
+                                new_tmp_exp_rewards = np.array(np.append(tmp_exp_rewards.ravel(),np.array(rewards_per_episode)))
+                                if tmp_exp_rewards.shape[0] == 0:
+                                    new_exp_rewards = new_tmp_exp_rewards.reshape(1,self.nr, len(rewards_per_episode))
+                                else:
+                                    new_exp_rewards = new_tmp_exp_rewards.reshape(new_exp_rewards.shape[0]+1, self.nr, new_exp_rewards.shape[2])
+                                exp_rewards = new_exp_rewards.tolist()
+                                
+                                q_tables[exp] = q_table
 
-                                # Add current episode reward to total rewards list
-                                if not done:
-                                    rewards_per_episode.append(rewards_current_episode)
-
-                            rewards_per_episode = rewards_per_episode[::interval]
-                            tmp_exp_rewards = np.array(exp_rewards)
-                            new_tmp_exp_rewards = np.array(np.append(tmp_exp_rewards.ravel(),np.array(rewards_per_episode)))
-                            if tmp_exp_rewards.shape[0] == 0:
-                                new_exp_rewards = new_tmp_exp_rewards.reshape(1,self.nr, len(rewards_per_episode))
-                            else:
-                                new_exp_rewards = new_tmp_exp_rewards.reshape(new_exp_rewards.shape[0]+1, self.nr, new_exp_rewards.shape[2])
-                            exp_rewards = new_exp_rewards.tolist()
-                            
-                            q_tables[exp] = q_table
-
-                            exp += 1
+                                exp += 1
                 tmp_rewards = np.array(all_rewards)
                 new_tmp_rewards = np.array(np.append(tmp_rewards.ravel(),np.array(exp_rewards).ravel()))
                 new_rewards = new_tmp_rewards.reshape(epoch_cnt+1,exp,self.nr,int(num_episodes/interval))
@@ -216,10 +217,36 @@ class QLearning:
                 trajs0.append(step_tab_0)
                 trajs1.append(step_tab_1)
 
-            results.plot_and_save(q_tables, avg_rewards, epochs,
+            qtrajs0 = []
+            
+            for i in range(0, q_tables.shape[0]):	
+                print("\nTrajectories of policy %s:" %(i))	
+                step_tab_0 = [None] * (env.grid.shape[0]*env.grid.shape[1]*env.grid.shape[0]*env.grid.shape[1])
+                step_tab_1 = [None] * (env.grid.shape[0]*env.grid.shape[1]*env.grid.shape[0]*env.grid.shape[1])
+
+                for state0 in range(0, env.grid.shape[0]*env.grid.shape[1]):
+                    for state1 in range(0, env.grid.shape[0]*env.grid.shape[1]):
+
+                        s = [(state0*env.grid.shape[0]*env.grid.shape[1] + state1),
+                            (state1*env.grid.shape[0]*env.grid.shape[1] + state0)]
+
+                        action[0] = np.argmax(q_tables[i, s[0],:])
+
+                        if action[0] == Direction.RIGHT.value:
+                            step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = ">"
+                        elif action[0] == Direction.LEFT.value:
+                            step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = "<"
+                        elif action[0] == Direction.UP.value: 
+                            step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = "^"
+                        elif action[0] == Direction.DOWN.value: 
+                            step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = "v"
+                
+                qtrajs0.append(np.reshape(step_tab_0, (env.grid.shape[0], env.grid.shape[1], env.grid.shape[0], env.grid.shape[1])))
+
+            results.plot_and_save(q_tables, avg_rewards, pos_reward, epochs,
                                     learning_rate, discount_rate, exploration_rate,
                                     min_exploration_rate, max_exploration_rate, exploration_decay_rate,
-                                    save_path, env, hour, min, sec, interval, trajs0, trajs1)
+                                    save_path, env, hour, min, sec, interval, trajs0, trajs1, qtrajs0)
 
             for i in range(0, q_tables.shape[0]):	
                 print("\nTesting policy %s:" % (i))	
@@ -317,35 +344,57 @@ class QLearning:
                 print ("Success rate of policy %s: %s%%" % (policy, success))
 
             print("\nTrajectories of policy %s:" %(policy))	
-            trajs = []	
-            test_tab = np.empty((env.grid.shape[0], env.grid.shape[1]), dtype=str)	
-            self.reset(env, generate)	
-            for step in range(1, 200):	
-                state = self.get_state(env)	
-                action[0] = np.argmax(q_table[state[0],:])	
-                action[1] = np.argmax(q_table[state[1],:])
+            trajs0 = []
+            trajs1 = []	
+            for i in range(0, q_tables.shape[0]):	
+                print("\nTrajectories of policy %s:" %(policy))	
+                step_tab_0 = np.zeros((env.grid.shape[0], env.grid.shape[1], env.grid.shape[0], env.grid.shape[1]))
+                step_tab_1 = np.zeros((env.grid.shape[0], env.grid.shape[1], env.grid.shape[0], env.grid.shape[1]))
 
-                if action[0] == Direction.RIGHT.value:	
-                    test_tab[self.pos[0].y, self.pos[0].x] = ">"	
-                elif action[0] == Direction.LEFT.value: 	
-                    test_tab[self.pos[0].y, self.pos[0].x] = "<"	
-                elif action[0] == Direction.UP.value: 	
-                    test_tab[self.pos[0].y, self.pos[0].x] = "^"	
-                elif action[0] == Direction.DOWN.value: 	
-                    test_tab[self.pos[0].y, self.pos[0].x] = "v"
 
-                if action[1] == Direction.RIGHT.value:	
-                    test_tab[self.pos[1].y, self.pos[1].x] = ">"	
-                elif action[1] == Direction.LEFT.value: 	
-                    test_tab[self.pos[1].y, self.pos[1].x] = "<"	
-                elif action[1] == Direction.UP.value: 	
-                    test_tab[self.pos[1].y, self.pos[1].x] = "^"	
-                elif action[1] == Direction.DOWN.value: 	
-                    test_tab[self.pos[1].y, self.pos[1].x] = "v"	
-                new_state, reward, done, _ = self.step(env, action, pos_reward)	
-            	
-            trajs.append(test_tab)	
-            print(test_tab)
+                self.reset(env, generate)	
+                for step in range(1, 200):	
+                    state = self.get_state(env)	
+                    action[0] = np.argmax(q_table[state[0],:])	
+                    action[1] = np.argmax(q_table[state[1],:])
+
+                    step_tab_0[self.pos[1].y, self.pos[1].x, self.pos[0].y, self.pos[0].x] = step
+                    step_tab_1[self.pos[0].y, self.pos[0].x, self.pos[1].y, self.pos[1].x] = step
+
+                    new_state, reward, done, _ = self.step(env, action, pos_reward)
+                    if done:
+                        break
+                	
+                trajs0.append(step_tab_0)
+                trajs1.append(step_tab_1)
+            print(trajs0)
+            print(trajs1)
+
+            qtrajs0 = []
+            print("\nTrajectories of policy %s:" %(policy))	
+            step_tab_0 = [None] * (env.grid.shape[0]*env.grid.shape[1]*env.grid.shape[0]*env.grid.shape[1])
+            step_tab_1 = [None] * (env.grid.shape[0]*env.grid.shape[1]*env.grid.shape[0]*env.grid.shape[1])
+
+            for state0 in range(0, env.grid.shape[0]*env.grid.shape[1]):
+                for state1 in range(0, env.grid.shape[0]*env.grid.shape[1]):
+
+                    s = [(state0*env.grid.shape[0]*env.grid.shape[1] + state1),
+                        (state1*env.grid.shape[0]*env.grid.shape[1] + state0)]
+
+                    action[0] = np.argmax(q_table[s[0],:])
+
+                    if action[0] == Direction.RIGHT.value:
+                        step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = ">"
+                    elif action[0] == Direction.LEFT.value:
+                        step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = "<"
+                    elif action[0] == Direction.UP.value: 
+                        step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = "^"
+                    elif action[0] == Direction.DOWN.value: 
+                        step_tab_0[state0*env.grid.shape[0]*env.grid.shape[1]+state1] = "v"
+            
+            qtrajs0.append(np.reshape(step_tab_0, (env.grid.shape[0], env.grid.shape[1], env.grid.shape[0], env.grid.shape[1])))
+
+            print_trajs(save_path, trajs0, trajs1, qtrajs0, env)
 
 
             # Save images
@@ -564,3 +613,52 @@ def extract_values(correct_path, policy):
     file_name = "policy" + str(policy) + ".txt"
     return np.loadtxt(os.path.join(correct_path, file_name)), cur_line
 
+def print_trajs(save_path, trajs0, trajs1, qtrajs0, env):
+    f = open(os.path.join(save_path,"trajectories0.txt"), "w", encoding="utf-8")
+
+    line = ""
+    for i in range(len(trajs0)):
+        for j in range(0, env.grid.shape[0]):
+            f.write('\n')
+            for k in range(0, env.grid.shape[0]):
+                for l in range(0, env.grid.shape[1]):
+                    line += str(trajs0[i][j][l][k]) + "  "
+                f.write(str(line))
+                line = ""
+                f.write('\n')
+        f.write('\n\n')
+
+    f.close()
+
+    f = open(os.path.join(save_path,"trajectories1.txt"), "w", encoding="utf-8")
+
+    line = ""
+    for i in range(len(trajs1)):
+        for j in range(0, env.grid.shape[0]):
+            f.write('\n')
+            for k in range(0, env.grid.shape[0]):
+                for l in range(0, env.grid.shape[1]):
+                    line += str(trajs1[i][j][l][k]) + "  "
+                f.write(str(line))
+                line = ""
+                f.write('\n')
+        f.write('\n\n')
+
+    f.close()
+
+
+    f = open(os.path.join(save_path,"qtrajectories0.txt"), "w", encoding="utf-8")
+
+    line = ""
+    for i in range(len(qtrajs0)):
+        for j in range(0, env.grid.shape[0]):
+            f.write('\n')
+            for k in range(0, env.grid.shape[0]):
+                for l in range(0, env.grid.shape[1]):
+                    line += str(qtrajs0[i][j][l][k]) + "  "
+                f.write(str(line))
+                line = ""
+                f.write('\n')
+        f.write('\n\n')
+
+    f.close()

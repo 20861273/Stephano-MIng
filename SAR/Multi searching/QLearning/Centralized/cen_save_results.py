@@ -74,33 +74,35 @@ class print_results:
         plt_title = "Q-learning Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
-    def plot_and_save(self, q_tables, rewards, epochs,
+    def plot_and_save(self, q_tables, rewards, pos_reward, epochs,
                     learning_rate, discount_rate, exploration_rate,
                     min_exploration_rate, max_exploration_rate, exploration_decay_rate,
-                    save_path, env, h, m, s, interval, trajs0, trajs1):
+                    save_path, env, h, m, s, interval, trajs0, trajs1, qtrajs0):
         f = open(os.path.join(save_path,"env_shape.txt"), "w", encoding="utf-8")
 
         c = cm.rainbow(np.linspace(0, 1, len(rewards)))
-        l = []
+        leg = []
         cnt = 0
 
         f.write(str(env.grid.shape))
         for lr_i in np.arange(len(learning_rate)):
             for dr_i in np.arange(len(discount_rate)):
                 for er_i in np.arange(len(exploration_rate)):
-                    file_name = "policy" + str(cnt) + ".txt"
-                    np.savetxt(os.path.join(save_path, file_name), q_tables[cnt])
-                    
-                    l.append("%s: α=%s, γ=%s, ϵ=%s, ϵ_min=%s, ϵ_max=%s, ϵ_d=%s" %(
-                            str(cnt),
-                            str(learning_rate[lr_i]), 
-                            str(discount_rate[dr_i]), 
-                            str(exploration_rate[er_i]),
-                            str(min_exploration_rate[er_i]),
-                            str(max_exploration_rate[er_i]),
-                            str(exploration_decay_rate[er_i])
-                            ))
-                    cnt += 1      
+                    for pos_i in np.arange(len(pos_reward)):
+                        file_name = "policy" + str(cnt) + ".txt"
+                        np.savetxt(os.path.join(save_path, file_name), q_tables[cnt])
+                        
+                        leg.append("%s: r=%s, α=%s, γ=%s, ϵ=%s, ϵ_min=%s, ϵ_max=%s, ϵ_d=%s" %(
+                                str(cnt),
+                                str(pos_reward[pos_i]), 
+                                str(learning_rate[lr_i]), 
+                                str(discount_rate[dr_i]), 
+                                str(exploration_rate[er_i]),
+                                str(min_exploration_rate[er_i]),
+                                str(max_exploration_rate[er_i]),
+                                str(exploration_decay_rate[er_i])
+                                ))
+                        cnt += 1      
         
         f.close()
 
@@ -108,19 +110,55 @@ class print_results:
             file_name = "policy_rewards" + str(i) + ".txt"
             np.savetxt(os.path.join(save_path, file_name), rewards[i])
 
-        f = open(os.path.join(save_path,"trajectories.txt"), "w", encoding="utf-8")
+        f = open(os.path.join(save_path,"trajectories0.txt"), "w", encoding="utf-8")
 
-        for k in range(len(trajs0)):
-            for i in range(0, env.grid.shape[0]):
+        line = ""
+        for i in range(len(trajs0)):
+            for j in range(0, env.grid.shape[0]):
                 f.write('\n')
-                for j in range(0, env.grid.shape[0]):
-                    line = str(trajs0[k][i][0][j]) +"  " + str(trajs0[k][i][1][j]) + "  " + str(trajs0[k][i][2][j])
+                for k in range(0, env.grid.shape[0]):
+                    for l in range(0, env.grid.shape[1]):
+                        line += str(trajs0[i][j][l][k]) + "  "
                     f.write(str(line))
+                    line = ""
                     f.write('\n')
+            f.write('\n\n')
+
+        f.close()
+
+        f = open(os.path.join(save_path,"trajectories1.txt"), "w", encoding="utf-8")
+
+        line = ""
+        for i in range(len(trajs1)):
+            for j in range(0, env.grid.shape[0]):
+                f.write('\n')
+                for k in range(0, env.grid.shape[0]):
+                    for l in range(0, env.grid.shape[1]):
+                        line += str(trajs1[i][j][l][k]) + "  "
+                    f.write(str(line))
+                    line = ""
+                    f.write('\n')
+            f.write('\n\n')
+
+        f.close()
+
+        f = open(os.path.join(save_path,"qtrajectories0.txt"), "w", encoding="utf-8")
+
+        line = ""
+        for i in range(len(qtrajs0)):
+            for j in range(0, env.grid.shape[0]):
+                f.write('\n')
+                for k in range(0, env.grid.shape[0]):
+                    for l in range(0, env.grid.shape[1]):
+                        line += str(qtrajs0[i][j][l][k]) + "  "
+                    f.write(str(line))
+                    line = ""
+                    f.write('\n')
+            f.write('\n\n')
 
         f.close()
         
-        sim_len = (len(learning_rate) * len(discount_rate) * len(exploration_rate))
+        sim_len = (len(learning_rate) * len(discount_rate) * len(exploration_rate) * len(pos_reward))
         plot_len = int(sim_len/3)
         plot_rem = sim_len % 3
         cnt = 0
@@ -135,15 +173,16 @@ class print_results:
             ax2.set_xlabel('Episode')
             ax2.set_ylabel('#Steps')
 
-            ax1.set_ylim([-1, 3])
-            ax2.set_ylim([-1, 3])
+            ax1.set_ylim([-10, 10])
+            ax2.set_ylim([-10, 10])
 
             for j in range(0, 3):
                 ax1.plot(np.arange(0, len(rewards[i*3+j][0]))*interval, rewards[i*3+j][0], color=c[i*3+j])
                 ax2.plot(np.arange(0, len(rewards[i*3+j][1]))*interval, rewards[i*3+j][1], color=c[i*3+j])
                 cnt += 1
 
-            ax1.legend(l[i*3:i*3+3])
+            ax1.legend(leg[i*3:i*3+3])
+            ax2.legend(leg[i*3:i*3+3])
 
             file_name = "learning_curve" + str(i) + ".png"
             plt.savefig(os.path.join(save_path, file_name))
@@ -160,14 +199,15 @@ class print_results:
             ax2.set_xlabel('Episode')
             ax2.set_ylabel('#Steps')
 
-            ax1.set_ylim([-1, 3])
-            ax2.set_ylim([-1, 3])
+            ax1.set_ylim([-10, 10])
+            ax2.set_ylim([-10, 10])
 
             for i in range(sim_len-plot_rem, sim_len):
                 ax1.plot(np.arange(0, len(rewards[i][0]))*interval, rewards[i][0], color=c[i])
                 ax2.plot(np.arange(0, len(rewards[i][1]))*interval, rewards[i][1], color=c[i])
 
-            ax1.legend(l[cnt:])
+            ax1.legend(leg[cnt:])
+            ax2.legend(leg[cnt:])
 
             file_name = "learning_curve" + str(i) + ".png"
             plt.savefig(os.path.join(save_path, file_name))
