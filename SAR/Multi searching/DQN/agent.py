@@ -38,7 +38,6 @@ class Agent():
         self.action_size = action_size
         self.seed = random.seed(seed)
         
-        
         #Q- Network
         self.qnetwork_local = QNetwork(state_size, action_size, seed).to(device)
         self.qnetwork_target = QNetwork(state_size, action_size, seed).to(device)
@@ -62,7 +61,7 @@ class Agent():
             if len(self.memory)>BATCH_SIZE:
                 experience = self.memory.sample()
                 self.learn(experience, discount_rate, learning_rate)
-    def act(self, state, eps = 0):
+    def act(self, state, eps):
         """Returns action for given state as per current policy
         Params
         =======
@@ -202,13 +201,13 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_
                 for er_i in np.arange(len(exploration_rate)):
                     print("Training simulation: %s\nLearning rate = %s\nDiscount rate = %s\nExploration rate = %s\nExploration rate min = %s\nExploration rate max = %s\nExploration decay rate = %s"
                             %(sim, learning_rate[lr_i], discount_rate[dr_i], exploration_rate[er_i], min_exploration_rate[er_i], max_exploration_rate[er_i], exploration_decay_rate[er_i]))
-                    agent = Agent(learning_rate[lr_i], state_size=1,action_size=1,seed=0)
+                    agent = Agent(learning_rate[lr_i], state_size=1,action_size=4,seed=0)
                     eps = eps_start[er_i]
                     env = Environment()
                     rewards_per_episode = []
                     steps_per_episode = [] 
                     for i_episode in range(0, n_episodes):
-                        if i_episode % 1000 == 0 or i_episode == 0: print("Episode: ", i_episode)
+                        if i_episode % 10 == 0 or i_episode == 0: print("Episode: ", i_episode)
                         state = env.reset()
                         score = 0
                         rewards_current_episode = 0
@@ -240,7 +239,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_
                                 print('\nEnvironment solve in {:d} epsiodes!\tAverage score: {:.2f}'.format(i_episode,np.mean(scores_window)))
                                 torch.save(agent.qnetwork_local.state_dict(),'checkpoint.pth')
                                 break
-                        if i_episode % 1000==0 and not i_episode == 0:
+                        if i_episode % 10==0 and not i_episode == 0:
                             print('\rEpisode {}\tAverage Score {:.2f}'.format(i_episode,np.mean(scores_window)))
                         if mode:
                             if not done:
@@ -313,8 +312,8 @@ num_episodes = 50000
 max_steps_per_episode = 200
 num_sims = 1
 
-learning_rate = np.array([0.00075, 0.1])
-discount_rate = np.array([0.1, 0.5, 0.9])
+learning_rate = np.array([0.00075])
+discount_rate = np.array([0.1])
 
 exploration_rate = np.array([0.03], dtype=np.float32)
 max_exploration_rate = np.array([0.03], dtype=np.float32)

@@ -34,38 +34,9 @@ GSD_H = (height * sensor_h) / (focal_length * pixel_h) # m
 FOV_W = GSD_W * pixel_w
 FOV_H = GSD_H * pixel_h
 
-# m = folium.Map()
-
-# Draw(export=True,
-#      filename='drawing.geojson',
-#      position = 'topleft').add_to(m)
-
-# mapObjectInHTML = m.get_name()
-
-# m.get_root().html.add_child(folium.Element("""
-# <script type="text/javascript">
-#   $(document).ready(function(){
-    
-#     {map}.on("draw:created", function(e){    
-#         var layer = e.layer;
-#             feature = layer.feature = layer.feature || {}; 
-            
-#         var title = prompt("Please provide the name of the search area", "default");
-
-#         feature.type = feature.type || "Feature";
-#         var props = feature.properties = feature.properties || {};
-#         props.Title = title;
-#         drawnItems.addLayer(layer);
-#       });    
-#     });    
-# </script>
-# """.replace('{map}', mapObjectInHTML)))
-
-# m.save('map.html')
-
-# src_file = r"C:\Users\Stephano\Downloads\search_area.geojson"
-# dst_file = r"C:\Users\Stephano\Documents\Stephano-MIng\search_area.geojson"
-# os.rename(src_file, dst_file)
+src_file = r"C:\Users\Stephano\Downloads\search_area.geojson"
+dst_file = r"C:\Users\Stephano\Documents\Stephano-MIng\search_area.geojson"
+os.rename(src_file, dst_file)
 
 # Load the .geojson file
 with open("search_area.geojson", "r") as f:
@@ -75,9 +46,11 @@ with open("search_area.geojson", "r") as f:
 title = data["features"][0]["properties"]["Title"]
 ls_coordinates = data["features"][0]["geometry"]["coordinates"]
 
+# Convert shape from (1,N,2) to (N,2)
 coordinates = np.array(ls_coordinates)
 coordinates = np.squeeze(coordinates)
 
+# Swap latitude and longitude positions
 coordinates[:, [1,0]] = coordinates[:,[0,1]]
 
 ls_coordinates = coordinates.tolist()
@@ -85,51 +58,45 @@ ls_coordinates = coordinates.tolist()
 print("Title: ", title)
 print("Coordinates: ", ls_coordinates)
 
-
-# # Create a new figure and axes
-# fig, ax = plt.subplots()
-
-# # Create the polygon using the coordinates
-# polygon = Polygon(coordinates, facecolor='red', edgecolor='black')
-# ax.add_patch(polygon)
-
-# # Set the axis limits to fit the polygon
-# ax.set_xlim(min(x for x, y in coordinates), max(x for x, y in coordinates))
-# ax.set_ylim(min(y for x, y in coordinates), max(y for x, y in coordinates))
-
-# # Save the figure as an image file
-# plt.savefig("polygon.png", dpi=300)
-
+# Create folium map
 m = folium.Map(location=ls_coordinates[0], zoom_start=13)
 
+# Add polygon to map
 folium.Polygon(ls_coordinates).add_to(m)
 
 # Latitude is the Y axis, longitude is the X axis
+# Get maximum and minimum latitude and longitude coordinates of polygon
 max_lat_index = np.argmax(coordinates[:,0])
 min_lat_index = np.argmin(coordinates[:,0])
 max_long_index = np.argmax(coordinates[:,1])
 min_long_index = np.argmin(coordinates[:,1])
 
+# Get distance between max and min lat and long in meters
 lat_dist = haversine(coordinates[max_lat_index], coordinates[min_lat_index], unit=Unit.METERS)
 long_dist = haversine(coordinates[max_long_index], coordinates[min_long_index], unit=Unit.METERS)
 
+# Get size of grid based on FOV of drones
 grid_width = round(lat_dist / FOV_W)
 grid_height = round(long_dist / FOV_H)
 
 grid = np.zeros((grid_height, grid_width))
 
+# Get distance of lat and long in meters
 diff_lat = coordinates[max_lat_index][0] - coordinates[min_lat_index][0]
 diff_long = coordinates[max_long_index][1] - coordinates[min_long_index][1]
 
+# Get cell size
 cell_h = diff_lat / grid_height
 cell_w = diff_long / grid_width
 
+# Starting coordinates (top left) of grid
 coordinate0 = [coordinates[max_lat_index][0], coordinates[min_long_index][1]]
 coordinate1 = [(coordinates[max_lat_index][0]-cell_h), (coordinates[min_long_index][1]+cell_w)]
 
 # create a polygon object with the coordinates of the polygon
 polygon = Polygon(ls_coordinates)
 
+# Draw grid on map
 for i in range(0, grid_height):
     for j in range(0, grid_width):
         # create a point object with the coordinates of the cell
@@ -138,7 +105,7 @@ for i in range(0, grid_height):
         point2 = Point([coordinate0[0]-cell_h, coordinate0[1]+cell_w])
         point3 = Point([coordinate0[0]-cell_h, coordinate0[1]])
         
-        # check if the rectangle is inside the polygon and draws it
+        # check if the rectangle is inside the polygon and draw it
         if polygon.contains(point0) or polygon.contains(point1) or polygon.contains(point2) or polygon.contains(point3):
             folium.Rectangle([coordinate0, coordinate1], color='black').add_to(m)
             grid[i,j] = 0
@@ -146,7 +113,6 @@ for i in range(0, grid_height):
             folium.Rectangle([coordinate0, coordinate1], color='black', fill=True,).add_to(m)
             grid[i,j] = 1
 
-        # folium.Rectangle([coordinate0, coordinate1], color='green').add_to(m)
         coordinate0[1] += cell_w
         coordinate1[1] += cell_w
     coordinate0[1] = coordinates[min_long_index][1]
