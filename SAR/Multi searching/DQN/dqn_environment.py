@@ -6,7 +6,7 @@ import math
 
 # Environment characteristics
 HEIGHT = 4
-WIDTH = 4
+WIDTH = 3
 # DENSITY = 30 # percentage
 
 # Direction states
@@ -37,7 +37,7 @@ class Environment:
         # Set robot(s) position
         self.pos = self.starting_pos
 
-        self.positive_reward = 2
+        self.positive_reward = self.grid.shape[0]*self.grid.shape[1]
 
         print("\nGrid size: ", self.grid.shape)
 
@@ -146,7 +146,7 @@ class Environment:
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
             return True
         elif pt.y < 0 or pt.y > self.grid.shape[0]-1 or pt.x < 0 or pt.x > self.grid.shape[1]-1:
-            #self.score -= 2
+            self.score -= 2
             return True
         
         return False
