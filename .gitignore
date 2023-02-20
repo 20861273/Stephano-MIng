@@ -3,6 +3,8 @@
 /SAR/Results/*
 /SAR/Multi searching/QLearning/Centralized/__pycache__/*
 /SAR/Multi searching/QLearning/Decentralized/__pycache__/*
+/SAR/Multi searching/DQN/__pycache__/*
+
 
 /Maze/__pycache__
 /Maze/include
