@@ -59,13 +59,22 @@ class print_results:
                 ax.fill([j, j + 1, j + 1, j], [i, i, i + 1, i + 1], facecolor="white", alpha=0.5)
 
         # Add path to plot
+        # for i, point in enumerate(path):
+        #     x, y = point.x, point.y
+        #     label = str(i)
+        #     label = ", ".join([str(j) for j, p in enumerate(path) if p == point])
+        
         for i, point in enumerate(path):
             x, y = point.x, point.y
             label = str(i)
-            if path.count(point) > 1:
-                label = ", ".join([str(j) for j, p in enumerate(path) if p == point])
+            for j, p in enumerate(path):
+                if p == point:
+                    if j % 3 == 0 and j != 0:
+                        label = ",\n".join(str(j))
+                    else:
+                        label = ", ".join(str(j))
             ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=14)
             ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], [y + 0.5, y + 0.5, y + 1.5, y + 1.5], facecolor="green", alpha=0.5)
         
-        plt.show()
+        # plt.show()
         

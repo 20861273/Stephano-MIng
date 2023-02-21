@@ -7,6 +7,8 @@ from datetime import datetime
 import os
 import matplotlib.pyplot as plt
 
+termination_time = 6
+exploration_cutoff = 1
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -32,15 +34,19 @@ class GridWithWeights(object):
     def passable(self, id):
         return id not in self.weights
 
-    def cost(self, current, next_node, closed_set):
+    def cost(self, current, next_node, closed_set, visited_list):
         branch = reconstruct_path(closed_set, current)
-        if next_node in branch:
-            if next_node == closed_set[0][4] and current[2] != 0:
+        if next_node in branch or next_node in visited_list:
+            # have visited
+
+            # End checker. Checks for termination condition
+            if next_node == closed_set[0][4] and current[2] != termination_time:
                 return 0, 0
             else:
                 return 0, 1
         else:
-            if next_node == closed_set[0][4] and current[2] != 0:
+            # not visited
+            if next_node == closed_set[0][4] and current[2] != termination_time:
                 return 1, 0
             else:
                 return 1, 1
@@ -71,13 +77,13 @@ def within_range(start, current):
     return False
 
 # A* algorithm
-def a_star(graph, start, termination_time):
+def a_star(graph, start, termination_time, exploration_cutoff):
     explored = 100
     visited_list = []
     closed_set = {}
     closed_set[0] = (-1, 0, 0, start, 1)
     id = 1
-    while explored > 5:
+    while explored > exploration_cutoff:
         printer = print_results(env.grid, WIDTH, HEIGHT)
         open_set = [(0, -1, 0, 0, start, 1)] # id, parent_id, time, reward, position, visited
         
@@ -90,18 +96,23 @@ def a_star(graph, start, termination_time):
             open_set.pop()
             if current[4] == start and current[2] != 0:
                 if current[2] == termination_time:
+                    # branch = reconstruct_path(closed_set, current)
+                    # printer.print_graph(branch)
+                    # print("")
                     explored = 0
                     path = reconstruct_path(closed_set, current)
                     for i in path:
                         if i not in visited_list: explored += 1
-                    visited_list = visited_list + path
+                    
+                    if explored > exploration_cutoff:
+                        visited_list = visited_list + path
 
                     break
             
             if current[2] != termination_time and within_range(start, current):
                 if current[4] != start or current[2] == 0: # only if the start is at time step 0
                     for next_node in graph.neighbors(current[4]):
-                        reward, visited = graph.cost(current, next_node, closed_set)
+                        reward, visited = graph.cost(current, next_node, closed_set, visited_list)
                         new_reward = current[3] + reward
                         new_t = current[2] + 1
                         if new_reward <= termination_time and new_t <= termination_time:
@@ -122,9 +133,7 @@ printer = print_results(env.grid, WIDTH, HEIGHT)
 
 graph = GridWithWeights(WIDTH, HEIGHT)
 
-termination_time = 10
-
-closed_set, current, traj = a_star(graph, env.starting_pos, termination_time)
+closed_set, current, traj = a_star(graph, env.starting_pos, termination_time, exploration_cutoff)
 print("Path:", traj)
 print("Cost:", closed_set[current[0]][2])
 print("Grid: \n", env.grid)
