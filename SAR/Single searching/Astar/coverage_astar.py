@@ -7,8 +7,8 @@ from datetime import datetime
 import os
 import matplotlib.pyplot as plt
 
-termination_time = 6
-exploration_cutoff = 1
+termination_time = 100
+visited_cutoff = 5
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -77,13 +77,13 @@ def within_range(start, current):
     return False
 
 # A* algorithm
-def a_star(graph, start, termination_time, exploration_cutoff):
-    explored = 100
+def a_star(graph, start, termination_time, visited_cutoff):
+    visited = 0
     visited_list = []
     closed_set = {}
     closed_set[0] = (-1, 0, 0, start, 1)
     id = 1
-    while explored > exploration_cutoff:
+    while visited < visited_cutoff:
         printer = print_results(env.grid, WIDTH, HEIGHT)
         open_set = [(0, -1, 0, 0, start, 1)] # id, parent_id, time, reward, position, visited
         
@@ -99,12 +99,12 @@ def a_star(graph, start, termination_time, exploration_cutoff):
                     # branch = reconstruct_path(closed_set, current)
                     # printer.print_graph(branch)
                     # print("")
-                    explored = 0
+                    visited = 0
                     path = reconstruct_path(closed_set, current)
                     for i in path:
-                        if i not in visited_list: explored += 1
+                        if i in visited_list: visited += 1
                     
-                    if explored > exploration_cutoff:
+                    if visited < visited_cutoff:
                         visited_list = visited_list + path
 
                     break
@@ -112,12 +112,12 @@ def a_star(graph, start, termination_time, exploration_cutoff):
             if current[2] != termination_time and within_range(start, current):
                 if current[4] != start or current[2] == 0: # only if the start is at time step 0
                     for next_node in graph.neighbors(current[4]):
-                        reward, visited = graph.cost(current, next_node, closed_set, visited_list)
+                        reward, backtracked = graph.cost(current, next_node, closed_set, visited_list)
                         new_reward = current[3] + reward
                         new_t = current[2] + 1
                         if new_reward <= termination_time and new_t <= termination_time:
-                            open_set.append((id, current[0], new_t, new_reward, next_node, visited))
-                            closed_set[id] = (current[0], new_t, new_reward, next_node, visited)
+                            open_set.append((id, current[0], new_t, new_reward, next_node, backtracked))
+                            closed_set[id] = (current[0], new_t, new_reward, next_node, backtracked)
 
                             # Debug
                             # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
@@ -133,18 +133,9 @@ printer = print_results(env.grid, WIDTH, HEIGHT)
 
 graph = GridWithWeights(WIDTH, HEIGHT)
 
-closed_set, current, traj = a_star(graph, env.starting_pos, termination_time, exploration_cutoff)
-print("Path:", traj)
+closed_set, current, traj = a_star(graph, env.starting_pos, termination_time, visited_cutoff)
+print("Path:", [(i.x, i.y) for i in traj])
 print("Cost:", closed_set[current[0]][2])
-print("Grid: \n", env.grid)
-
-i = 1
-for p in traj:
-    env.grid[p.y, p.x] = i
-    i += 1
-
-print("Path:\n", env.grid)
-
 
 printer.print_graph(traj)
 file_name = "traj.png"
