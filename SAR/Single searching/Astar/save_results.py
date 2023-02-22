@@ -28,16 +28,16 @@ class print_results:
         self.grid = grid
         self.rows = rows
         self.cols = cols
-    def print_graph(self, path):
+    def print_graph(self, path, h, w):
         """
         Prints the grid environment
         """
 
-        plt.rc('font', size=12)
+        plt.rc('font', size=20)
         plt.rc('axes', titlesize=15) 
 
         # Prints graph
-        fig,ax = plt.subplots(figsize=(8, 8))
+        fig,ax = plt.subplots(figsize=(h, w))
 
         ax.set_aspect("equal")
         ax.set_xlim(0.5, self.cols + 0.5)
@@ -63,17 +63,23 @@ class print_results:
         #     x, y = point.x, point.y
         #     label = str(i)
         #     label = ", ".join([str(j) for j, p in enumerate(path) if p == point])
-        
+        grid = np.zeros((h, w))
+        visited = []
         for i, point in enumerate(path):
             x, y = point.x, point.y
-            label = str(i)
+            label = []
             for j, p in enumerate(path):
-                if p == point:
-                    if j % 3 == 0 and j != 0:
-                        label = ",\n".join(str(j))
+                if p == point and p not in visited:
+                    if grid[p.y, p.x] % 3 == 0 and grid[p.y, p.x] != 0:
+                        temp = "\n" + str(j)
+                        label.append(temp)
                     else:
-                        label = ", ".join(str(j))
-            ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=14)
+                        label.append(str(j))
+                    grid[p.y, p.x] += 1
+            label = ", ".join(label)
+            visited.append(point)
+                    
+            ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
             ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], [y + 0.5, y + 0.5, y + 1.5, y + 1.5], facecolor="green", alpha=0.5)
         
         # plt.show()

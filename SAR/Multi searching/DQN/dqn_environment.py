@@ -136,17 +136,19 @@ class Environment:
         return state, reward, game_over, self.score
 
     def get_state(self):
-        return np.array([self.pos.x*self.grid.shape[0] + self.pos.y])
+        grid = np.zeros(self.grid.shape)
+        grid[self.pos.y, self.pos.x] = 1
+        return grid.flatten()
 
     def _is_collision(self, pt=None):
         if pt is None:
             pt = self.pos
         # hits boundary
-        obstacles = np.argwhere(self.grid == 1)
+        obstacles = np.argwhere(self.grid == States.OBS.value)
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
             return True
         elif pt.y < 0 or pt.y > self.grid.shape[0]-1 or pt.x < 0 or pt.x > self.grid.shape[1]-1:
-            self.score -= 2
+            # self.score -= 2
             return True
         
         return False

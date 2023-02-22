@@ -114,8 +114,8 @@ class print_results:
             ax2.set_ylabel('#Steps')
             
             for j in range(0, 3):
-                ax1.plot(np.arange(0, len(rewards[i*3+j]), 500), rewards[i*3+j][::500], color=c[i*3+j])
-                ax2.plot(np.arange(0, len(steps[i*3+j]), 500), steps[i*3+j][::500], color=c[i*3+j])
+                ax1.plot(np.arange(0, len(rewards[i*3+j]), 50), rewards[i*3+j][::50], color=c[i*3+j])
+                ax2.plot(np.arange(0, len(steps[i*3+j]), 50), steps[i*3+j][::50], color=c[i*3+j])
 
             ax1.legend(l)
             ax2.legend(l)
@@ -136,8 +136,8 @@ class print_results:
             ax2.set_ylabel('#Steps')
 
             for i in range(sim_len-plot_rem, sim_len):
-                ax1.plot(np.arange(0, len(rewards[i]), 500), rewards[i][::500], color=c[i])
-                ax2.plot(np.arange(0, len(steps[i]), 500), steps[i][::500], color=c[i])
+                ax1.plot(np.arange(0, len(rewards[i]), 50), rewards[i][::50], color=c[i])
+                ax2.plot(np.arange(0, len(steps[i]), 50), steps[i][::50], color=c[i])
 
             ax1.legend(l)
             ax2.legend(l)

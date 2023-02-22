@@ -104,7 +104,7 @@ class Agent():
             labels_next = self.qnetwork_target(next_state).detach().max(1)[0].unsqueeze(1) # unsqueeze(1) converts the dimension from (batch_size) to (batch_size,1)
 
         # .detach() ->  Returns a new Tensor, detached from the current graph.
-        labels = rewards + (gamma* labels_next*(1-dones))
+        labels = torch.zeros(rewards.size(0), predicted_targets.size(1), device=device) + rewards + (gamma * labels_next * (1 - dones))
         
         loss = criterion(predicted_targets,labels).to(device)
         self.optimizer.zero_grad()
@@ -200,9 +200,9 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_
         for lr_i in np.arange(len(learning_rate)):
             for dr_i in np.arange(len(discount_rate)):
                 for er_i in np.arange(len(exploration_rate)):
-                    print("Training simulation: %s\nLearning rate = %s\nDiscount rate = %s\nExploration rate = %s\nExploration rate min = %s\nExploration rate max = %s\nExploration decay rate = %s"
+                    print("\nTraining simulation: %s\nLearning rate = %s\nDiscount rate = %s\nExploration rate = %s\nExploration rate min = %s\nExploration rate max = %s\nExploration decay rate = %s"
                             %(sim, learning_rate[lr_i], discount_rate[dr_i], exploration_rate[er_i], min_exploration_rate[er_i], max_exploration_rate[er_i], exploration_decay_rate[er_i]))
-                    agent = Agent(learning_rate[lr_i], state_size=1,action_size=1,seed=0)
+                    agent = Agent(learning_rate[lr_i], state_size=HEIGHT*WIDTH,action_size=1,seed=0)
                     eps = eps_start[er_i]
                     env = Environment()
                     rewards_per_episode = []
@@ -242,10 +242,13 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_
                                 break
                         if i_episode % 1000==0 and not i_episode == 0:
                             print('\rEpisode {}\tAverage Score {:.2f}'.format(i_episode,np.mean(scores_window)))
+                        
                         if mode:
                             if not done:
                                 rewards_per_episode.append(rewards_current_episode)
                                 steps_per_episode.append(t+1)
+                    file_name = os.path.join(save_path, 'checkpoint.pth')
+                    torch.save(agent.qnetwork_local.state_dict(),file_name)
                     if mode:
                         tmp_seq_rewards = np.array(seq_rewards)
                         new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
@@ -280,7 +283,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_
 
     results = print_results(env.grid, HEIGHT, WIDTH)
 
-    results.plot(avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, load_path, env, training_time)
+    results.plot(avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, save_path, env, training_time)
 
 def moving_avarage_smoothing(X,k):
 	S = np.zeros(X.shape[0])
@@ -309,12 +312,12 @@ def calc_avg(rewards, steps, num_sims):
     return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
 
 # Initializing Q-Learning Parameters
-num_episodes = 50000
+num_episodes = 10000
 max_steps_per_episode = 200
 num_sims = 1
 
-learning_rate = np.array([0.00075, 0.1])
-discount_rate = np.array([0.1, 0.5, 0.9])
+learning_rate = np.array([0.00075])
+discount_rate = np.array([0.9])
 
 exploration_rate = np.array([0.03], dtype=np.float32)
 max_exploration_rate = np.array([0.03], dtype=np.float32)

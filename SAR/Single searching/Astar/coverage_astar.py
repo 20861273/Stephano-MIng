@@ -7,8 +7,8 @@ from datetime import datetime
 import os
 import matplotlib.pyplot as plt
 
-termination_time = 100
-visited_cutoff = 5
+termination_time = 300
+visited_cutoff = 20
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -37,14 +37,15 @@ class GridWithWeights(object):
     def cost(self, current, next_node, closed_set, visited_list):
         branch = reconstruct_path(closed_set, current)
         if next_node in branch or next_node in visited_list:
-            # have visited
-
+            # has visited
+            return 0
             # End checker. Checks for termination condition
             if next_node == closed_set[0][4] and current[2] != termination_time:
                 return 0, 0
             else:
                 return 0, 1
         else:
+            return 1
             # not visited
             if next_node == closed_set[0][4] and current[2] != termination_time:
                 return 1, 0
@@ -81,29 +82,32 @@ def a_star(graph, start, termination_time, visited_cutoff):
     visited = 0
     visited_list = []
     closed_set = {}
-    closed_set[0] = (-1, 0, 0, start, 1)
+    closed_set[0] = (-1, 0, 0, start)
     id = 1
+    open_set = [(0, -1, 0, 0, start)]
+    current = open_set[-1]
     while visited < visited_cutoff:
         printer = print_results(env.grid, WIDTH, HEIGHT)
-        open_set = [(0, -1, 0, 0, start, 1)] # id, parent_id, time, reward, position, visited
-        
+        # if id != 1: open_set = [(current[0], current[1], 0, 0, current[4])] # id, parent_id, time, reward, position, visited
+        open_set = [(0, -1, 0, 0, start)]
         
         while len(open_set) > 0:
             open_set = list(sorted(open_set, key=itemgetter(0), reverse=True))
             open_set = list(sorted(open_set, key=itemgetter(3)))
-            open_set = list(sorted(open_set, key=itemgetter(5)))
             current = open_set[-1]
             open_set.pop()
             if current[4] == start and current[2] != 0:
                 if current[2] == termination_time:
                     # branch = reconstruct_path(closed_set, current)
-                    # printer.print_graph(branch)
+                    # printer.print_graph(branch, HEIGHT, WIDTH)
+                    # plt.show()
                     # print("")
+                    # plt.close()
                     visited = 0
                     path = reconstruct_path(closed_set, current)
+                    if len(visited_list) != 0: del path[0]
                     for i in path:
                         if i in visited_list: visited += 1
-                    
                     if visited < visited_cutoff:
                         visited_list = visited_list + path
 
@@ -112,16 +116,16 @@ def a_star(graph, start, termination_time, visited_cutoff):
             if current[2] != termination_time and within_range(start, current):
                 if current[4] != start or current[2] == 0: # only if the start is at time step 0
                     for next_node in graph.neighbors(current[4]):
-                        reward, backtracked = graph.cost(current, next_node, closed_set, visited_list)
+                        reward = graph.cost(current, next_node, closed_set, visited_list)
                         new_reward = current[3] + reward
                         new_t = current[2] + 1
                         if new_reward <= termination_time and new_t <= termination_time:
-                            open_set.append((id, current[0], new_t, new_reward, next_node, backtracked))
-                            closed_set[id] = (current[0], new_t, new_reward, next_node, backtracked)
+                            open_set.append((id, current[0], new_t, new_reward, next_node))
+                            closed_set[id] = (current[0], new_t, new_reward, next_node)
 
                             # Debug
                             # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
-                            # printer.print_graph(branch)
+                            # printer.print_graph(branch, HEIGHT, WIDTH)
                             # print("")
                         id += 1
                 
@@ -133,11 +137,11 @@ printer = print_results(env.grid, WIDTH, HEIGHT)
 
 graph = GridWithWeights(WIDTH, HEIGHT)
 
-closed_set, current, traj = a_star(graph, env.starting_pos, termination_time, visited_cutoff)
+closed_set, current, traj = a_star(graph, Point(2,2), termination_time, visited_cutoff)
 print("Path:", [(i.x, i.y) for i in traj])
 print("Cost:", closed_set[current[0]][2])
 
-printer.print_graph(traj)
+printer.print_graph(traj, HEIGHT, WIDTH)
 file_name = "traj.png"
 plt.savefig(os.path.join(save_path, file_name))
 plt.close()
