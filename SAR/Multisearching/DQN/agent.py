@@ -76,10 +76,15 @@ class Agent():
         self.qnetwork_local.train()
 
         #Epsilon -greedy action selction
+        action = np.array([0,0,0,0])
         if random.random() > eps:
-            return np.argmax(action_values.cpu().data.numpy())
+            action[np.argmax(action_values.cpu().data.numpy())] = 1
+            return action
+            # return np.argmax(action_values.cpu().data.numpy())
         else:
-            return random.choice(np.arange(self.action_size))
+            action[random.choice(np.arange(self.action_size))] = 1
+            return action
+            # return random.choice(np.arange(self.action_size))
             
     def learn(self, experiences, gamma, tau):
         """Update value parameters using given batch of experience tuples.
@@ -202,7 +207,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_
                 for er_i in np.arange(len(exploration_rate)):
                     print("\nTraining simulation: %s\nLearning rate = %s\nDiscount rate = %s\nExploration rate = %s\nExploration rate min = %s\nExploration rate max = %s\nExploration decay rate = %s"
                             %(sim, learning_rate[lr_i], discount_rate[dr_i], exploration_rate[er_i], min_exploration_rate[er_i], max_exploration_rate[er_i], exploration_decay_rate[er_i]))
-                    agent = Agent(learning_rate[lr_i], state_size=HEIGHT*WIDTH,action_size=1,seed=0)
+                    agent = Agent(learning_rate[lr_i], state_size=HEIGHT*WIDTH,action_size=4,seed=0)
                     eps = eps_start[er_i]
                     env = Environment()
                     rewards_per_episode = []
@@ -313,7 +318,7 @@ def calc_avg(rewards, steps, num_sims):
 
 # Initializing Q-Learning Parameters
 num_episodes = 10000
-max_steps_per_episode = 200
+max_steps_per_episode = 20
 num_sims = 1
 
 learning_rate = np.array([0.00075])

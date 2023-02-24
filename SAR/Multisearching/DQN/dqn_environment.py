@@ -6,7 +6,7 @@ import math
 
 # Environment characteristics
 HEIGHT = 4
-WIDTH = 3
+WIDTH = 4
 # DENSITY = 30 # percentage
 
 # Direction states
@@ -174,14 +174,26 @@ class Environment:
             
 
     def _move(self, action):
-        if action == (Direction.LEFT).value:
-            self.direction = action
-        elif action == (Direction.RIGHT).value:
-            self.direction = action
-        elif action == (Direction.UP).value:
-            self.direction = action
-        elif action == (Direction.DOWN).value:
-            self.direction = action
+        move = np.array([0, 0, 0, 0])
+
+        l = move.copy()
+        r = move.copy()
+        u = move.copy()
+        d = move.copy()
+
+        l[Direction.LEFT.value] = 1
+        r[Direction.RIGHT.value] = 1
+        u[Direction.UP.value] = 1
+        d[Direction.DOWN.value] = 1
+
+        if np.array_equal(action, l):
+            self.direction = (Direction.LEFT).value
+        elif np.array_equal(action, r):
+            self.direction = (Direction.RIGHT).value
+        elif np.array_equal(action, u):
+            self.direction = (Direction.UP).value
+        elif np.array_equal(action, d):
+            self.direction = (Direction.DOWN).value
 
         x = self.pos.x
         y = self.pos.y

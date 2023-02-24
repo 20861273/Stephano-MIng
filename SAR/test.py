@@ -1,2 +1,3 @@
-dist = abs(0-1) + abs(0-1)
-print(dist)
+dis = {0:1, 1:100, 2:34, 3:12}
+
+print(dis[min(dis, key=dis.get)])
