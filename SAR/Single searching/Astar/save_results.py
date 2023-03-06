@@ -60,17 +60,17 @@ class print_results:
             ax.tick_params(axis='both', labelsize=10, pad=2, width=0.5, length=2)
             ax.grid(True, color='black', linewidth=1)
 
-            for i in range(self.rows+1):
-                for j in range(self.cols+1):
+            for i in range(HEIGHT): # y
+                for j in range(WIDTH): # x
                     ax.fill([j, j + 1, j + 1, j], [i, i, i + 1, i + 1], facecolor="white", alpha=0.5)
 
             # Add path to plot
             for i in visited:
                 x, y = i.x, i.y
                 ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
-                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
-                        facecolor="gray",
-                        alpha=0.5)
+                    [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
+                    facecolor="gray",
+                    alpha=0.5)
 
             clabel = ""
             grid = np.zeros((HEIGHT, WIDTH))
@@ -99,7 +99,7 @@ class print_results:
                             grid[p.y][p.x] += 1
 
                         if grid[p.y, p.x] % 3 == 0 and grid[p.y, p.x] != 0:
-                            temp = "\n" + clabel
+                            temp = clabel + "\n"
                             label.append(temp)
                         else:
                             label.append(clabel)
@@ -123,7 +123,7 @@ class print_results:
             cnt += 1
         # plt.show()
 
-    def print_row(self, path, dir_path, id):
+    def print_row(self, path, dir_path, id, visited):
         """
         Prints the grid environment
         """
@@ -131,10 +131,8 @@ class print_results:
         plt.rc('font', size=20)
         plt.rc('axes', titlesize=10)
 
-        visited = []
-
         # Prints graph
-        fig,ax = plt.subplots(figsize=(HEIGHT, WIDTH))
+        fig,ax = plt.subplots(figsize=(WIDTH, HEIGHT))
 
         ax.set_aspect("equal")
         ax.set_xlim(0.5, self.cols + 0.5)
@@ -156,12 +154,13 @@ class print_results:
                 ax.fill([j, j + 1, j + 1, j], [i, i, i + 1, i + 1], facecolor="white", alpha=0.5)
 
         # Add path to plot
-        for i in visited:
-            x, y = i.x, i.y
-            ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
-                    [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
-                    facecolor="gray",
-                    alpha=0.5)
+        for row in visited:
+            for i in row:
+                x, y = i.x, i.y
+                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
+                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
+                        facecolor="gray",
+                        alpha=0.5)
 
         clabel = ""
         grid = np.zeros((HEIGHT, WIDTH))
@@ -196,7 +195,7 @@ class print_results:
                         label.append(clabel)
 
             label = " | ".join(label)
-            visited.append(point)
+            # visited.append(point)
             row_visit.append(point)
             
             ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
@@ -208,6 +207,8 @@ class print_results:
         
         plt_title = "Adapted A* algorithm:"
         plt.title(plt_title)
+
+        # plt.show()
 
         file_name = "traj%s.png"%(str(id))
         plt.savefig(os.path.join(dir_path, file_name))

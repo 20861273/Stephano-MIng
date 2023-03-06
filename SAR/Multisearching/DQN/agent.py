@@ -38,7 +38,6 @@ class Agent():
         self.action_size = action_size
         self.seed = random.seed(seed)
         
-        
         #Q- Network
         self.qnetwork_local = QNetwork(state_size, action_size, seed).to(device)
         self.qnetwork_target = QNetwork(state_size, action_size, seed).to(device)
@@ -252,7 +251,8 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_end, eps_decay, load_path, save_
                             if not done:
                                 rewards_per_episode.append(rewards_current_episode)
                                 steps_per_episode.append(t+1)
-                    file_name = os.path.join(save_path, 'checkpoint.pth')
+                    file_name = "experience%s.pth" %(str(sim))
+                    file_name = os.path.join(save_path, file_name)
                     torch.save(agent.qnetwork_local.state_dict(),file_name)
                     if mode:
                         tmp_seq_rewards = np.array(seq_rewards)
@@ -318,10 +318,10 @@ def calc_avg(rewards, steps, num_sims):
 
 # Initializing Q-Learning Parameters
 num_episodes = 10000
-max_steps_per_episode = 20
+max_steps_per_episode = 200
 num_sims = 1
 
-learning_rate = np.array([0.00075])
+learning_rate = np.array([0.01])
 discount_rate = np.array([0.9])
 
 exploration_rate = np.array([0.03], dtype=np.float32)
@@ -339,4 +339,35 @@ date_and_time = datetime.now()
 save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
 if not os.path.exists(save_path): os.makedirs(save_path)
 
-dqn(num_sims, num_episodes, max_steps_per_episode, exploration_rate, min_exploration_rate, exploration_decay_rate, load_path, save_path)
+# On or off policy
+policy_bool = True
+policy_num = 0
+
+if policy_bool:
+    dqn(num_sims, num_episodes, max_steps_per_episode, exploration_rate, min_exploration_rate, exploration_decay_rate, load_path, save_path)
+else:
+    agent = Agent(0, state_size=HEIGHT*WIDTH,action_size=4,seed=0)
+    file_name = "experience%s.pth" %(str(policy_num))
+    file_name = os.path.join(load_path, file_name)
+    agent.qnetwork_local.load_state_dict(torch.load(file_name))
+    agent.qnetwork_local.eval()
+    env = Environment()
+
+    state = env.reset()
+    grids = []
+    for step in range(max_steps_per_episode):
+        action = agent.act(state,eps=0)
+        next_state, reward, done, _ = env.step(action)
+        grids.append(env.grid)
+        state = next_state
+        if done:
+            break
+
+    for i in range(len(grids)):
+        PR = print_results(grids[i], env.grid.shape[0], env.grid.shape[1])
+        PR.print_graph(i)
+        
+        file_name = "plot-%s.png" %(i)
+        plt.savefig(os.path.join(save_path, file_name))
+        plt.close()
+

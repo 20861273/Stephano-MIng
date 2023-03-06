@@ -37,7 +37,7 @@ class Environment:
         # Set robot(s) position
         self.pos = self.starting_pos
 
-        self.positive_reward = self.grid.shape[0]*self.grid.shape[1]
+        self.positive_reward = 100
 
         print("\nGrid size: ", self.grid.shape)
 

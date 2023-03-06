@@ -71,11 +71,15 @@ class print_results:
                 elif self.grid[j][i] == 4:
                     plt.fill( [x1, x1, x2, x2], [y1, y2, y2, y1], 'y', alpha=0.75)
 
-        plt_title = "Q-learning Results: Step %s" %(str(step)) 
+        plt_title = "DQN Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
     def plot(self, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
+
+        m, s = divmod(t_time, 60)
+        h = 0
+        if m >= 60: h, m = divmod(m, 60)
 
         c = cm.rainbow(np.linspace(0, 1, len(rewards)))
         l = []
@@ -102,10 +106,11 @@ class print_results:
         sim_len = (len(learning_rate) * len(discount_rate) * len(exploration_rate))
         plot_len = int(sim_len/3)
         plot_rem = sim_len % 3
+        cnt = 0
         for i in range(0, plot_len):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 15))
 
-            ax1.set_title('Rewards per episode\nTraining time: %sm %ss' %(divmod(t_time, 60)))
+            ax1.set_title('Rewards per episode\nTraining time: %sh %sm %ss' %(h, m, s))
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 
@@ -114,11 +119,12 @@ class print_results:
             ax2.set_ylabel('#Steps')
             
             for j in range(0, 3):
-                ax1.plot(np.arange(0, len(rewards[i*3+j]), 50), rewards[i*3+j][::50], color=c[i*3+j])
-                ax2.plot(np.arange(0, len(steps[i*3+j]), 50), steps[i*3+j][::50], color=c[i*3+j])
+                ax1.plot(np.arange(0, len(rewards[i*3+j]), 500), rewards[i*3+j][::500], color=c[i*3+j])
+                ax2.plot(np.arange(0, len(steps[i*3+j]), 500), steps[i*3+j][::500], color=c[i*3+j])
+                cnt += 1
 
-            ax1.legend(l)
-            ax2.legend(l)
+            ax1.legend(l[i*3:i*3+3])
+            ax2.legend(l[i*3:i*3+3])
 
             file_name = "learning_curve" + str(i) + ".png"
             plt.savefig(os.path.join(save_path, file_name))
@@ -127,7 +133,7 @@ class print_results:
         if plot_rem != 0:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 15))
 
-            ax1.set_title('Rewards per episode\nTraining time: %sm %ss' %(divmod(t_time, 60)))
+            ax1.set_title('Rewards per episode\nTraining time: %sh %sm %ss' %(h, m, s))
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 
@@ -136,11 +142,11 @@ class print_results:
             ax2.set_ylabel('#Steps')
 
             for i in range(sim_len-plot_rem, sim_len):
-                ax1.plot(np.arange(0, len(rewards[i]), 50), rewards[i][::50], color=c[i])
-                ax2.plot(np.arange(0, len(steps[i]), 50), steps[i][::50], color=c[i])
+                ax1.plot(np.arange(0, len(rewards[i]), 500), rewards[i][::500], color=c[i])
+                ax2.plot(np.arange(0, len(steps[i]), 500), steps[i][::500], color=c[i])
 
-            ax1.legend(l)
-            ax2.legend(l)
+            ax1.legend(l[cnt:])
+            ax2.legend(l[cnt:])
 
             file_name = "learning_curve" + str(i) + ".png"
             plt.savefig(os.path.join(save_path, file_name))
