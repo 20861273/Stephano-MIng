@@ -41,14 +41,14 @@ class GridWithWeights(object):
 
     def cost(self, current, next_node, closed_set, visited_list):
         branch = reconstruct_path(closed_set, current)
+        reachable, distance = closest_unvisited(branch, visited_list, current, next_node)
         if next_node in branch or len([True for row in visited_list if next_node in row]) != 0:
-            reachable = True
-            if current[3] == 0: reachable = closest_unvisited(branch, visited_list, current, next_node)
+            if current[3] != 0: reachable = within_range(env.starting_pos, current)
             # visited
-            return 0, reachable
+            return 0, reachable, distance
         else:
             # unvisited
-            return 1, closest_unvisited(branch, visited_list, current, next_node)
+            return 1, reachable, distance
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
@@ -89,14 +89,15 @@ def closest_unvisited(branch, visited, current, next):
                 if distance <= termination_time - current[2]:
                     distances[Point(x,y)] = distance
     
-    # Check if area covered
+    # Check if unvisted block reachable
     if not bool(distances):
-        return False
+        return False, None
     else:
-        return True
-    # max_dist = get_distance(Point(0,0), Point(HEIGHT-1,WIDTH-1))
-
-    # return distances[min(distances, key=distances.get)]#/max_dist
+        # Normalize distance
+        max_dist = (HEIGHT+WIDTH-2) * 2
+        min_distance =  distances[min(distances, key=distances.get)]/max_dist
+        return True, min_distance
+    
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
@@ -151,7 +152,7 @@ def a_star(graph, start, termination_time):
                         break
                     else:
                         path = reconstruct_path(closed_set, current)
-                        printer.print_row(path, save_path, len(visited_list), visited_list)
+                        # printer.print_row(path, save_path, len(visited_list), visited_list)
                         # if len(visited_list) == 1: del path[0]
                         visited_list.append(path)
                         last_ids.append(current[0])
@@ -162,7 +163,11 @@ def a_star(graph, start, termination_time):
                 if current[4] != start or current[2] == 0: # only if the start is at time step 0
                     no_children = []
                     for next_node in graph.neighbors(current[4]):
-                        reward, unvisited_reachable = graph.cost(current, next_node, closed_set, visited_list)
+                        # Debug
+                        # branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
+                        # printer.print_row(branch, save_path, len(visited_list), visited_list)
+                        # print("")
+                        reward, unvisited_reachable, distance = graph.cost(current, next_node, closed_set, visited_list)
                         if unvisited_reachable == False:
                             no_children.append(False)
                             # no children left
@@ -172,15 +177,13 @@ def a_star(graph, start, termination_time):
                         else:
                             no_children.append(True)
                             new_reward = current[3] + reward #+ dis #here
+                            # if distance != None and distance > 1/((HEIGHT+WIDTH-2) * 2): new_reward += distance
                             new_t = current[2] + 1
                             if new_t <= termination_time:
                                 open_set.append((id, current[0], new_t, new_reward, next_node))
                                 closed_set[id] = (current[0], new_t, new_reward, next_node)
 
-                                # Debug
-                                # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
-                                # printer.print_row(branch, save_path, len(visited_list), visited_list)
-                                # print("")
+                                
                         id += 1
                     # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
                     # printer.print_row(branch, save_path, len(visited_list), visited_list)
@@ -199,7 +202,7 @@ printer = print_results(env.grid, HEIGHT, WIDTH)
 graph = GridWithWeights(WIDTH, HEIGHT)
 
 stime = time.time()
-# env.starting_pos = Point(0,0)
+env.starting_pos = Point(0,0)
 print(env.grid)
 
 closed_set, last_ids, traj = a_star(graph, env.starting_pos, termination_time)
@@ -214,7 +217,7 @@ print("Path:", path)
 print("Cost:", cost)
 print("Planning time:", t)
 
-printer.print_graph(traj, cost, t, save_path)
+printer.print_graph(traj, cost, t, save_path, 0)
 
 plt.close()
 

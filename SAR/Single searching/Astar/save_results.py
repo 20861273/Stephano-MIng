@@ -30,7 +30,7 @@ class print_results:
         self.grid = grid
         self.rows = rows
         self.cols = cols
-    def print_graph(self, paths, cost, time, dir_path):
+    def print_graph(self, paths, cost, time, dir_path, pos_cnt):
         """
         Prints the grid environment
         """
@@ -43,7 +43,7 @@ class print_results:
 
         for path in paths:
             # Prints graph
-            fig,ax = plt.subplots(figsize=(HEIGHT, WIDTH))
+            fig,ax = plt.subplots(figsize=(WIDTH, HEIGHT))
 
             ax.set_aspect("equal")
             ax.set_xlim(0.5, self.cols + 0.5)
@@ -118,10 +118,10 @@ class print_results:
             plt_title = "Adapted A* algorithm:\nCost: %s\nTime: %s" %(str(cost), str(time)) 
             plt.title(plt_title)
 
-            file_name = "traj%s.png"%(str(cnt))
+            file_name = "traj%s_%s.png"%(str(pos_cnt), str(cnt))
             plt.savefig(os.path.join(dir_path, file_name))
             cnt += 1
-        # plt.show()
+        plt.close()
 
     def print_row(self, path, dir_path, id, visited):
         """
@@ -212,4 +212,5 @@ class print_results:
 
         file_name = "traj%s.png"%(str(id))
         plt.savefig(os.path.join(dir_path, file_name))
+        plt.close()
         
