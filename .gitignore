@@ -6,6 +6,7 @@
 /SAR/Multi searching/DQN/__pycache__/*
 /SAR/Single searching/Astar/__pycache__/*
 /SAR/Single searching/__pycache__/*
+/SAR/Single searching/Astar/SAR/*
 
 
 /Maze/__pycache__

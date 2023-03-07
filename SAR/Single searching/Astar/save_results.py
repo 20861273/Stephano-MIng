@@ -212,5 +212,5 @@ class print_results:
 
         file_name = "traj%s.png"%(str(id))
         plt.savefig(os.path.join(dir_path, file_name))
-        plt.close()
+        # plt.close()
         
