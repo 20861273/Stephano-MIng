@@ -5,8 +5,8 @@ import numpy as np
 import random
 
 # Maze characteristics
-HEIGHT = 10
-WIDTH = 10
+HEIGHT = 5
+WIDTH = 5
 
 # Direction states
 class Direction(Enum):
@@ -348,7 +348,9 @@ class MazeAI:
         return state, reward, game_over, self.score
 
     def get_state(self):
-        return self.pos.x*self.grid.shape[1] + self.pos.y
+        grid = np.zeros(self.grid.shape)
+        grid[self.pos.y, self.pos.x] = 1
+        return grid.flatten()
     
     def _is_collision(self, pt=None):
         if pt is None:
@@ -384,33 +386,37 @@ class MazeAI:
             
 
     def _move(self, action):
-        if action == (Direction.LEFT).value:
-            self.direction = action
-            #print(action, (Direction.LEFT).value, self.direction)
-        elif action == (Direction.RIGHT).value:
-            self.direction = action
-            #print(action, (Direction.RIGHT).value, self.direction)
-        elif action == (Direction.UP).value:
-            self.direction = action
-            #print(action, (Direction.UP).value, self.direction)
-        elif action == (Direction.DOWN).value:
-            self.direction = action
-            #print(action, (Direction.DOWN).value, self.direction)
+        move = np.array([0, 0, 0, 0])
+
+        l = move.copy()
+        r = move.copy()
+        u = move.copy()
+        d = move.copy()
+
+        l[Direction.LEFT.value] = 1
+        r[Direction.RIGHT.value] = 1
+        u[Direction.UP.value] = 1
+        d[Direction.DOWN.value] = 1
+
+        if np.array_equal(action, l):
+            self.direction = (Direction.LEFT).value
+        elif np.array_equal(action, r):
+            self.direction = (Direction.RIGHT).value
+        elif np.array_equal(action, u):
+            self.direction = (Direction.UP).value
+        elif np.array_equal(action, d):
+            self.direction = (Direction.DOWN).value
 
         x = self.pos.x
         y = self.pos.y
         if self.direction == (Direction.RIGHT).value:
             x += 1
-            #print("RIGHT")
         elif self.direction == (Direction.LEFT).value:
             x -= 1
-            #print("LEFT")
         elif self.direction == (Direction.DOWN).value:
             y += 1
-            #print("DOWN")
         elif self.direction == (Direction.UP).value:
             y -= 1
-            #print("UP")
 
         if self._is_collision(Point(x,y)):
             self.pos = self.pos

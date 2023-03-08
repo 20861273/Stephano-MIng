@@ -78,13 +78,15 @@ class Agent():
         rate = strategy.get_exploration_rate(self.current_step)
         self.current_step += 1
 
+        actions = [0]*self.num_actions
         if rate > random.random():
             action = random.randrange(self.num_actions)
-            return torch.tensor([action]).to(self.device) # explore      
+            actions[action] = 1
+            return torch.tensor(actions).to(self.device) # explore      
         else:
             with torch.no_grad():
-                print(policy_net(state).argmax(dim=1))
-                return policy_net(state).unsqueeze(dim=0).argmax(dim=1).to(self.device) # exploit
+                actions[policy_net(state).argmax(dim=1).item()] = 1
+                return actions # exploit
 
 class MazeEnvManager():
     def __init__(self, device):
@@ -107,7 +109,7 @@ class MazeEnvManager():
 
     def take_action(self, action):   
         #print("take action", action.item(), self.env.pos)     
-        new_state, reward, self.done, _ = self.env.step(action.item())
+        new_state, reward, self.done, _ = self.env.step(action)
         #print(self.done)
         return torch.tensor([new_state], device=self.device).float(), torch.tensor([reward], device=self.device)
         #return torch.from_numpy(np.array([new_state], dtype=np.float32)).to(device), torch.tensor([reward], device=self.device)

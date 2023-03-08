@@ -8,13 +8,15 @@ from datetime import datetime
 import time
 import os
 import matplotlib.pyplot as plt
+import json
 
 import time
 
 import shutil
 
-termination_time = 50
+termination_time = 20
 HH = False
+draw = True
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -25,6 +27,16 @@ if not os.path.exists(load_path): os.makedirs(load_path)
 date_and_time = datetime.now()
 save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
 if not os.path.exists(save_path): os.makedirs(save_path)
+
+def write_json(lst, path, file_name):
+    file_path = os.path.join(path, file_name)
+    with open(file_path, "w") as f:
+        json.dump(lst, f)
+
+def read_json(path, file_name):
+    file_path = os.path.join(path, file_name)
+    with open(file_path, "r") as f:
+        return json.load(f)
 
 class GridWithWeights(object):
     def __init__(self, width, height):
@@ -106,7 +118,6 @@ def closest_unvisited(branch, visited, current, next):
     else:
         min_distance =  distances[min(distances, key=distances.get)]#/max_dist
         return True, min_distance, False
-    
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
@@ -135,6 +146,7 @@ def calc_cost(closed_set, ids):
 
 # A* algorithm
 def a_star(graph, start, termination_time):
+    times = [0]
     global HH
     visited = 0
     visited_list = []
@@ -156,7 +168,7 @@ def a_star(graph, start, termination_time):
             open_set = list(sorted(open_set, key=itemgetter(0), reverse=True))
             open_set = list(sorted(open_set, key=itemgetter(3)))
             current = open_set[-1]
-            if current[3] == 0 and len(visited_list) != 0 or current[6]:
+            if (current[3] == 0 and len(visited_list) != 0) or (current[6]):# and current[3] == 0):
                 open_set = list(sorted(open_set, key=itemgetter(5), reverse=True))
                 HH = False
             current = open_set[-1]
@@ -167,10 +179,11 @@ def a_star(graph, start, termination_time):
                         break
                     else:
                         path = reconstruct_path(closed_set, current)
-                        # printer.print_row(path, save_path, len(visited_list), visited_list)
+                        printer.print_row(path, save_path, len(visited_list), visited_list)
                         visited_list.append(path)
                         last_ids.append(current[0])
-                        print("Path ", len(visited_list), "complete in ", time.time() - stime, "s")
+                        times.append(time.time() - stime - times[-1])
+                        print("Path ", len(visited_list), "complete in ", times[-1], "s")
                         break
             
             if current[2] != termination_time and within_range(start, current):
@@ -182,7 +195,7 @@ def a_star(graph, start, termination_time):
                             no_children.append(False)
                             # no children left
                             if current[4] == start and len(no_children) == len(graph.neighbors(current[4])) and not all(no_children):
-                                return closed_set, last_ids, visited_list
+                                return closed_set, last_ids, visited_list, times
                             else:
                                 continue
                         else:
@@ -209,7 +222,7 @@ def a_star(graph, start, termination_time):
                 
     # if t >= 10:
     #     return None, None, open_set
-    return closed_set, last_ids, visited_list
+    return closed_set, last_ids, visited_list, times
 
 env = Environment()
 
@@ -260,8 +273,8 @@ stime = time.time()
 # env.starting_pos = Point(0,0)
 # print(env.grid)
 
-closed_set, last_ids, traj = a_star(graph, env.starting_pos, termination_time)
-t = time.time() - stime
+closed_set, last_ids, traj, times = a_star(graph, env.starting_pos, termination_time)
+del times[0]
 
 cost = calc_cost(closed_set, last_ids)
 path = []
@@ -271,11 +284,14 @@ for row in traj:
 print("Termination time: ", termination_time)
 print("Path:", path)
 print("Cost:", cost)
-print("Planning time:", t)
+print("Planning time:", sum(times))
 
-printer.print_graph(traj, cost, t, save_path, pos_cnt=0)
+if draw:
+    printer.print_graph(traj, cost, save_path, times, sum(times), pos_cnt=0)
+    plt.close()
 
-plt.close()
+file_name = "trajectories.json"
+write_json(traj, save_path, file_name)
 
 
 # Delete any empty folders in PATH

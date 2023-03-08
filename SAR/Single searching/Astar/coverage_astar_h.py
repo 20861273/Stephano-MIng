@@ -8,12 +8,15 @@ from datetime import datetime
 import time
 import os
 import matplotlib.pyplot as plt
+import json
 
 import time
 
 import shutil
 
-termination_time = 20
+termination_time = 8
+HH = False
+draw = True
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -24,6 +27,16 @@ if not os.path.exists(load_path): os.makedirs(load_path)
 date_and_time = datetime.now()
 save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
 if not os.path.exists(save_path): os.makedirs(save_path)
+
+def write_json(lst, path, file_name):
+    file_path = os.path.join(path, file_name)
+    with open(file_path, "w") as f:
+        json.dump(lst, f)
+
+def read_json(path, file_name):
+    file_path = os.path.join(path, file_name)
+    with open(file_path, "r") as f:
+        return json.load(f)
 
 class GridWithWeights(object):
     def __init__(self, width, height):
@@ -41,14 +54,15 @@ class GridWithWeights(object):
 
     def cost(self, current, next_node, closed_set, visited_list):
         branch = reconstruct_path(closed_set, current)
-        reachable, distance = closest_unvisited(branch, visited_list, current, next_node)
+        reachable, distance, heading_home = closest_unvisited(branch, visited_list, current, next_node)
         if next_node in branch or len([True for row in visited_list if next_node in row]) != 0:
-            if current[3] != 0: reachable = within_range(env.starting_pos, current)
+            if (not reachable and distance == float('inf')) or (current[3] == 0 and heading_home):
+                return None, False, None, None
             # visited
-            return 0, reachable, distance
+            return 0, reachable, distance, heading_home
         else:
             # unvisited
-            return 1, reachable, distance
+            return 1, reachable, distance, heading_home
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
@@ -82,22 +96,28 @@ def closest_unvisited(branch, visited, current, next):
     for y in range(grid.shape[0]):
         for x in range(grid.shape[1]):
             if grid[y,x] == 0:
-                dist_to_u = get_distance(Point(x,y), next)
+                dist_to_uv = get_distance(Point(x,y), next)
                 dist_to_s = get_distance(Point(x,y), env.starting_pos)
-                distance = dist_to_u + dist_to_s
+                distance = dist_to_uv + dist_to_s
 
                 if distance <= termination_time - current[2]:
                     distances[Point(x,y)] = distance
     
+    
+    # Normalize distance
+    max_dist = (HEIGHT+WIDTH-2) * 2
+
+    dist_next_to_s = get_distance(env.starting_pos, next)
+    if dist_next_to_s >= termination_time - current[2]:
+        dist_next_to_s = float('inf')
+    
     # Check if unvisted block reachable
     if not bool(distances):
-        return False, None
+        if dist_next_to_s == float('inf'): return False, None, None
+        else: return True, dist_next_to_s, True
     else:
-        # Normalize distance
-        max_dist = (HEIGHT+WIDTH-2) * 2
-        min_distance =  distances[min(distances, key=distances.get)]/max_dist
-        return True, min_distance
-    
+        min_distance =  distances[min(distances, key=distances.get)]#/max_dist
+        return True, min_distance, False
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
@@ -126,89 +146,134 @@ def calc_cost(closed_set, ids):
 
 # A* algorithm
 def a_star(graph, start, termination_time):
-    times = [0]
+    global HH
     visited = 0
     visited_list = []
     closed_set = {}
-    closed_set[0] = (-1, 0, 0, start)
+    closed_set[0] = (-1, 0, 0, start, float('inf'), False)
     id = 1
-    open_set = [(0, -1, 0, 0, start)]
+    open_set = [(0, -1, 0, 0, start, float('inf'), False)]
     current = open_set[-1]
     last_ids = []
     while True:
         printer = print_results(env.grid, HEIGHT, WIDTH)
-        # if id != 1: open_set = [(current[0], current[1], 0, 0, current[4])] # id, parent_id, time, reward, position, visited
-        open_set = [(0, 0, 0, 0, start)]
+        # id, parent_id, time, reward, position, visited
+        open_set = [(0, 0, 0, 0, start, float('inf'), False)]
         
+        t = time.time() - stime
         while len(open_set) > 0:
-            # open_set = list(sorted(open_set, key=itemgetter(5), reverse=True))
+        # while len(open_set) > 0 and t < 10:
+            t = time.time() - stime
             open_set = list(sorted(open_set, key=itemgetter(0), reverse=True))
             open_set = list(sorted(open_set, key=itemgetter(3)))
+            current = open_set[-1]
+            if current[3] == 0 and len(visited_list) != 0 or current[6]:
+                open_set = list(sorted(open_set, key=itemgetter(5), reverse=True))
+                HH = False
             current = open_set[-1]
             open_set.pop()
             if current[4] == start and current[2] != 0:
                 if current[2] == termination_time:
-                    # if current[3] <= (termination_time-1)*-1: #here
                     if current[3] == 0:
                         break
                     else:
                         path = reconstruct_path(closed_set, current)
                         # printer.print_row(path, save_path, len(visited_list), visited_list)
-                        # if len(visited_list) == 1: del path[0]
                         visited_list.append(path)
                         last_ids.append(current[0])
-                        times.append(time.time() - stime - times[-1])
-                        print("Path ", len(visited_list), "complete in ", times[-1], "s")
+                        print("Path ", len(visited_list), "complete in ", time.time() - stime, "s")
                         break
             
             if current[2] != termination_time and within_range(start, current):
                 if current[4] != start or current[2] == 0: # only if the start is at time step 0
                     no_children = []
                     for next_node in graph.neighbors(current[4]):
-                        # Debug
-                        # branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
-                        # printer.print_row(branch, save_path, len(visited_list), visited_list)
-                        # print("")
-                        reward, unvisited_reachable, distance = graph.cost(current, next_node, closed_set, visited_list)
+                        reward, unvisited_reachable, distance, heading_home = graph.cost(current, next_node, closed_set, visited_list)
                         if unvisited_reachable == False:
                             no_children.append(False)
                             # no children left
                             if current[4] == start and len(no_children) == len(graph.neighbors(current[4])) and not all(no_children):
-                                return closed_set, last_ids, visited_list, times
-                            continue
+                                continue
+                            else:
+                                continue
                         else:
                             no_children.append(True)
-                            new_reward = current[3] + reward #+ dis #here
-                            # if distance != None and distance > 1/((HEIGHT+WIDTH-2) * 2): new_reward += distance
+                            new_reward = current[3] + reward
                             new_t = current[2] + 1
                             if new_t <= termination_time:
-                                open_set.append((id, current[0], new_t, new_reward, next_node))
-                                closed_set[id] = (current[0], new_t, new_reward, next_node)
+                                open_set.append((id, current[0], new_t, new_reward, next_node, distance, heading_home))
+                                closed_set[id] = (current[0], new_t, new_reward, next_node, distance, heading_home)
 
-                                
+                                # Debug
+                                branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
+                                printer.print_row(branch, save_path, len(visited_list), visited_list)
+                                print("")
                         id += 1
                     # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
                     # printer.print_row(branch, save_path, len(visited_list), visited_list)
                     # print("")
             
-        # if current[3] <= (termination_time-1)*-1: #here
         if current[3] == 0 and current[2] != 0:
             break
+    #     if t >= 10:
+    #         break
                 
-                    
-    return closed_set, last_ids, visited_list, times
+    # if t >= 10:
+    #     return None, None, open_set
+    return closed_set, last_ids, visited_list
 
 env = Environment()
+
+# for x in range(WIDTH):
+#     for y in range(HEIGHT):
+#         env.starting_pos= env.starting_pos._replace(x=x)
+#         env.starting_pos =env.starting_pos._replace(y=y)
+
+#         printer = print_results(env.grid, HEIGHT, WIDTH)
+
+#         graph = GridWithWeights(WIDTH, HEIGHT)
+
+#         stime = time.time()
+#         # env.starting_pos = Point(0,0)
+#         # print(env.grid)
+
+#         closed_set, last_ids, traj = a_star(graph, env.starting_pos, termination_time)
+#         t = time.time() - stime
+        
+#         if closed_set == None:
+#             print("Could not complete (%s, %s)" %(str(x), str(y)))
+#             file_name = "open_set" + str(x*x+y) + ".txt"
+#             np.savetxt(os.path.join(save_path, file_name), traj, fmt='%s')
+#             continue
+        
+#         cost = calc_cost(closed_set, last_ids)
+#         path = []
+#         for row in traj:
+#             for i in row:
+#                 path.append((i.x, i.y))
+#         print("Termination time: ", termination_time)
+#         print("Path:", path)
+#         print("Cost:", cost)
+#         print("Planning time:", t)
+
+#         printer.print_graph(traj, cost, t, save_path, pos_cnt=x*x+y)
+
+#         plt.close()
+
+env.starting_pos= env.starting_pos._replace(x=0)
+env.starting_pos =env.starting_pos._replace(y=0)
+
 printer = print_results(env.grid, HEIGHT, WIDTH)
 
 graph = GridWithWeights(WIDTH, HEIGHT)
 
 stime = time.time()
-env.starting_pos = Point(0,0)
-print(env.grid)
+# env.starting_pos = Point(0,0)
+# print(env.grid)
 
-closed_set, last_ids, traj, times = a_star(graph, env.starting_pos, termination_time)
-del times[0]
+closed_set, last_ids, traj = a_star(graph, env.starting_pos, termination_time)
+t = time.time() - stime
+
 cost = calc_cost(closed_set, last_ids)
 path = []
 for row in traj:
@@ -217,17 +282,21 @@ for row in traj:
 print("Termination time: ", termination_time)
 print("Path:", path)
 print("Cost:", cost)
-print("Planning time:", sum(times))
+print("Planning time:", t)
 
-printer.print_graph(traj, cost, save_path, times, sum(times), 0)
+if draw:
+    printer.print_graph(traj, cost, t, save_path, pos_cnt=0)
+    plt.close()
 
-plt.close()
+file_name = "trajectories.json"
+write_json(traj, save_path, file_name)
+
 
 # Delete any empty folders in PATH
-for folder in os.listdir(PATH):
-    f = os.path.join(PATH, folder)
-    if not len(os.listdir(f)):
-        try:
-            shutil.rmtree(f)
-        except OSError as e:
-            print("Tried to delete folder that doesn't exist: ", f)
+# for folder in os.listdir(PATH):
+#     f = os.path.join(PATH, folder)
+#     if not len(os.listdir(f)):
+#         try:
+#             shutil.rmtree(f)
+#         except OSError as e:
+#             print("Tried to delete folder that doesn't exist: ", f)
