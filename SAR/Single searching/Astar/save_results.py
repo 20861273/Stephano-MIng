@@ -124,7 +124,7 @@ class print_results:
             cnt += 1
         plt.close()
 
-    def print_row(self, path, dir_path, id, visited):
+    def print_row(self, path, dir_path, id, visited, next):
         """
         Prints the grid environment
         """
@@ -204,6 +204,12 @@ class print_results:
                     facecolor="green", 
                     alpha=0.5)
             ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
+        
+        if next != None:
+            ax.fill([next.x + 0.5, next.x + 1.5, next.x + 1.5, next.x + 0.5], 
+                        [next.y + 0.5, next.y + 0.5, next.y + 1.5, next.y + 1.5], 
+                        facecolor="blue", 
+                        alpha=0.5)
             
         
         plt_title = "Adapted A* algorithm:"

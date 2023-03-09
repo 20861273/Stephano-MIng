@@ -175,7 +175,7 @@ class ReplayBuffer:
         """Return the current size of internal memory."""
         return len(self.memory)
 
-def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, load_path, save_path):
+def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, positive_reward, load_path, save_path):
     """Deep Q-Learning
     
     Params
@@ -192,7 +192,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, load_pa
     all_rewards = []
     all_steps = []
     scores = [] # list containing score from each episode
-    scores_window = deque(maxlen=100) # last 100 scores
+    scores_window = deque(maxlen=1000) # last 100 scores
     rewards_per_episode = []
     training_time = time.time()
     print("Training starting...")
@@ -208,7 +208,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, load_pa
                             %(sim, learning_rate[lr_i], discount_rate[dr_i], exploration_rate[er_i], min_exploration_rate[er_i], max_exploration_rate[er_i], exploration_decay_rate[er_i]))
                     agent = Agent(learning_rate[lr_i], state_size=HEIGHT*WIDTH,action_size=4,seed=0)
                     eps = eps_start[er_i]
-                    env = Environment()
+                    env = Environment(positive_reward)
                     rewards_per_episode = []
                     steps_per_episode = [] 
                     for i_episode in range(0, n_episodes):
@@ -241,11 +241,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, load_pa
                             # eps = max(eps*eps_decay[er_i],eps_end[er_i])## decrease the epsilon
                             eps = eps_end[er_i] + \
                                         (eps_max[er_i] - eps_end[er_i]) * np.exp(-eps_decay[er_i]*i_episode)
-                                                                
-                            if np.mean(scores_window)>=20.0:
-                                print('\nEnvironment solve in {:d} epsiodes!\tAverage score: {:.2f}'.format(i_episode,np.mean(scores_window)))
-                                torch.save(agent.qnetwork_local.state_dict(),'checkpoint.pth')
-                                break
+
                         if i_episode % 1000==0 and not i_episode == 0:
                             print('\rEpisode {}\tAverage Score {:.2f}'.format(i_episode,np.mean(scores_window)))
                         
@@ -253,10 +249,15 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, load_pa
                             if not done:
                                 rewards_per_episode.append(rewards_current_episode)
                                 steps_per_episode.append(t+1)
+                    
                     file_name = "experience%s.pth" %(str(sim))
                     file_name = os.path.join(save_path, file_name)
                     torch.save(agent.qnetwork_local.state_dict(),file_name)
                     if mode:
+                        # Adds epoch rewards to training session rewards variable
+                        # rewards_per_episode: (num_episodes, self.nr) ; i.e,  [[agent0_reward0, agent1_reward0], [agent0_reward1, agent1_reward1], ...]
+                        # new_tmp_exp_rewards: (2*num_episodes,)
+                        # new_exp_rewards: (num_sequences, self.nr, num_episodes)
                         tmp_seq_rewards = np.array(seq_rewards)
                         new_tmp_seq_rewards = np.array(np.append(tmp_seq_rewards.ravel(),np.array(rewards_per_episode)))
                         if tmp_seq_rewards.shape[0] == 0:
@@ -319,17 +320,19 @@ def calc_avg(rewards, steps, num_sims):
     return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
 
 # Initializing Q-Learning Parameters
-num_episodes = 10000
+num_episodes = 100000
 max_steps_per_episode = 200
 num_sims = 1
 
-learning_rate = np.array([0.01])
-discount_rate = np.array([0.9])
+learning_rate = np.array([0.01, 0.9])
+discount_rate = np.array([0.1, 0.9])
 
-exploration_rate = np.array([1, 1], dtype=np.float32)
-max_exploration_rate = np.array([1, 1], dtype=np.float32)
-min_exploration_rate = np.array([0.03, 0.03], dtype=np.float32)
-exploration_decay_rate = np.array([0.001, 0.01], dtype=np.float32)
+exploration_rate = np.array([1], dtype=np.float32)
+max_exploration_rate = np.array([1], dtype=np.float32)
+min_exploration_rate = np.array([0.03], dtype=np.float32)
+exploration_decay_rate = np.array([0.0001], dtype=np.float32)
+
+positive_reward = 40 # 20, 40 , (lr, dr)
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -341,43 +344,63 @@ date_and_time = datetime.now()
 save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
 if not os.path.exists(save_path): os.makedirs(save_path)
 
+print(save_path)
+
 # On or off policy
-policy_bool = False
-policy_num = 1
+policy_bool = True
+policy_num = 2
 
 if policy_bool:
-    dqn(num_sims, num_episodes, max_steps_per_episode, exploration_rate, max_exploration_rate, min_exploration_rate, exploration_decay_rate, load_path, save_path)
+    dqn(num_sims, num_episodes, max_steps_per_episode, exploration_rate, max_exploration_rate, min_exploration_rate, exploration_decay_rate, positive_reward, load_path, save_path)
 else:
     agent = Agent(0, state_size=HEIGHT*WIDTH,action_size=4,seed=0)
     file_name = "experience%s.pth" %(str(policy_num))
     file_name = os.path.join(load_path, file_name)
     agent.qnetwork_local.load_state_dict(torch.load(file_name))
     agent.qnetwork_local.eval()
-    env = Environment()
+    env = Environment(positive_reward)
 
-    state = env.reset()
-    grids = []
+    found = []
+    resultss = []
+    cnt = 0
     for y in range(env.grid.shape[0]):
         for x in range(env.grid.shape[1]):
             state = env.reset()
             grids = []
+            results = []
+            
+            env.grid[env.pos.y, env.pos.x] = 0
             env.pos = Point(x,y)
+            env.prev_pos = Point(x,y)
+            env.starting_pos = Point(x,y)
+            env.grid[env.pos.y, env.pos.x] = 2
+
+            grids.append(env.grid.copy())
+            results.append((env.pos, None))
+
+            done = False
+           
             for step in range(max_steps_per_episode):
                 action = agent.act(state,eps=0)
                 next_state, reward, done, _ = env.step(action)
-                grids.append(env.grid)
+                results.append((env.pos, action))
+                grids.append(env.grid.copy())
                 state = next_state
                 if done:
+                    found.append(grids)
+                    resultss.append(results)
+                    cnt += 1
                     break
-            if done: break
-        if done: break
-
-    if done:
-        for i in range(len(grids)):
-            PR = print_results(grids[i], env.grid.shape[0], env.grid.shape[1])
+            # if done: break
+        # if done: break
+    print("Percentage success: ", cnt, HEIGHT*WIDTH, cnt/(HEIGHT*WIDTH)*100)
+    cnt = 0
+    for j, g in enumerate(found):
+        for i, g_i in enumerate(g):
+            PR = print_results(g_i, env.grid.shape[0], env.grid.shape[1])
             PR.print_graph(i)
             
-            file_name = "plot-%s.png" %(i)
+            file_name = "plot-%s%s.png" %(j, i)
             plt.savefig(os.path.join(save_path, file_name))
             plt.close()
 

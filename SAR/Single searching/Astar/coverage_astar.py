@@ -13,7 +13,7 @@ import time
 
 import shutil
 
-termination_time = 20
+termination_time = 4
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -128,6 +128,7 @@ def calc_cost(closed_set, ids):
 def a_star(graph, start, termination_time):
     times = [0]
     visited = 0
+    debug = False
     visited_list = []
     closed_set = {}
     closed_set[0] = (-1, 0, 0, start)
@@ -153,7 +154,7 @@ def a_star(graph, start, termination_time):
                         break
                     else:
                         path = reconstruct_path(closed_set, current)
-                        # printer.print_row(path, save_path, len(visited_list), visited_list)
+                        printer.print_row(path, save_path, len(visited_list), visited_list, None)
                         # if len(visited_list) == 1: del path[0]
                         visited_list.append(path)
                         last_ids.append(current[0])
@@ -185,6 +186,11 @@ def a_star(graph, start, termination_time):
                                 open_set.append((id, current[0], new_t, new_reward, next_node))
                                 closed_set[id] = (current[0], new_t, new_reward, next_node)
 
+                                if debug:
+                                    # Debug
+                                    branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
+                                    printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
+                                    print("")
                                 
                         id += 1
                     # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))

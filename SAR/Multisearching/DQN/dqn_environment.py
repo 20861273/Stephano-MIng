@@ -30,21 +30,21 @@ Point = namedtuple('Point', 'x, y')
 
 class Environment:
     
-    def __init__(self):
+    def __init__(self, positive_reward):
         # Generates grid (Grid[y,x])
         self.grid = self.generate_grid()
 
         # Set robot(s) position
         self.pos = self.starting_pos
 
-        self.positive_reward = 100
+        self.positive_reward = positive_reward
 
         print("\nGrid size: ", self.grid.shape)
 
     def generate_grid(self):        
         # Ggenerate grid of zeros 
         grid = np.zeros((HEIGHT, WIDTH))
-
+        # grid[y][x]
         # Generate obstacles
         # CODE GOES HERE
 
@@ -55,29 +55,18 @@ class Environment:
 
         grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
 
-        # Set goal position at least 20% of grid size away from robot(s)
-        distance_to = 0
-        while distance_to < grid.shape[0]*0.2:
-            indices = np.argwhere(grid == States.UNEXP.value)
-            np.random.shuffle(indices)
-            self.goal = Point(indices[0,1], indices[0,0])
-            distance_to = math.sqrt((self.starting_pos.x - self.goal.x)**2 +
-                            (self.starting_pos.y - self.goal.y)**2)
-        
+        indices = np.argwhere(grid == States.UNEXP.value)
+        np.random.shuffle(indices)
+        self.goal = Point(indices[0,1], indices[0,0])
         grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         return grid
 
     def reset(self):
-        visited = np.argwhere(self.grid == States.EXP.value)
-        for i in visited:
-            self.grid[i[0], i[1]] = States.UNEXP.value
+        # Clear all visited blocks
+        self.grid.fill(0)
 
         # Setup agent
-        # Clear all robot blocks
-        robot = np.argwhere(self.grid == States.ROBOT.value)
-        for i in robot:
-            self.grid[i[0], i[1]] = States.UNEXP.value
         # Set new starting pos
         indices = np.argwhere(self.grid == States.UNEXP.value)
         np.random.shuffle(indices)
@@ -87,22 +76,56 @@ class Environment:
         self.grid[self.pos.y, self.pos.x] = States.ROBOT.value
 
         # Setup goal
-        # Clear all goal blocks
-        goal = np.argwhere(self.grid == States.GOAL.value)
-        for i in goal:
-            self.grid[i[0], i[1]] = States.UNEXP.value
         # Set new goal pos
         indices = np.argwhere(self.grid == States.UNEXP.value)
         np.random.shuffle(indices)
         self.goal = Point(indices[0,1], indices[0,0])
         self.grid[self.goal.y, self.goal.x] = States.GOAL.value
-    
+
         self.direction = (Direction.RIGHT).value
                 
         self.score = 0
         self.frame_iteration = 0
 
         state = self.get_state()
+
+        return state
+
+
+        # visited = np.argwhere(self.grid == States.EXP.value)
+        # for i in visited:
+        #     self.grid[i[0], i[1]] = States.UNEXP.value
+
+        # # Setup agent
+        # # Clear all robot blocks
+        # robot = np.argwhere(self.grid == States.ROBOT.value)
+        # for i in robot:
+        #     self.grid[i[0], i[1]] = States.UNEXP.value
+        # # Set new starting pos
+        # indices = np.argwhere(self.grid == States.UNEXP.value)
+        # np.random.shuffle(indices)
+        # self.starting_pos = Point(indices[0,1], indices[0,0])
+        # self.pos = self.starting_pos
+        # self.prev_pos = self.pos
+        # self.grid[self.pos.y, self.pos.x] = States.ROBOT.value
+
+        # # Setup goal
+        # # Clear all goal blocks
+        # goal = np.argwhere(self.grid == States.GOAL.value)
+        # for i in goal:
+        #     self.grid[i[0], i[1]] = States.UNEXP.value
+        # # Set new goal pos
+        # indices = np.argwhere(self.grid == States.UNEXP.value)
+        # np.random.shuffle(indices)
+        # self.goal = Point(indices[0,1], indices[0,0])
+        # self.grid[self.goal.y, self.goal.x] = States.GOAL.value
+    
+        # self.direction = (Direction.RIGHT).value
+                
+        # self.score = 0
+        # self.frame_iteration = 0
+
+        # state = self.get_state()
 
         return state
 
@@ -140,14 +163,12 @@ class Environment:
         grid[self.pos.y, self.pos.x] = 1
         return grid.flatten()
 
-    def _is_collision(self, pt=None):
-        if pt is None:
-            pt = self.pos
+    def _is_collision(self, pt):
         # hits boundary
         obstacles = np.argwhere(self.grid == States.OBS.value)
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
             return True
-        elif pt.y < 0 or pt.y > self.grid.shape[0]-1 or pt.x < 0 or pt.x > self.grid.shape[1]-1:
+        elif not 0 <= pt.y < self.grid.shape[0] or not 0 <= pt.x < self.grid.shape[1]:
             # self.score -= 2
             return True
         
@@ -207,7 +228,6 @@ class Environment:
             y -= 1
 
         if self._is_collision(Point(x,y)):
-            self.pos = self.pos
             self.prev_pos = self.pos
         else:
             self.prev_pos = self.pos
