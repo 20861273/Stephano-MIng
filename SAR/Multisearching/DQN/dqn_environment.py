@@ -169,7 +169,7 @@ class Environment:
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
             return True
         elif not 0 <= pt.y < self.grid.shape[0] or not 0 <= pt.x < self.grid.shape[1]:
-            # self.score -= 2
+            self.score -= 1
             return True
         
         return False

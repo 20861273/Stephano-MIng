@@ -74,7 +74,7 @@ class print_results:
         plt_title = "DQN Results: Step %s" %(str(step)) 
         plt.title(plt_title)
 
-    def plot(self, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time):
+    def plot(self, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time, postive_reward):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
 
         m, s = divmod(t_time, 60)
@@ -110,7 +110,7 @@ class print_results:
         for i in range(0, plot_len):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(30, 15))
 
-            ax1.set_title('Rewards per episode\nTraining time: %sh %sm %ss' %(h, m, s))
+            ax1.set_title('Rewards per episode\nTraining time: %sh %sm %ss\nPositive reward: %s' %(h, m, s, str(postive_reward)))
             ax1.set_xlabel('Episode')
             ax1.set_ylabel('Rewards')
 

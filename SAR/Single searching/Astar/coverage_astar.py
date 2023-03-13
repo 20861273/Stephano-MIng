@@ -13,7 +13,7 @@ import time
 
 import shutil
 
-termination_time = 4
+termination_time = 26
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -166,10 +166,11 @@ def a_star(graph, start, termination_time):
                 if current[4] != start or current[2] == 0: # only if the start is at time step 0
                     no_children = []
                     for next_node in graph.neighbors(current[4]):
-                        # Debug
-                        # branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
-                        # printer.print_row(branch, save_path, len(visited_list), visited_list)
-                        # print("")
+                        if debug:
+                            # Debug
+                            branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
+                            printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
+                            print("")
                         reward, unvisited_reachable, distance = graph.cost(current, next_node, closed_set, visited_list)
                         if unvisited_reachable == False:
                             no_children.append(False)
@@ -185,12 +186,6 @@ def a_star(graph, start, termination_time):
                             if new_t <= termination_time:
                                 open_set.append((id, current[0], new_t, new_reward, next_node))
                                 closed_set[id] = (current[0], new_t, new_reward, next_node)
-
-                                if debug:
-                                    # Debug
-                                    branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
-                                    printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
-                                    print("")
                                 
                         id += 1
                     # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
@@ -230,10 +225,10 @@ printer.print_graph(traj, cost, save_path, times, sum(times), 0)
 plt.close()
 
 # Delete any empty folders in PATH
-for folder in os.listdir(PATH):
-    f = os.path.join(PATH, folder)
-    if not len(os.listdir(f)):
-        try:
-            shutil.rmtree(f)
-        except OSError as e:
-            print("Tried to delete folder that doesn't exist: ", f)
+# for folder in os.listdir(PATH):
+#     f = os.path.join(PATH, folder)
+#     if not len(os.listdir(f)):
+#         try:
+#             shutil.rmtree(f)
+#         except OSError as e:
+#             print("Tried to delete folder that doesn't exist: ", f)

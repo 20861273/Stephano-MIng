@@ -291,7 +291,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, positiv
 
     results = print_results(env.grid, HEIGHT, WIDTH)
 
-    results.plot(avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, save_path, env, training_time)
+    results.plot(avg_rewards, avg_steps, learning_rate, discount_rate, exploration_rate, save_path, env, training_time, positive_reward)
 
 def moving_avarage_smoothing(X,k):
 	S = np.zeros(X.shape[0])
@@ -320,19 +320,19 @@ def calc_avg(rewards, steps, num_sims):
     return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
 
 # Initializing Q-Learning Parameters
-num_episodes = 100000
+num_episodes = 200000
 max_steps_per_episode = 200
 num_sims = 1
 
-learning_rate = np.array([0.01, 0.9])
-discount_rate = np.array([0.1, 0.9])
+learning_rate = np.array([0.00075])
+discount_rate = np.array([0.002])
 
-exploration_rate = np.array([1], dtype=np.float32)
-max_exploration_rate = np.array([1], dtype=np.float32)
+exploration_rate = np.array([0.03], dtype=np.float32)
+max_exploration_rate = np.array([0.03], dtype=np.float32)
 min_exploration_rate = np.array([0.03], dtype=np.float32)
-exploration_decay_rate = np.array([0.0001], dtype=np.float32)
+exploration_decay_rate = np.array([0.03], dtype=np.float32)
 
-positive_reward = 40 # 20, 40 , (lr, dr)
+positive_reward = 100 # 20, 40 , (lr, dr)
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')

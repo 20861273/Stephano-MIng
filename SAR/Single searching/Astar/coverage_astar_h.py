@@ -14,7 +14,8 @@ import time
 
 import shutil
 
-termination_time = 50
+# termination_time = (WIDTH+HEIGHT)*2
+termination_time = 10
 HH = False
 draw = True
 
@@ -58,12 +59,33 @@ class GridWithWeights(object):
         cost = 0
         explored = 0
 
+        # visited
         visited = []
         for row in visited_list:
             for p in row:
                 visited.append(p)
         
-        visited = visited + branch
+        visited = visited + branch #+ [next_node]
+
+        estimated_reward = find_largest_estimated_reward(visited, next_node, current)
+
+        if estimated_reward == None:
+            return None
+        elif estimated_reward == float('inf'):
+            return float('inf')
+
+        if next_node in branch or len([True for row in visited_list if next_node in row]) != 0:
+            return estimated_reward
+        else:
+            # unvisited
+            return 1+estimated_reward
+
+        visited = []
+        for row in visited_list:
+            for p in row:
+                visited.append(p)
+        
+        visited = visited + branch #+ [next_node]
 
         estimated_reward = find_largest_estimated_reward(visited, next_node, current)
 
@@ -77,15 +99,14 @@ class GridWithWeights(object):
         #     cost -= 1
         # if len([True for row in visited_list if next_node in row]) != 0:
         #     cost -= 1
-        if next_node not in branch and not len([True for row in visited_list if next_node in row]) != 0:
-            cost += 1
-            explored += 1
+        # if next_node in branch or len([True for row in visited_list if next_node in row]) != 0:
+        #     if current[3] != 0: estimated_reward -= 1
 
         return estimated_reward#, reachable, distance, heading_home, explored
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
-        # (right, up, left, down)
+        # (right, left, down, up, stay)
         results = [Point(x+1, y), Point(x-1, y), Point(x, y-1), Point(x, y+1), Point(x, y)]
         # This is done to prioritise straight paths
         # if (x + y) % 2 == 0: results.reverse()
@@ -102,12 +123,16 @@ def within_range(start, current):
 def find_largest_estimated_reward(visited, next_node, current):
     track_visited = [[False] * HEIGHT for _ in range(WIDTH)]
     groups = []
-    distances = {}
+    distance = {}
+    dist_to_uv = {}
+    dist_to_s = {}
+    # get group with minumum distance to next_node
     for x in range(WIDTH):
         for y in range(HEIGHT):
             if Point(x,y) not in visited and not track_visited[x][y]:
                 group_size = 0
                 min_distance = float('inf')
+                min_dist_to = float('inf')
                 min_dist_pos = None
                 stack = [(x, y)]
                 while stack:
@@ -115,12 +140,13 @@ def find_largest_estimated_reward(visited, next_node, current):
                     if not track_visited[x][y]:
                         track_visited[x][y] = True
                         group_size += 1
-                        dist_to_uv = get_distance(Point(x,y), next_node)
-                        # dist_to_s = get_distance(Point(x,y), env.starting_pos)
-                        distance = dist_to_uv #+ dist_to_s
-                        if distance < min_distance:
-                            min_distance = distance
-                            min_dist_pos = (x,y)
+                        dist_to_uv[Point(x,y)] = get_distance(Point(x,y), next_node) # plus 1 is for distance from current to next_node
+                        dist_to_s[Point(x,y)] = get_distance(Point(x,y), env.starting_pos)
+                        distance[Point(x,y)] = dist_to_uv[Point(x,y)] + dist_to_s[Point(x,y)]
+                        if distance[Point(x,y)] <= min_distance and dist_to_uv[Point(x,y)] < min_dist_to:
+                            min_dist_to = dist_to_uv[Point(x,y)]
+                            min_distance = distance[Point(x,y)]
+                            min_dist_pos = Point(x,y)
                     for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
                         nx, ny = x + dx, y + dy
                         if 0 <= nx < WIDTH and 0 <= ny < HEIGHT and Point(nx,ny) not in visited and not track_visited[nx][ny]:
@@ -128,27 +154,36 @@ def find_largest_estimated_reward(visited, next_node, current):
                 groups.append((group_size, min_dist_pos, min_distance))
     
     groups = sorted(groups, reverse=True)
-
-    if len(groups) == 1 and groups[0][1] == None:
-        for y in range(HEIGHT):
-            for x in range(WIDTH):
-                if Point(x,y) not in visited:
-                    dist_to_uv = get_distance(Point(x,y), next_node)
-                    dist_to_s = get_distance(Point(x,y), env.starting_pos)
-                    distance = dist_to_uv + dist_to_s
-
-                    if distance <= termination_time - current[2]:
-                        distances[Point(x,y)] = distance
-                        distances[Point(x,y)] = termination_time - current[2] - distance
-    else:
-        for i, group in enumerate(groups):
-            distance = get_distance(Point(group[1][0], group[1][1]), env.starting_pos) + group[2]
-            if distance <= termination_time - current[2]:
-                distances[group[1]] = termination_time - current[2] - distance
+    # if len(groups) > 1:
+    #     print("")
         
-    if not bool(distances):
-        return 0
-    return max(distances.values())
+    if not bool(groups):
+        #
+        if current[4] == env.starting_pos: return None
+        return 1 - get_distance(env.starting_pos, next_node)/termination_time # changed from None to get exit condition for area covered
+    
+    PR = 0
+    for i, group in enumerate(groups):
+        group_max_PR = 0
+        # potential reward calculation
+        remainder_steps = termination_time - group[2] - current[2]
+        # can't reach
+        if remainder_steps < 0:
+            continue
+        # if the size of the group is smaller than the remainder steps the potential reward can only be as large as the gorup
+        if group[0] > remainder_steps:
+            group_max_PR = remainder_steps
+        else:
+            group_max_PR = group[0]
+
+        if group_max_PR > PR:
+            PR = group_max_PR
+    
+    if PR == 0:
+        return PR/termination_time
+    if PR < 0:
+        return None
+    return PR/termination_time
 
 def closest_unvisited(branch, visited, current, next, explored):
     grid = env.grid.copy()
@@ -232,6 +267,7 @@ def a_star(graph, start, termination_time):
     open_set = [(0, -1, 0, 0, start)]
     current = open_set[-1]
     last_ids = []
+    rememeber_ids = []
     while True:
         printer = print_results(env.grid, HEIGHT, WIDTH)
         # id, parent_id, time, reward, position, visited
@@ -263,35 +299,35 @@ def a_star(graph, start, termination_time):
             if current[2] != termination_time and within_range(start, current):
                 if current[4] != start or current[2] == 0: # only if the start is at time step 0
                     no_children = []
+                    no_reward = []
                     for next_node in graph.neighbors(current[4]):
+                        if debug:
+                            # Debug
+                            branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node))
+                            printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
+                            print("")
                         reward = graph.cost(current, next_node, closed_set, visited_list)
-                        new_reward = current[3] + reward
-                        new_t = current[2] + 1
-                        if new_reward == 0:
+                        if reward == 0:
+                            rememeber_ids.append(id)
+                            no_reward.append(False)
+                        if reward != None: new_reward = current[3] + reward
+                        if reward == None or (len(no_reward) == len(graph.neighbors(current[4])) and not any(no_reward)) or reward == float('inf'):
                             no_children.append(False)
-
-                            if debug:
-                                    # Debug
-                                    branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node))
-                                    printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
-                                    print("")
                             # no children left
-                            if current[4] == start and len(no_children) == len(graph.neighbors(current[4])) and not any(no_children):
+                            if (current[4] == start and len(no_children) == len(graph.neighbors(current[4])) and not any(no_children)) \
+                                or (len(no_reward) == len(graph.neighbors(current[4])) and not any(no_reward) and current[4] == env.starting_pos)\
+                                     or reward == float('inf'):
                                 return closed_set, last_ids, visited_list, times
                             else:
+                                breakpoint
                                 continue
                         else:
                             no_children.append(True)
+                            new_t = current[2] + 1
                             # new_explored = current[7] + explored
                             if new_t <= termination_time:
                                 open_set.append((id, current[0], new_t, new_reward, next_node))
                                 closed_set[id] = (current[0], new_t, new_reward, next_node)
-
-                                if debug:
-                                    # Debug
-                                    branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node))
-                                    printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
-                                    print("")
                         id += 1
                     # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
                     # printer.print_row(branch, save_path, len(visited_list), visited_list)
