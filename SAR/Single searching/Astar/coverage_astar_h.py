@@ -15,7 +15,7 @@ import time
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 10
+termination_time = 6
 HH = False
 draw = True
 
@@ -55,9 +55,6 @@ class GridWithWeights(object):
 
     def cost(self, current, next_node, closed_set, visited_list):
         branch = reconstruct_path(closed_set, current)
-        # reachable, distance, heading_home = closest_unvisited(branch, visited_list, current, next_node, current[7])
-        cost = 0
-        explored = 0
 
         # visited
         visited = []
@@ -79,30 +76,6 @@ class GridWithWeights(object):
         else:
             # unvisited
             return 1+estimated_reward
-
-        visited = []
-        for row in visited_list:
-            for p in row:
-                visited.append(p)
-        
-        visited = visited + branch #+ [next_node]
-
-        estimated_reward = find_largest_estimated_reward(visited, next_node, current)
-
-        if estimated_reward == None:
-            return None
-
-        # if (not reachable and distance == None):
-        #     return None, False, None, None, explored
-        
-        # if next_node in branch:
-        #     cost -= 1
-        # if len([True for row in visited_list if next_node in row]) != 0:
-        #     cost -= 1
-        # if next_node in branch or len([True for row in visited_list if next_node in row]) != 0:
-        #     if current[3] != 0: estimated_reward -= 1
-
-        return estimated_reward#, reachable, distance, heading_home, explored
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
@@ -158,7 +131,6 @@ def find_largest_estimated_reward(visited, next_node, current):
     #     print("")
         
     if not bool(groups):
-        #
         if current[4] == env.starting_pos: return None
         return 1 - get_distance(env.starting_pos, next_node)/termination_time # changed from None to get exit condition for area covered
     
@@ -170,6 +142,7 @@ def find_largest_estimated_reward(visited, next_node, current):
         # can't reach
         if remainder_steps < 0:
             continue
+
         # if the size of the group is smaller than the remainder steps the potential reward can only be as large as the gorup
         if group[0] > remainder_steps:
             group_max_PR = remainder_steps
@@ -178,55 +151,21 @@ def find_largest_estimated_reward(visited, next_node, current):
 
         if group_max_PR > PR:
             PR = group_max_PR
+            # if len(groups) > 1 and i != len(groups)-1:
+            #     temp = groups[i+1][2] - remainder_steps
+            #     if temp 
+        
     
-    if PR == 0:
+    if remainder_steps < 0 and current[3] > 0:
+        # testing new heuristic for travelling back to start
+        if termination_time - current[2] > get_distance(env.starting_pos, next_node):
+            return (1 - get_distance(env.starting_pos, next_node)/termination_time)/2
+        else:
+            return None
         return PR/termination_time
     if PR < 0:
         return None
     return PR/termination_time
-
-def closest_unvisited(branch, visited, current, next, explored):
-    grid = env.grid.copy()
-    grid.fill(0)
-    distances = {}
-    
-    # fills visited blocks with 1's in grid
-    for row in visited:
-        for p in row:
-            grid[p.y, p.x] = 1
-    for p in branch:
-        grid[p.y, p.x] = 1
-    # gets the distance to all unvisited blocks
-    for y in range(grid.shape[0]):
-        for x in range(grid.shape[1]):
-            if grid[y,x] == 0:
-                dist_to_uv = get_distance(Point(x,y), next)
-                dist_to_s = get_distance(Point(x,y), env.starting_pos)
-                distance = dist_to_uv + dist_to_s
-
-                if distance <= termination_time - current[2]:
-                    distances[Point(x,y)] = distance
-    
-    
-    # Normalize distance
-    max_dist = (HEIGHT+WIDTH-2) * 2
-
-    dist_next_to_s = get_distance(env.starting_pos, next)
-    if dist_next_to_s >= termination_time - current[2]:
-        dist_next_to_s = float('inf')
-    
-    # Check if unvisted block reachable
-    if not bool(distances) or dist_next_to_s == float('inf'):
-        # Can't get back to start
-        if dist_next_to_s == float('inf') or explored == 0:
-            return False, None, None
-        # Can't get to unvisited block, but can return home
-        else:
-            return True, dist_next_to_s/max_dist/10, True
-    else:
-        # Unvisited block reachable
-        min_distance =  distances[min(distances, key=distances.get)]/max_dist/10
-        return True, min_distance, False
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
@@ -280,13 +219,8 @@ def a_star(graph, start, termination_time):
             open_set = list(sorted(open_set, key=itemgetter(0), reverse=True))
             open_set = list(sorted(open_set, key=itemgetter(3)))
             current = open_set[-1]
-            # if (current[7] == 0 and len(visited_list) != 0):
-            #     open_set = list(sorted(open_set, key=itemgetter(5), reverse=True))
-            current = open_set[-1]
             open_set.pop()
 
-            # if find_largest_estimated_reward(visited_list, current[4], current) == 0:
-            #     return closed_set, last_ids, visited_list, times
             if current[4] == start and current[2] == termination_time: 
                 path = reconstruct_path(closed_set, current)
                 printer.print_row(path, save_path, len(visited_list), visited_list, None)
@@ -328,10 +262,9 @@ def a_star(graph, start, termination_time):
                             if new_t <= termination_time:
                                 open_set.append((id, current[0], new_t, new_reward, next_node))
                                 closed_set[id] = (current[0], new_t, new_reward, next_node)
+                            else:
+                                breakpoint
                         id += 1
-                    # branch = reconstruct_path(closed_set, (id, current[0], new_t, new_reward, next_node, reward))
-                    # printer.print_row(branch, save_path, len(visited_list), visited_list)
-                    # print("")
             
         # if current[4] == start and current[2] == termination_time:
         #     break
