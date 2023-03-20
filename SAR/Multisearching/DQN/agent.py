@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import time
 from datetime import datetime
 import os
+import shutil
 
 ##Importing the model (function approximator for Q-table)
 from model import QNetwork
@@ -347,8 +348,8 @@ if not os.path.exists(save_path): os.makedirs(save_path)
 print(save_path)
 
 # On or off policy
-policy_bool = True
-policy_num = 2
+policy_bool = False
+policy_num = 1
 
 if policy_bool:
     dqn(num_sims, num_episodes, max_steps_per_episode, exploration_rate, max_exploration_rate, min_exploration_rate, exploration_decay_rate, positive_reward, load_path, save_path)
@@ -404,3 +405,11 @@ else:
             plt.savefig(os.path.join(save_path, file_name))
             plt.close()
 
+# Delete any empty folders in PATH
+for folder in os.listdir(PATH):
+    f = os.path.join(PATH, folder)
+    if not len(os.listdir(f)):
+        try:
+            shutil.rmtree(f)
+        except OSError as e:
+            print("Tried to delete folder that doesn't exist: ", f)

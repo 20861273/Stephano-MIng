@@ -129,6 +129,7 @@ class print_results:
         Prints the grid environment
         """
 
+        plt.ion()
         plt.rc('font', size=20)
         plt.rc('axes', titlesize=10)
 

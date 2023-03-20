@@ -14,7 +14,7 @@ import time
 
 import shutil
 
-termination_time = 4
+termination_time = 30
 HH = False
 draw = True
 
