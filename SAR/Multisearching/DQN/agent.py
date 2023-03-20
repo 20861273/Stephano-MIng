@@ -18,8 +18,8 @@ import torch.optim as optim
 
 BUFFER_SIZE = int(1e5)  #replay buffer size
 BATCH_SIZE = 64         # minibatch size
-UPDATE_EVERY = 4        # how often to update the network
-
+UPDATE_EVERY = 10       # how often to update the network
+old_values = 0
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class Agent():
@@ -54,14 +54,9 @@ class Agent():
         # Save experience in replay memory
         self.memory.add(state, action, reward, next_step, done)
 
-        # Learn every UPDATE_EVERY time steps.
-        self.t_step = (self.t_step+1)% UPDATE_EVERY
-        if self.t_step == 0:
-            # If enough samples are available in memory, get radom subset and learn
-
-            if len(self.memory)>BATCH_SIZE:
-                experience = self.memory.sample()
-                self.learn(experience, discount_rate, learning_rate)
+        if len(self.memory)>BATCH_SIZE:
+            experience = self.memory.sample()
+            self.learn(experience, discount_rate, learning_rate)
     def act(self, state, eps = 0):
         """Returns action for given state as per current policy
         Params
@@ -72,8 +67,9 @@ class Agent():
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
         self.qnetwork_local.eval()
         with torch.no_grad():
-            action_values = self.qnetwork_local(state)
+            action_values = self.qnetwork_local.forward(state)
         self.qnetwork_local.train()
+        old_values = action_values
 
         #Epsilon -greedy action selction
         action = np.array([0,0,0,0])
@@ -103,10 +99,11 @@ class Agent():
         # We will update target model weights with soft_update function
         self.qnetwork_target.eval()
         #shape of output from the model (batch_size,action_dim) = (64,4)
-        predicted_targets = self.qnetwork_local(states).gather(1,actions)
-    
+        predicted_targets = self.qnetwork_local.forward(states).gather(1,actions)
+
         with torch.no_grad():
-            labels_next = self.qnetwork_target(next_state).detach().max(1)[0].unsqueeze(1) # unsqueeze(1) converts the dimension from (batch_size) to (batch_size,1)
+            labels_next = self.qnetwork_target.forward(next_state) # unsqueeze(1) converts the dimension from (batch_size) to (batch_size,1)
+            labels_next = labels_next.detach().max(1)[0].unsqueeze(1)
 
         # .detach() ->  Returns a new Tensor, detached from the current graph.
         labels = torch.zeros(rewards.size(0), predicted_targets.size(1), device=device) + rewards + (gamma * labels_next * (1 - dones))
@@ -116,8 +113,13 @@ class Agent():
         loss.backward()
         self.optimizer.step()
 
+        # Learn every UPDATE_EVERY time steps.
+        self.t_step = (self.t_step+1)% UPDATE_EVERY
+        if self.t_step == 0:
+            # If enough samples are available in memory, get radom subset and learn
+
         # ------------------- update target network ------------------- #
-        self.soft_update(self.qnetwork_local,self.qnetwork_target,tau)
+            self.soft_update(self.qnetwork_local,self.qnetwork_target,tau)
             
     def soft_update(self, local_model, target_model, tau):
         """Soft update model parameters.
@@ -189,6 +191,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, positiv
         
     """
     mode = True
+    cntr = 0
     all_grids = []
     all_rewards = []
     all_steps = []
@@ -207,7 +210,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, positiv
                 for er_i in np.arange(len(exploration_rate)):
                     print("\nTraining simulation: %s\nLearning rate = %s\nDiscount rate = %s\nExploration rate = %s\nExploration rate min = %s\nExploration rate max = %s\nExploration decay rate = %s"
                             %(sim, learning_rate[lr_i], discount_rate[dr_i], exploration_rate[er_i], min_exploration_rate[er_i], max_exploration_rate[er_i], exploration_decay_rate[er_i]))
-                    agent = Agent(learning_rate[lr_i], state_size=HEIGHT*WIDTH,action_size=4,seed=0)
+                    agent = Agent(learning_rate[lr_i], state_size=HEIGHT*WIDTH*2,action_size=4,seed=0)
                     eps = eps_start[er_i]
                     env = Environment(positive_reward)
                     rewards_per_episode = []
@@ -221,7 +224,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, positiv
                         for t in range(max_t):
                             if i_episode == 0 and mode: all_grids.append(env.grid.copy())
                             action = agent.act(state,eps)
-                            next_state,reward,done,_ = env.step(action)
+                            next_state,reward,done,_, cntr = env.step(action, cntr)
                             agent.step(state,action,reward,next_state,done,discount_rate[dr_i],learning_rate[lr_i])
 
                             ## above step decides whether we will train(learn) the network
@@ -243,7 +246,7 @@ def dqn(n_ts, n_episodes, max_t, eps_start, eps_max, eps_end, eps_decay, positiv
                             eps = eps_end[er_i] + \
                                         (eps_max[er_i] - eps_end[er_i]) * np.exp(-eps_decay[er_i]*i_episode)
 
-                        if i_episode % 1000==0 and not i_episode == 0:
+                        if i_episode % 10==0 and not i_episode == 0:
                             print('\rEpisode {}\tAverage Score {:.2f}'.format(i_episode,np.mean(scores_window)))
                         
                         if mode:
@@ -321,19 +324,19 @@ def calc_avg(rewards, steps, num_sims):
     return mov_avg_rewards.tolist(), mov_avg_steps.tolist()
 
 # Initializing Q-Learning Parameters
-num_episodes = 200000
-max_steps_per_episode = 200
+num_episodes = 2000
+max_steps_per_episode = 100
 num_sims = 1
 
-learning_rate = np.array([0.00075])
-discount_rate = np.array([0.002])
+learning_rate = np.array([0.001])
+discount_rate = np.array([0.5])
 
 exploration_rate = np.array([0.03], dtype=np.float32)
 max_exploration_rate = np.array([0.03], dtype=np.float32)
 min_exploration_rate = np.array([0.03], dtype=np.float32)
 exploration_decay_rate = np.array([0.03], dtype=np.float32)
 
-positive_reward = 100 # 20, 40 , (lr, dr)
+positive_reward = 1 # 20, 40 , (lr, dr)
 
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
@@ -348,7 +351,7 @@ if not os.path.exists(save_path): os.makedirs(save_path)
 print(save_path)
 
 # On or off policy
-policy_bool = False
+policy_bool = True
 policy_num = 1
 
 if policy_bool:

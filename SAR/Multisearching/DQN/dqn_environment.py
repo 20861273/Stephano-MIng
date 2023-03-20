@@ -7,6 +7,7 @@ import math
 # Environment characteristics
 HEIGHT = 4
 WIDTH = 4
+
 # DENSITY = 30 # percentage
 
 # Direction states
@@ -57,7 +58,8 @@ class Environment:
 
         indices = np.argwhere(grid == States.UNEXP.value)
         np.random.shuffle(indices)
-        self.goal = Point(indices[0,1], indices[0,0])
+        # self.goal = Point(indices[0,1], indices[0,0])
+        self.goal = Point(0,0)
         grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         return grid
@@ -77,9 +79,11 @@ class Environment:
 
         # Setup goal
         # Set new goal pos
-        indices = np.argwhere(self.grid == States.UNEXP.value)
-        np.random.shuffle(indices)
-        self.goal = Point(indices[0,1], indices[0,0])
+        # indices = np.argwhere(self.grid == States.UNEXP.value)
+        # np.random.shuffle(indices)
+        # self.goal = Point(indices[0,1], indices[0,0])
+        # self.grid[self.goal.y, self.goal.x] = States.GOAL.value
+        self.goal = Point(0,0)
         self.grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         self.direction = (Direction.RIGHT).value
@@ -88,6 +92,8 @@ class Environment:
         self.frame_iteration = 0
 
         state = self.get_state()
+        goal_state = self.get_goal_state()
+        state = np.append(state, goal_state, axis=0)
 
         return state
 
@@ -129,7 +135,7 @@ class Environment:
 
         return state
 
-    def step(self, action):
+    def step(self, action, cntr):
         #print(self.pos, self.prev_pos, action)
         #print(self.grid,"\n")
         self.frame_iteration += 1
@@ -142,6 +148,8 @@ class Environment:
         game_over = False
 
         state = self.get_state()
+        goal_state = self.get_goal_state()
+        state = np.append(state, goal_state, axis=0)
         
         reward = self.score
 
@@ -153,14 +161,21 @@ class Environment:
             self.score += self.positive_reward
             reward = self.score
             game_over = True
-            return state, reward, game_over, self.score
+            cntr += 1
+            print(cntr)
+            return state, reward, game_over, self.score, cntr
 
         # 6. return game over and score
-        return state, reward, game_over, self.score
+        return state, reward, game_over, self.score, cntr
 
     def get_state(self):
         grid = np.zeros(self.grid.shape)
         grid[self.pos.y, self.pos.x] = 1
+        return grid.flatten()
+
+    def get_goal_state(self):
+        grid = np.zeros(self.grid.shape)
+        grid[self.goal.y, self.goal.x] = 1
         return grid.flatten()
 
     def _is_collision(self, pt):
@@ -169,7 +184,7 @@ class Environment:
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
             return True
         elif not 0 <= pt.y < self.grid.shape[0] or not 0 <= pt.x < self.grid.shape[1]:
-            self.score -= 1
+            # self.score -= 1
             return True
         
         return False

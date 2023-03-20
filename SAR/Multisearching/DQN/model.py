@@ -5,8 +5,8 @@ import torch.nn.functional as F
 
 class QNetwork(nn.Module):
     """ Actor (Policy) Model."""
-    def __init__(self, state_size,action_size, seed, fc1_unit=32,
-                 fc2_unit = 64, fc3_unit = 128):
+    def __init__(self, state_size,action_size, seed, fc1_unit=16,
+                 fc2_unit = 32, fc3_unit = 128):
         """
         Initialize parameters and build model.
         Params
@@ -19,11 +19,9 @@ class QNetwork(nn.Module):
         """
         super(QNetwork,self).__init__() ## calls __init__ method of nn.Module class
         self.seed = torch.manual_seed(seed)
-        self.fc1= nn.Linear(state_size,fc1_unit)
-        self.fc2 = nn.Linear(fc1_unit,fc2_unit)
-        self.fc3 = nn.Linear(fc2_unit,fc2_unit)
-        self.fc4 = nn.Linear(fc2_unit,fc1_unit)
-        self.fc5 = nn.Linear(fc1_unit,action_size)
+        self.fc1= nn.Linear(state_size,fc2_unit)
+        self.fc2 = nn.Linear(fc2_unit,fc1_unit)
+        self.fc3 = nn.Linear(fc1_unit,action_size)
         
     def forward(self,x):
         # x = state
@@ -32,6 +30,5 @@ class QNetwork(nn.Module):
         """
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = F.relu(self.fc4(x))
-        return self.fc5(x)
+        x = self.fc3(x)
+        return x
