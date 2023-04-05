@@ -1,7 +1,7 @@
 from operator import itemgetter
 import numpy as np
 
-from astar_environment import Environment, HEIGHT, WIDTH, Point
+from astar_environment import Environment, HEIGHT, WIDTH, Point, States
 from save_results import print_results
 
 from datetime import datetime
@@ -15,7 +15,7 @@ import time
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 20
+termination_time = 40
 HH = False
 draw = True
 
@@ -50,6 +50,10 @@ class GridWithWeights(object):
         (x, y) = id
         return 0 <= x < self.width and 0 <= y < self.height
 
+    def collision(self, id):
+        (x, y) = id
+        return env.grid[y][x] != States.OBS.value
+
     def passable(self, id):
         return id not in self.weights
 
@@ -78,12 +82,12 @@ class GridWithWeights(object):
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
-        # (right, left, down, up, stay)
+        # (right, up, left, down)
         results = [Point(x+1, y), Point(x-1, y), Point(x, y-1), Point(x, y+1), Point(x, y)]
         # This is done to prioritise straight paths
         # if (x + y) % 2 == 0: results.reverse()
         results = list(filter(self.in_bounds, results))
-        # results = filter(self.passable, results)
+        results = list(filter(self.collision, results))
         return results
 
 def within_range(start, current):
@@ -171,7 +175,7 @@ def find_largest_estimated_reward(visited, next_node, current):
     if remainder_steps < 0 and current[3] > 0:
         # testing new heuristic for travelling back to start
         # check if start is within range and if agent has explored any cells
-        if termination_time - current[2] > get_distance(env.starting_pos, next_node) and current[3] > 0:
+        if termination_time - current[2] > get_distance(env.starting_pos, next_node):
             return (1 - get_distance(env.starting_pos, next_node)/termination_time)/2*-1
         else: # if start is not within range skip child
             return None
@@ -209,6 +213,7 @@ def a_star(graph, start, termination_time):
     times = [0]
     global HH
     debug = False
+    debug_found = False
     visited = 0
     explored = 0
     visited_list = []
@@ -235,7 +240,7 @@ def a_star(graph, start, termination_time):
 
             if current[4] == start and current[2] == termination_time: 
                 path = reconstruct_path(closed_set, current)
-                if debug: printer.print_row(path, save_path, len(visited_list), visited_list, None)
+                if debug_found: printer.print_row(path, save_path, len(visited_list), visited_list, None, env)
                 visited_list.append(path)
                 last_ids.append(current[0])
                 times.append(time.time() - stime - times[-1])
@@ -250,7 +255,7 @@ def a_star(graph, start, termination_time):
                         if debug:
                             # Debug
                             branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node))
-                            printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
+                            printer.print_row(branch, save_path, len(visited_list), visited_list, next_node, env)
                             print("")
                         reward = graph.cost(current, next_node, closed_set, visited_list)
                         if reward != None and reward < 0:
@@ -350,7 +355,7 @@ print("Cost:", cost)
 print("Planning time:", sum(times))
 
 if draw:
-    printer.print_graph(traj, cost, save_path, times, sum(times), pos_cnt=0)
+    printer.print_graph(traj, cost, save_path, times, sum(times), 0, env)
     plt.close()
 
 file_name = "trajectories.json"

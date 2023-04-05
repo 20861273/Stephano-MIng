@@ -30,7 +30,7 @@ class print_results:
         self.grid = grid
         self.rows = rows
         self.cols = cols
-    def print_graph(self, paths, cost, dir_path, times, tot_time, pos_cnt):
+    def print_graph(self, paths, cost, dir_path, times, tot_time, pos_cnt, env):
         """
         Prints the grid environment
         """
@@ -63,14 +63,18 @@ class print_results:
             for i in range(HEIGHT): # y
                 for j in range(WIDTH): # x
                     ax.fill([j, j + 1, j + 1, j], [i, i, i + 1, i + 1], facecolor="white", alpha=0.5)
+                    if env.grid[i][j] == 1: ax.fill([j, j + 1, j + 1, j], [i, i, i + 1, i + 1], facecolor="k", alpha=0.5)
 
             # Add path to plot
+            temp_grid_ = np.zeros(env.grid.shape)
             for i in visited:
                 x, y = i.x, i.y
-                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
-                    [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
-                    facecolor="gray",
-                    alpha=0.5)
+                if temp_grid_[y][x] < 1:
+                    ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
+                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
+                        facecolor="y",
+                        alpha=0.5)
+                    temp_grid_[y][x] += 1
 
             clabel = ""
             grid = np.zeros((HEIGHT, WIDTH))
@@ -107,11 +111,13 @@ class print_results:
                 label = " | ".join(label)
                 visited.append(point)
                 row_visit.append(point)
-                
-                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
-                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
-                        facecolor="green", 
-                        alpha=0.5)
+
+                if temp_grid_[y][x] < 2:
+                    ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
+                            [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
+                            facecolor="green", 
+                            alpha=0.5)
+                    temp_grid_[y][x] += 1
                 ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
                 
             
@@ -124,7 +130,7 @@ class print_results:
             cnt += 1
         plt.close()
 
-    def print_row(self, path, dir_path, id, visited, next):
+    def print_row(self, path, dir_path, id, visited, next, env):
         """
         Prints the grid environment
         """
@@ -153,18 +159,24 @@ class print_results:
 
         for i in range(self.rows+1):
             for j in range(self.cols+1):
-                ax.fill([j, j + 1, j + 1, j], [i, i, i + 1, i + 1], facecolor="white", alpha=0.5)
+                if i < self.rows and j < self.cols and env.grid[i][j] == 1:
+                    ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5],[i + 0.5, i + 0.5, i + 1.5, i + 1.5], facecolor="k", alpha=0.5)
+                else:
+                    ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5], [i + 0.5, i + 0.5, i + 1.5, i + 1.5], facecolor="white", alpha=0.5)
 
         # Add path to plot
+        temp_grid_ = np.zeros(env.grid.shape)
         for row in visited:
             for i in row:
                 x, y = i.x, i.y
-                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
-                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
-                        facecolor="gray",
-                        alpha=0.5)
+                if temp_grid_[y][x] < 2:
+                    ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
+                            [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
+                            facecolor="y",
+                            alpha=0.5)
 
         clabel = ""
+        temp_grid_ = np.zeros(env.grid.shape)
         grid = np.zeros((HEIGHT, WIDTH))
         row_visit = []
         for i, point in enumerate(path):
@@ -200,10 +212,12 @@ class print_results:
             # visited.append(point)
             row_visit.append(point)
             
-            ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
-                    [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
-                    facecolor="green", 
-                    alpha=0.5)
+            if temp_grid_[y][x] < 2:
+                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
+                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
+                        facecolor="green", 
+                        alpha=0.5)
+                temp_grid_[y][x] += 1
             ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
         
         if next != None:

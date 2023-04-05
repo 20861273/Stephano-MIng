@@ -1,7 +1,7 @@
 from operator import itemgetter
 import numpy as np
 
-from astar_environment import Environment, HEIGHT, WIDTH, Point
+from astar_environment import Environment, HEIGHT, WIDTH, Point, States
 from save_results import print_results
 
 from datetime import datetime
@@ -106,6 +106,10 @@ class GridWithWeights(object):
     def in_bounds(self, id):
         (x, y) = id
         return 0 <= x < self.width and 0 <= y < self.height
+    
+    def collision(self, id):
+        (x, y) = id
+        return env.grid[y][x] != States.OBS.value
 
     def passable(self, id):
         return id not in self.weights
@@ -137,12 +141,12 @@ class GridWithWeights(object):
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
-        # (right, left, down, up, stay)
+        # (right, up, left, down)
         results = [Point(x+1, y), Point(x-1, y), Point(x, y-1), Point(x, y+1), Point(x, y)]
         # This is done to prioritise straight paths
         # if (x + y) % 2 == 0: results.reverse()
         results = list(filter(self.in_bounds, results))
-        # results = filter(self.passable, results)
+        results = list(filter(self.collision, results))
         return results
 
 def within_range(start, current):
@@ -229,8 +233,8 @@ def find_largest_estimated_reward(visited, next_node, current):
         
     
     # no potential reward
-    if PR < 0:
-        return None
+    # if PR < 0:
+    #     return None
     return PR/termination_time
 
 def get_distance(end, start):
@@ -267,6 +271,8 @@ def a_star(graph, start, termination_time):
     times = [0]
     global HH
     debug = False
+    debug_found = True
+    debug_save = False
     visited = 0
     explored = 0
     visited_list = []
@@ -291,23 +297,23 @@ def a_star(graph, start, termination_time):
             current = open_set[-1]
             open_set.pop()
 
-            if current[4] == start and current[2] == termination_time: 
+            if current[4] == start and current[2] <= termination_time and current[3] >= 1: 
                 path = reconstruct_path(closed_set, current)
-                if debug: printer.print_row(path, save_path, len(visited_list), visited_list, None)
+                if debug_found: printer.print_row(path, save_path, len(visited_list), visited_list, None, env)
                 visited_list.append(path)
                 last_ids.append(current[0])
                 times.append(time.time() - stime - times[-1])
                 print("Path ", len(visited_list), "complete in ", times[-1], "s")
                 break
             
-            if current[2] != termination_time and within_range(start, current):
+            if current[2] < termination_time and within_range(start, current):
                 no_children = []
                 no_reward = []
                 for next_node in graph.neighbors(current[4]):
                     if debug:
                         # Debug
                         branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node))
-                        printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
+                        printer.print_row(branch, save_path, len(visited_list), visited_list, next_node, env)
                         print("")
                     reward = graph.cost(current, next_node, closed_set, visited_list)
                     if reward == 0:
@@ -320,8 +326,8 @@ def a_star(graph, start, termination_time):
                     if reward == None or (len(no_reward) == len(graph.neighbors(current[4])) and not any(no_reward)) or reward == float('inf'):
                         no_children.append(False)
                         # no children left
-                        if (current[4] == start and len(no_children) == len(graph.neighbors(current[4])) and not any(no_children)) \
-                            or (len(no_reward) == len(graph.neighbors(current[4])) and not any(no_reward) and current[4] == env.starting_pos)\
+                        if (current[2] == 0 and len(no_children) == len(graph.neighbors(current[4])) and not any(no_children)) \
+                            or (len(no_reward) == len(graph.neighbors(current[4])) and not any(no_reward) and current[2] == 0)\
                                     or reward == float('inf'):
                             return closed_set, last_ids, visited_list, times
                         else:
@@ -331,9 +337,21 @@ def a_star(graph, start, termination_time):
                         no_children.append(True)
                         new_t = current[2] + 1
                         # new_explored = current[7] + explored
-                        if new_t <= termination_time:
-                            open_set.append((id, current[0], new_t, new_reward, next_node))
-                            closed_set[id] = (current[0], new_t, new_reward, next_node)
+                        open_set.append((id, current[0], new_t, new_reward, next_node))
+                        closed_set[id] = (current[0], new_t, new_reward, next_node)
+                        if debug_save:
+                            file_name = "closed_set.json"
+                            file_path = os.path.join(save_path, file_name)
+                            with open(file_path, 'w') as f:
+                                for key, value in closed_set.items():
+                                    json.dump({key: value}, f)
+                                    f.write('\n')
+                            file_name = "open_set.json"
+                            file_path = os.path.join(save_path, file_name)
+                            with open(file_path, 'w') as f:
+                                for value in open_set:
+                                    json.dump(value, f)
+                                    f.write('\n')
                     id += 1
             
         # if current[4] == start and current[2] == termination_time:
@@ -410,7 +428,7 @@ print("Planning time:", sum(times))
 # draw_tree(closed_set, paths_ids, save_path)
 
 if draw:
-    printer.print_graph(traj, cost, save_path, times, sum(times), pos_cnt=0)
+    printer.print_graph(traj, cost, save_path, times, sum(times), 0, env)
     plt.close()
 
 file_name = "trajectories.json"

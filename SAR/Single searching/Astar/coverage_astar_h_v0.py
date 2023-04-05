@@ -1,7 +1,7 @@
 from operator import itemgetter
 import numpy as np
 
-from astar_environment import Environment, HEIGHT, WIDTH, Point
+from astar_environment import Environment, HEIGHT, WIDTH, Point, States
 from save_results import print_results
 
 from datetime import datetime
@@ -12,8 +12,9 @@ import matplotlib.pyplot as plt
 import time
 
 import shutil
+import json
 
-termination_time = 20
+termination_time = 40
 MAX_DISTANCE = (HEIGHT+WIDTH-2) * 2
 
 PATH = os.getcwd()
@@ -36,6 +37,10 @@ class GridWithWeights(object):
     def in_bounds(self, id):
         (x, y) = id
         return 0 <= x < self.width and 0 <= y < self.height
+        
+    def collision(self, id):
+        (x, y) = id
+        return env.grid[y][x] != States.OBS.value
 
     def passable(self, id):
         return id not in self.weights
@@ -71,7 +76,7 @@ class GridWithWeights(object):
         # This is done to prioritise straight paths
         # if (x + y) % 2 == 0: results.reverse()
         results = list(filter(self.in_bounds, results))
-        # results = filter(self.passable, results)
+        results = list(filter(self.collision, results))
         return results
 
 def within_range(start, current):
@@ -133,7 +138,9 @@ def calc_cost(closed_set, ids):
 def a_star(graph, start, termination_time):
     times = [0]
     visited = 0
+    debug_save = False
     debug = False
+    debug_found = False
     visited_list = []
     closed_set = {}
     closed_set[0] = (-1, 0, 0, start)
@@ -154,7 +161,7 @@ def a_star(graph, start, termination_time):
             open_set.pop()
             if current[4] == start and current[2] == termination_time:
                 path = reconstruct_path(closed_set, current)
-                if debug: printer.print_row(path, save_path, len(visited_list), visited_list, None)
+                if debug_found: printer.print_row(path, save_path, len(visited_list), visited_list, None, env)
                 # if len(visited_list) == 1: del path[0]
                 visited_list.append(path)
                 last_ids.append(current[0])
@@ -162,19 +169,26 @@ def a_star(graph, start, termination_time):
                 print("Path ", len(visited_list), "complete in ", times[-1], "s")
                 break
             
-            if current[2] != termination_time and within_range(start, current):
+            if current[2] < termination_time and within_range(start, current):
                 no_children = []
                 for next_node in graph.neighbors(current[4]):
+                    if debug_save:
+                        file_name = "closed_set.json"
+                        file_path = os.path.join(save_path, file_name)
+                        with open(file_path, 'w') as f:
+                            for key, value in closed_set.items():
+                                json.dump({key: value}, f)
+                                f.write('\n')
                     if debug:
                         # Debug
                         branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node, 0))
-                        printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
+                        printer.print_row(branch, save_path, len(visited_list), visited_list, next_node, env)
                         breakpoint
                     reward, unvisited_reachable = graph.cost(current, next_node, closed_set, visited_list)
                     if not within_range(start, (None, None, current[2]+1, None, next_node)) or not unvisited_reachable:
                         no_children.append(False)
                         # no children left
-                        if current[4] == start and len(no_children) == len(graph.neighbors(current[4])) and not any(no_children):
+                        if current[2] == 0 and len(no_children) == len(graph.neighbors(current[4])) and not any(no_children):
                             return closed_set, last_ids, visited_list, times
                         breakpoint
                         continue
@@ -217,7 +231,7 @@ print("Path:", path)
 print("Cost:", cost)
 print("Planning time:", sum(times))
 
-printer.print_graph(traj, cost, save_path, times, sum(times), 0)
+printer.print_graph(traj, cost, save_path, times, sum(times), 0, env)
 
 plt.close()
 

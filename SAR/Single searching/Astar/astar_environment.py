@@ -5,8 +5,8 @@ import random
 import math
 
 # Environment characteristics
-HEIGHT = 5
-WIDTH = 5
+HEIGHT = 20
+WIDTH = 20
 # DENSITY = 30 # percentage
 
 # Direction states
@@ -20,8 +20,8 @@ class Direction(Enum):
 class States(Enum):
     UNEXP = 0
     OBS = 1
-    ROBOT = 9
-    GOAL = 8
+    ROBOT = 2
+    GOAL = 3
     EXP = 4
 
 # Setup position variable of robot as point
@@ -57,5 +57,12 @@ class Environment:
         np.random.shuffle(indices)
         self.goal = Point(indices[0,1], indices[0,0])
         grid[self.goal.y, self.goal.x] = States.GOAL.value
+
+        # indices = np.argwhere(grid == States.UNEXP.value)
+        # np.random.shuffle(indices)
+        # for i, index in enumerate(indices):
+        #     grid[index[0]][index[1]] = States.OBS.value
+        #     if i > len(indices)/10:
+        #         break
 
         return grid

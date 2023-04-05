@@ -1,7 +1,7 @@
 from operator import itemgetter
 import numpy as np
 
-from astar_environment import Environment, HEIGHT, WIDTH, Point
+from astar_environment import Environment, HEIGHT, WIDTH, Point, States
 from save_results import print_results
 
 from datetime import datetime
@@ -18,7 +18,7 @@ import time
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 20
+termination_time = 30
 HH = False
 draw = True
 
@@ -82,7 +82,7 @@ def draw_tree(closed_set, optimal_trajectories, save_path):
     file_name = "tree.png"
     file_path = os.path.join(save_path, file_name)
 
-    # p.draw(file_path)
+    p.draw(file_path)
 
 def write_json(lst, path, file_name):
     file_path = os.path.join(path, file_name)
@@ -108,6 +108,10 @@ class GridWithWeights(object):
     def passable(self, id):
         return id not in self.weights
 
+    def collision(self, id):
+        (x, y) = id
+        return env.grid[y][x] != States.OBS.value
+
     def cost(self, current, next_node, closed_set, visited_list):
         branch = reconstruct_path(closed_set, current)
 
@@ -124,6 +128,8 @@ class GridWithWeights(object):
         if (not reachable) and current[3] < 1:
             breakpoint
             return None
+        if area_covered:
+            breakpoint
 
         if current[3] < 1 or area_covered:
             if next_node not in branch:
@@ -148,18 +154,18 @@ class GridWithWeights(object):
         # This is done to prioritise straight paths
         # if (x + y) % 2 == 0: results.reverse()
         results = list(filter(self.in_bounds, results))
-        # results = filter(self.passable, results)
+        results = list(filter(self.collision, results))
         return results
 
 def closest_unvisited(visited, current, next):
     distances = {}
     remaining_time = termination_time - current[2]
-    no_cells_in_visited = True
+    area_covered = True
     # gets the distance to all unvisited blocks within reach
     for y in range(HEIGHT):
         for x in range(WIDTH):
             if Point(x,y) not in visited:
-                no_cells_in_visited = False
+                area_covered = False
                 dist_to_u = get_distance(Point(x,y), next)
                 dist_to_s = get_distance(Point(x,y), env.starting_pos)
                 distance = dist_to_u + dist_to_s
@@ -169,9 +175,9 @@ def closest_unvisited(visited, current, next):
     
     # Check if unexplored blocks reachable
     if not bool(distances):
-        return False, no_cells_in_visited
+        return False, area_covered
     else:
-        return True, no_cells_in_visited
+        return True, area_covered
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
@@ -211,6 +217,7 @@ def calc_cost(closed_set, ids):
 # A* algorithm
 def a_star(graph, start, termination_time):
     times = [0]
+    debug_save = False
     debug = False
     debug_found = False
     visited_list = []
@@ -237,21 +244,28 @@ def a_star(graph, start, termination_time):
 
             if current[4] == start and current[2] <= termination_time and current[3] >= 1: 
                 path = reconstruct_path(closed_set, current)
-                if debug_found: printer.print_row(path, save_path, len(visited_list), visited_list, None)
+                if debug_found: printer.print_row(path, save_path, len(visited_list), visited_list, None, env)
                 visited_list.append(path)
                 last_ids.append(current[0])
                 times.append(time.time() - stime - times[-1])
                 print("Path ", len(visited_list), "complete in ", times[-1], "s")
                 break
             
-            if current[2] != termination_time and within_range(start, current):
+            if current[2] < termination_time and within_range(start, current):
                 no_children = []
                 no_reward = []
                 for next_node in graph.neighbors(current[4]):
+                    if debug_save:
+                        file_name = "closed_set.json"
+                        file_path = os.path.join(save_path, file_name)
+                        with open(file_path, 'w') as f:
+                            for key, value in closed_set.items():
+                                json.dump({key: value}, f)
+                                f.write('\n')
                     if debug:
                         # Debug
                         branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, next_node))
-                        printer.print_row(branch, save_path, len(visited_list), visited_list, next_node)
+                        printer.print_row(branch, save_path, len(visited_list), visited_list, next_node, env)
                         breakpoint
                     reward = graph.cost(current, next_node, closed_set, visited_list)
                     
@@ -277,9 +291,8 @@ def a_star(graph, start, termination_time):
                         if current[3] >= 1:
                             new_reward += current[3]
                         
-                        if new_t <= termination_time:
-                            open_set.append((id, current[0], new_t, new_reward, next_node))
-                            closed_set[id] = (current[0], new_t, new_reward, next_node)
+                        open_set.append((id, current[0], new_t, new_reward, next_node))
+                        closed_set[id] = (current[0], new_t, new_reward, next_node)
                     id += 1
             
         # if current[4] == start and current[2] == termination_time:
@@ -356,7 +369,7 @@ print("Planning time:", sum(times))
 draw_tree(closed_set, paths_ids, save_path)
 
 if draw:
-    printer.print_graph(traj, cost, save_path, times, sum(times), pos_cnt=0)
+    printer.print_graph(traj, cost, save_path, times, sum(times), 0, env)
     plt.close()
 
 file_name = "trajectories.json"
