@@ -1,5 +1,6 @@
 from operator import itemgetter
 import numpy as np
+from math import trunc
 
 from astar_environment import Environment, HEIGHT, WIDTH, Point, States
 from save_results import print_results
@@ -15,7 +16,7 @@ import time
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 15
+termination_time = 40
 HH = False
 draw = True
 
@@ -50,47 +51,9 @@ class GridWithWeights(object):
         (x, y) = id
         return 0 <= x < self.width and 0 <= y < self.height
 
-    def passable(self, id):
-        return id not in self.weights
-
     def collision(self, id):
         (x, y) = id
         return env.grid[y][x] != States.OBS.value
-
-    def cost(self, current, next_node, closed_set, visited_list):
-        branch = reconstruct_path(closed_set, current)
-
-        # visited
-        visited = []
-        for row in visited_list:
-            for p in row:
-                visited.append(p)
-        
-        visited = visited + branch
-
-        reachable, area_covered = closest_unvisited(visited, current, next_node)
-
-        if (not reachable) and current[3] < 1:
-            breakpoint
-            return None
-        if area_covered:
-            breakpoint
-
-        if current[3] < 1 or area_covered:
-            if next_node not in branch:
-                if len([True for row in visited_list if next_node in row]) == 0:
-                    return 1
-                else:
-                    return 0.00000000000001
-            else:
-                return 0
-        else:
-            if next_node not in visited:
-                return 1
-            else:
-                return 0
-        
-        breakpoint
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
@@ -121,16 +84,10 @@ def closest_unvisited(visited, current):
     if not bool(distances):
         return None, 0
     else:
-        return min(distances, key=distances.get), len(distances)
+        return min(distances, key=distances.get), len(distances)/(HEIGHT*WIDTH)
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
-
-def within_range(start, current):
-    dist = abs(current[4].x - start.x) + abs(current[4].y - start.y)
-    if dist <= termination_time-current[2]:
-        return True
-    return False
 
 def reconstruct_path(closed_set, current):
     current = current[1:]
@@ -169,6 +126,7 @@ def a_star(graph, start, termination_time):
     times = [0]
     debug = False
     debug_found = False
+    save_data = False
     visited_list = []
     closed_set = {}
     id = 0
@@ -209,10 +167,10 @@ def a_star(graph, start, termination_time):
             explored_from_current = explored+branch_from_current
 
             # if used all fuel and drone is back at initial position, then goal reached (allow a margin of 1 fuel for even/odd number of moves)
-            # if current[2] <= 1 and current[6] == start:
+            if current[2] <= 1 and current[6] == start:
             # if no more reachable unexplored cells and drone is back at initial position, then goal reached
-            if (current[6] == start) \
-            and (current[2] < get_distance(current[6], closest_unexplored) + get_distance(closest_unexplored, current[6])):
+            # if (current[6] == start) \
+            # and (current[2] < get_distance(current[6], closest_unexplored) + get_distance(closest_unexplored, current[6])):
                 # reconstruct best coverage path by starting at last state and iterating backwards through parents states
                 path = reconstruct_path(closed_set, current)
                 # Debug purposes
@@ -220,7 +178,8 @@ def a_star(graph, start, termination_time):
                 visited_list.append(path)
                 last_ids.append(current[0])
                 times.append(time.time() - stime - times[-1])
-                print("Path ", len(visited_list), "complete in ", times[-1], "s")
+                min, s = divmod(times[-1], 60)
+                print("Path ", len(visited_list), "complete in ", round(min,2), "m ", round(s,2), "s")
                 break
 
             # otherwise, generate child states        
@@ -229,7 +188,7 @@ def a_star(graph, start, termination_time):
                 if debug:
                     branch = reconstruct_path(closed_set, (id, current[0], current[2] + 1, 0, 0, 0, next_node))
                     printer.print_row(branch, save_path, len(visited_list), visited_list, next_node, env)
-                    breakpoint
+                    breakpoint                   
                 
                 next_fuel = current[2] - 1
 
@@ -241,18 +200,10 @@ def a_star(graph, start, termination_time):
                     continue
                 else:
                     # the score to come is the score to come so far plus the unexplored status (1 or 0) of the next state
-                    next_score_to_come = current[3] + check_unexplored(next_node, explored_from_current)
+                    next_score_to_come = trunc(current[3]) + check_unexplored(next_node, explored_from_current)
 
-                # the next state's score to go is 1 if there is any unexplored cell that the drone can reach and also return to the initial position afterwards
-                # the next state's score to go is 0 if there are no unexplored cells within reach, but the drone can still reach the initial position
-                # if next_fuel >= get_distance(next_node, closest_unexplored) + get_distance(closest_unexplored, start):
-                #     next_score_to_go   = 1
-                # elif next_fuel >= get_distance(next_node, start):
-                #     next_score_to_go   = 0
-
-                # the score to go is the number of unexplored cells that can be reached and also reach the initial position
-                closest_unexplored_from_next, reachable_unexplored_cells_from_next = closest_unvisited(explored_from_current, (0, 0, next_fuel, 0, 0, 0, next_node))
-                next_score_to_go = reachable_unexplored_cells_from_next 
+                # the score to go is the number of unexplored cell that the drone can reach and also return to the initial position afterwards
+                next_score_to_go = reachable_unexplored_cells
 
                 # the total score is the sum of the score to come and the score to go
                 next_score = next_score_to_come + next_score_to_go
@@ -264,10 +215,24 @@ def a_star(graph, start, termination_time):
                 next_state = (next_id, next_parentID, next_fuel, next_score_to_come, next_score_to_go, next_score, next_node)
                 closed_set[id] = (next_state[1:])
                 open_set.append(next_state)
-                # explored.append(next_node)
+                if save_data:
+                    file_name = "closed_set%d.json" %(next_id)
+                    file_path = os.path.join(save_path, file_name)
+                    with open(file_path, 'w') as f:
+                        for key, value in closed_set.items():
+                            json.dump({key: value}, f)
+                            f.write('\n')
+                    file_name = "open_set%d.json" %(next_id)
+                    file_path = os.path.join(save_path, file_name)
+                    with open(file_path, 'w') as f:
+                        for state in open_set:
+                            json.dump(state, f)
+                            f.write('\n')
+                
             # after generating all the child states from the current state, sort the priority queue from highest to lowest score
             open_set = list(sorted(open_set, key=itemgetter(0), reverse=True))
             open_set = list(sorted(open_set, key=itemgetter(5)))
+
         # if the priority queue is empty and the initial node was never reached after using all the fuel, then return empty path
         
 

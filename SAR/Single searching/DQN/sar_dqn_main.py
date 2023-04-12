@@ -11,6 +11,7 @@ import torch as T
 from dqn_save_results import print_results
 import matplotlib.pyplot as plt
 import time
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def dqn(training_sessions, episodes, discount_rate, epsilon,
         batch_size, n_actions, eps_min, eps_dec, input_dims, 
@@ -21,7 +22,7 @@ def dqn(training_sessions, episodes, discount_rate, epsilon,
     for i_ts in range(training_sessions):
         print("Experience: %s, Epoch: %s, Discount rate: %s, Learning rate: %s, Epsilon: %s" %(str(i_exp), str(i_ts), str(discount_rate), str(learning_rate), str(epsilon)))
         rewards, steps = [], []
-        replace = 1000
+        replace = 10000
         env = Environment(positive_reward, negative_reward)
         agent = DQNAgent(gamma=discount_rate, epsilon=epsilon, eps_min=eps_min, eps_dec=eps_dec, lr=learning_rate,
                      n_actions=n_actions, input_dims=input_dims, mem_size=50000,
@@ -102,11 +103,11 @@ if __name__ == '__main__':
     # for on-policy runs
     off_policy = True
     policy_num = 3
-    testing_iterations = 1000
+    testing_iterations = 10000
 
     # initialize hyperparameters
     learning_rate = [0.001]
-    discount_rate = [0.5, 0.9]
+    discount_rate = [0.9]
     epsilon = [0.01]
     eps_min = [0.01]
 
@@ -115,10 +116,10 @@ if __name__ == '__main__':
     n_actions = 4
     input_dims = [HEIGHT*WIDTH]
 
-    training_sessions = 10
-    episodes = 20000
+    training_sessions = 1
+    episodes = 100000
     positive_rewards = [2]
-    negative_rewards = [0,1]
+    negative_rewards = [1]
     max_steps = [200]
 
     num_experiences = len(learning_rate) * len(discount_rate) * len(epsilon) * len(positive_rewards) * len(negative_rewards) * len(max_steps) * training_sessions

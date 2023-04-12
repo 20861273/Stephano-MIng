@@ -120,8 +120,10 @@ class print_results:
                     temp_grid_[y][x] += 1
                 ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
                 
-            
-            plt_title = "Adapted A* algorithm:\nCost: %s\nTime: %s" %(str(cost), str(times[time]))
+            min, sec = divmod(times[time], 60)
+            min = round(min, 2)
+            sec = round(sec, 2)
+            plt_title = "Adapted A* algorithm:\nCost: %s\nTime: %sm %ss" %(str(cost), str(min), str(sec))
             if len(times)-1 == time: plt_title = plt_title + "\nTotal time: %s" %(str(tot_time))
             plt.title(plt_title)
 
@@ -140,7 +142,7 @@ class print_results:
         plt.rc('axes', titlesize=10)
 
         # Prints graph
-        fig,ax = plt.subplots(figsize=(WIDTH, HEIGHT))
+        fig,(ax, ax1) = plt.subplots(1, 2, figsize=(WIDTH, HEIGHT))
 
         ax.set_aspect("equal")
         ax.set_xlim(0.5, self.cols + 0.5)
@@ -228,11 +230,14 @@ class print_results:
             
         
         plt_title = "Adapted A* algorithm:"
-        plt.title(plt_title)
+        ax.set_title(plt_title)
 
-        mng = plt.get_current_fig_manager()
-        mng.full_screen_toggle()
+        # mng = plt.get_current_fig_manager()
+        # mng.full_screen_toggle()
 
         # plt.show()
+        # plt.pause(.1)
+        # breakpoint
         # plt.close()
+        return ax1
         

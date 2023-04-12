@@ -31,7 +31,8 @@ def plot_learning_curves(x, scores, filename, ts, pr, nr, ms, lr, dr, er):
     ax.tick_params(axis='x', colors="C0")
     ax.tick_params(axis='y', colors="C0")
     np_scores = np.array(scores)
-    ax.set_ylim(np_scores.min()-1, np_scores.max()+1)
+    # np_scores.min()-1
+    ax.set_ylim(-20, np_scores.max()+1)
     ax.set_title("Learning curve:\nLearning rate: %s\nDiscount rate: %s\nEpsilon: %s" %(str(lr),str(dr), str(er)))
 
     plt.savefig(filename)
@@ -58,7 +59,7 @@ load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
 
-policies = [0]
+policies = [1,3]
 rewards = []
 tss, lrs, drs, ers, prs, nrs, mss = [], [], [], [], [], [], []
 for i, policy in enumerate(policies):

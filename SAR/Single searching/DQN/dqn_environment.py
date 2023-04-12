@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 3
-WIDTH = 3
+HEIGHT = 10
+WIDTH = 10
 
 # DENSITY = 30 # percentage
 
@@ -173,9 +173,7 @@ class Environment:
         # state = self.get_state()
         # goal_state = self.get_goal_state()
         # state = np.append(state, goal_state, axis=0)
-        state = self.get_state_unex()
-        
-        
+        state = self.get_state_unex()        
 
         # 4. Update environment
         self._update_env()
@@ -197,11 +195,12 @@ class Environment:
 
     def calc_reward(self):
         if self.unexplored:
-            grid = self.grid.copy()
-            grid[self.goal.y, self.goal.x] = States.UNEXP.value
-            grid[self.pos.y, self.pos.x] = States.UNEXP.value
-            explored = np.argwhere(self.grid == States.EXP.value)
-            return (len(explored)/(HEIGHT*WIDTH))*self.positive_reward
+            # grid = self.grid.copy()
+            # grid[self.goal.y, self.goal.x] = States.UNEXP.value
+            # grid[self.pos.y, self.pos.x] = States.UNEXP.value
+            # explored = np.argwhere(self.grid == States.EXP.value)
+            # return (len(explored)/(HEIGHT*WIDTH))*self.positive_reward
+            return 1#10 # 1
         else:
             return -0.1
 
