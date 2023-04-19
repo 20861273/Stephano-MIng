@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 10
-WIDTH = 10
+HEIGHT = 4
+WIDTH = 4
 
 # DENSITY = 30 # percentage
 
@@ -20,12 +20,12 @@ class Direction(Enum):
     DOWN = 3
 
 # Block states
-class States(float, Enum):
-    UNEXP = 0.0
-    OBS = 0.1
-    ROBOT = 0.2
-    GOAL = 0.3
-    EXP = 0.4
+class States(Enum):
+    UNEXP = 0
+    OBS = 4
+    ROBOT = 1
+    GOAL = 2
+    EXP = 3
 
 # Setup position variable of robot as point
 Point = namedtuple('Point', 'x, y')
@@ -33,7 +33,7 @@ Point = namedtuple('Point', 'x, y')
 
 class Environment:
     
-    def __init__(self, positive_reward, negative_reward):
+    def __init__(self, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward):
         # Generates grid (Grid[y,x])
         self.grid = self.generate_grid()
 
@@ -41,7 +41,9 @@ class Environment:
         self.pos = self.starting_pos
 
         self.positive_reward = positive_reward
+        self.positive_exploration_reward = positive_exploration_reward
         self.negative_reward = negative_reward
+        self.negative_step_reward = negative_step_reward
 
         self.unexplored = False
 
@@ -49,7 +51,7 @@ class Environment:
 
     def generate_grid(self):        
         # Ggenerate grid of zeros 
-        grid = np.zeros((HEIGHT, WIDTH), dtype=np.float32)
+        grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
         # Note: grid[y][x]
         # Generate obstacles
         # CODE GOES HERE
@@ -113,10 +115,7 @@ class Environment:
         self.score = 0
         self.frame_iteration = 0
         
-        # state = self.get_state()
-        # goal_state = self.get_goal_state()
-        # state = np.append(state, goal_state, axis=0)
-        state = self.get_state_unex()
+        state = self.get_state()
 
         return state, last_start
 
@@ -173,16 +172,21 @@ class Environment:
         # state = self.get_state()
         # goal_state = self.get_goal_state()
         # state = np.append(state, goal_state, axis=0)
-        state = self.get_state_unex()        
+           
 
         # 4. Update environment
         self._update_env()
 
+        state = self.get_state()
+
         self.score += self.calc_reward()
         reward = self.score
 
+        num_explored = len(np.argwhere(self.grid == States.EXP.value))
+
         # 5. Check exit condition
         if self.pos == self.goal:
+        # if num_explored == WIDTH*HEIGHT:
             self.score += self.positive_reward
             reward = self.score
             game_over = True
@@ -200,14 +204,13 @@ class Environment:
             # grid[self.pos.y, self.pos.x] = States.UNEXP.value
             # explored = np.argwhere(self.grid == States.EXP.value)
             # return (len(explored)/(HEIGHT*WIDTH))*self.positive_reward
-            return 1#10 # 1
+            return self.positive_exploration_reward
         else:
-            return -0.1
-
+            return -self.negative_step_reward
     
-    def get_state(self):
-        grid = np.zeros(self.grid.shape, dtype=np.float32)
-        grid[self.pos.y, self.pos.x] = States.ROBOT.value
+    def get_position_state(self):
+        grid = np.zeros(self.grid.shape)
+        grid[self.pos.y, self.pos.x] = 1.0
 
         return grid.flatten()
 
@@ -217,9 +220,43 @@ class Environment:
         return grid.flatten()
     
     def get_state_unex(self):
-        grid = self.grid.copy()
-        grid[self.goal.y, self.goal.x] = States.UNEXP.value
+        grid = np.zeros(self.grid.shape)
+        explored = np.argwhere(self.grid == States.EXP.value)
+        for y,x in explored:
+            grid[y, x] = 1.0
         return grid.flatten()
+
+    def get_state(self):
+        # Position state
+        position_grid = np.zeros(self.grid.shape)
+        position_grid[self.pos.y, self.pos.x] = 1.0
+        position_grid = position_grid.flatten()
+
+        # Exploreation state
+        exploration_grid = np.zeros(self.grid.shape)
+        explored = np.argwhere(self.grid == States.EXP.value)
+        for y,x in explored:
+            exploration_grid[y, x] = 1.0
+        exploration_grid = exploration_grid.flatten()
+
+        # Goal state
+        # goal_grid = np.zeros(self.grid.shape, dtype=np.float32)
+        # goal_grid[self.goal.y, self.goal.x] = States.GOAL.value
+        # goal_grid = goal_grid.flatten()
+
+        # Image state
+
+        # Inputs:
+        # 1. Position state:
+        state = position_grid
+
+        # 2. Position state + exploration state
+        # state = np.concatenate((position_grid, exploration_grid), axis=0)  
+
+        # 3. Image state:
+
+        return state
+
 
     def _is_collision(self, pt):
         # hits boundary

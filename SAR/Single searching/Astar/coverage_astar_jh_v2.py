@@ -10,13 +10,16 @@ import time
 import os
 import matplotlib.pyplot as plt
 import json
+import heapq
+import networkx as nx
+from EoN import hierarchy_pos
 
 import time
 
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 40
+termination_time = 6
 HH = False
 draw = True
 
@@ -29,6 +32,45 @@ if not os.path.exists(load_path): os.makedirs(load_path)
 date_and_time = datetime.now()
 save_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
 if not os.path.exists(save_path): os.makedirs(save_path)
+
+def make_dag(closed_set):
+    # Create a directed graph
+    G = nx.DiGraph()
+
+    # Add the nodes to the graph
+    for child_id, (parent_id, _, _, _, priority, position) in closed_set.items():
+        G.add_node(child_id, priority=priority)
+
+    # Add the edges to the graph
+    for child_id, (parent_id, _, _, _, priority, position) in closed_set.items():
+        if parent_id != -1:
+            G.add_edge(parent_id, child_id)
+
+    # Initialize the heap list with the root node
+    # heap = ["%s\n%s,%s" %(str(0), str(closed_set[0][5].x), str(closed_set[0][5].y))]
+    heap = [(0, (closed_set[0][5].x, closed_set[0][5].y))]
+
+    # Loop through the rest of the nodes and add them to the heap
+    for key in closed_set:
+        if key == 0: continue
+        # heapq.heappush(heap, ("%s\n%s,%s" %(str(key), str(closed_set[key][5].x), str(closed_set[key][5].y))))
+        heapq.heappush(heap, (key, (closed_set[key][5].x, closed_set[key][5].y)))
+        
+    return G, heap
+
+def draw_tree(closed_set, cycle_num, dir_path, ax):
+    G, heap = make_dag(closed_set)
+    pos = hierarchy_pos(G, width=0.1)
+    labels = dict(enumerate(heap))
+    if ax == None: nx.draw(G, pos, node_size=2000, labels=labels, alpha=0.4, font_size=14, ax=ax)
+    else: nx.draw(G, pos, node_size=2000, labels=labels, alpha=0.4, font_size=14, ax=ax)
+    figure = plt.gcf()  # get current figure
+    figure.set_size_inches(32, 18)
+    file_name = "tree%s.png"%(str(cycle_num))
+    plt.savefig(os.path.join(dir_path, file_name), bbox_inches='tight')
+    # plt.pause(.1)
+    # breakpoint
+    plt.close()
 
 def write_json(lst, path, file_name):
     file_path = os.path.join(path, file_name)
@@ -84,7 +126,7 @@ def closest_unvisited(visited, current):
     if not bool(distances):
         return None, 0
     else:
-        return min(distances, key=distances.get), len(distances)/(HEIGHT*WIDTH)
+        return min(distances, key=distances.get), len(distances)#/(HEIGHT*WIDTH)
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
@@ -133,8 +175,12 @@ def a_star(graph, start, termination_time):
     open_set = []
     last_ids = []
     explored = []
+    cycle_closed_set = {}
     explored.append(start)
     while True:
+        if len(cycle_closed_set) != 0:
+            draw_tree(cycle_closed_set, len(visited_list), save_path, ax=None)
+        cycle_closed_set = {}
         printer = print_results(env.grid, HEIGHT, WIDTH)
         # 0: id, 1: parent_id, 2: fuel, 3: score_to_come, 4: score_to_go, 5: total_score, 6: position
         open_set = [(0, -1, termination_time, 0, 0, 0, start)]
@@ -145,7 +191,7 @@ def a_star(graph, start, termination_time):
                 explored.append(p)
         
         closest_unexplored, reachable_unexplored_cells = closest_unvisited(explored, current)
-        if closest_unexplored == None:
+        if closest_unexplored == None or reachable_unexplored_cells == 0:
             return closed_set, last_ids, visited_list, times
 
         if current[2] >= get_distance(current[6], closest_unexplored)*2:
@@ -157,6 +203,7 @@ def a_star(graph, start, termination_time):
         current[0] = 0
         current[1] = -1
         closed_set[current[0]] = (tuple(current[1:]))
+        cycle_closed_set[current[0]] = (tuple(current[1:]))
         open_set.append(current)
         
         while len(open_set) > 0:
@@ -167,10 +214,10 @@ def a_star(graph, start, termination_time):
             explored_from_current = explored+branch_from_current
 
             # if used all fuel and drone is back at initial position, then goal reached (allow a margin of 1 fuel for even/odd number of moves)
-            if current[2] <= 1 and current[6] == start:
+            # if current[2] <= 1 and current[6] == start:
             # if no more reachable unexplored cells and drone is back at initial position, then goal reached
-            # if (current[6] == start) \
-            # and (current[2] < get_distance(current[6], closest_unexplored) + get_distance(closest_unexplored, current[6])):
+            if (current[6] == start) \
+            and (current[2] < get_distance(current[6], closest_unexplored) + get_distance(closest_unexplored, current[6])):
                 # reconstruct best coverage path by starting at last state and iterating backwards through parents states
                 path = reconstruct_path(closed_set, current)
                 # Debug purposes
@@ -214,6 +261,7 @@ def a_star(graph, start, termination_time):
                 next_parentID = current[0]
                 next_state = (next_id, next_parentID, next_fuel, next_score_to_come, next_score_to_go, next_score, next_node)
                 closed_set[id] = (next_state[1:])
+                cycle_closed_set[id] = (next_state[1:])
                 open_set.append(next_state)
                 if save_data:
                     file_name = "closed_set%d.json" %(next_id)

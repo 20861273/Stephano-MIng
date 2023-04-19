@@ -217,7 +217,7 @@ def a_star(graph, start, termination_time):
             branch_from_current = reconstruct_path(closed_set, current)
             explored_from_current = explored+branch_from_current
 
-            # if used all fuel and drone is back at initial position, then goal reached (allow a margin of 1 fuel for even/odd number of moves)
+            # # if used all fuel and drone is back at initial position, then goal reached (allow a margin of 1 fuel for even/odd number of moves)
             if current[2] <= 1 and current[6] == start:
             # if no more reachable unexplored cells and drone is back at initial position, then goal reached
             # if (current[6] == start) \

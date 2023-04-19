@@ -4,6 +4,8 @@ from matplotlib.pyplot import cm
 
 import os
 
+from dqn_environment import States
+
 class print_results:
     """
     A class used to print the results
@@ -78,7 +80,7 @@ class print_results:
             if p == pos:
                 yield act
     
-    def print_row(self, trajectory, dir_traj, cnt, env, p, ti):
+    def print_row(self, trajectory, dir_traj, cnt, env, p, policy, ti):
         """
         Prints the grid environment
         """
@@ -107,7 +109,7 @@ class print_results:
 
         for i in range(self.rows+1):
             for j in range(self.cols+1):
-                if i < self.rows and j < self.cols and env.grid[i][j] == 1:
+                if i < self.rows and j < self.cols and env.grid[i][j] == States.OBS.value:
                     ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5],[i + 0.5, i + 0.5, i + 1.5, i + 1.5], facecolor="k", alpha=0.5)
                 else:
                     ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5], [i + 0.5, i + 0.5, i + 1.5, i + 1.5], facecolor="white", alpha=0.5)
@@ -172,7 +174,7 @@ class print_results:
         mng = plt.get_current_fig_manager()
         mng.full_screen_toggle()
 
-        file_name = "trajectory" + str(cnt) + ".png"
+        file_name = "p%dtrajectory%d.png" %(policy, cnt)
         plt.savefig(os.path.join(dir_traj, file_name))
         plt.close()
 

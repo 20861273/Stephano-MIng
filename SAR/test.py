@@ -3,9 +3,16 @@ import numpy as np
 import json
 from matplotlib.pyplot import cm
 import os
+import math
 
-l = [1,1,1]
-c = [0,1,2,3]
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
-l = l+c
-print(l)
+x = np.arange(10)
+ys = [i+x+(i*x)**2 for i in range(10)]
+
+colors = cm.rainbow(np.linspace(0, 1, len(ys)))
+for y, c in zip(ys, colors):
+    plt.scatter(x, y, color=c)
+    plt.pause(2)

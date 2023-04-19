@@ -25,13 +25,13 @@ class DQNAgent(object):
         
         self.q_eval = DeepQNetwork(self.lr, self.n_actions,
                                     input_dims=self.input_dims,
-                                    fc1_dims=32, fc2_dims=16,
+                                    fc1_dims=64, fc2_dims=32, fc3_dims=16,
                                     name=self.env_name+'_'+self.algo+'_q_eval',
                                     chkpt_dir=self.chkpt_dir)
 
         self.q_next = DeepQNetwork(self.lr, self.n_actions,
                                     input_dims=self.input_dims,
-                                    fc1_dims=32, fc2_dims=16,
+                                    fc1_dims=64, fc2_dims=32, fc3_dims=16,
                                     name=self.env_name+'_'+self.algo+'_q_next',
                                     chkpt_dir=self.chkpt_dir)
 

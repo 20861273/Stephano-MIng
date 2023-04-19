@@ -4,6 +4,8 @@ import gym
 import json
 import os
 from matplotlib.pyplot import cm
+import math
+import pandas as pd
 
 def write_json(lst, file_name):
     with open(file_name, "w") as f:
@@ -18,24 +20,44 @@ def read_hp_json(path, file_name, policy):
     with open(file_path, "r") as f:
         txt = json.load(f)
     
-    ts, lr, dr, er, pr, nr, ms, _, r = txt.split(",")
-    return float(ts), float(lr), float(dr), float(er), float(pr), float(nr), float(ms), int(r)
+    # For reward system 1
+    # ts, lr, dr, er, pr, nr, ms, _ = txt.split(",")
+    # return float(ts), float(lr), float(dr), float(er), float(pr), float(nr), float(ms), int(1000)
 
-def plot_learning_curve(x, scores, filename, lr, dr, er, pr, nr, ms, totle_time):
+    ts, lr, dr, er, pr, nr, per, nsr, ms, _, _, _, r = txt.split(",")
+    return float(ts), float(lr), float(dr), float(er), float(pr), float(nr), float(per), float(nsr), float(ms), int(r)
+
+def plot_learning_curve(scores, filename, lr, dr, er, pr, nr, per, nsr, ms, totle_time):
+    mean_rewards = np.zeros((len(scores[0]),))
+    std_rewards = np.zeros((len(scores[0]),))
+
+    if len(scores) > 1:
+        for i_ep in range(len(scores[0])):
+            s = sum(scores[e][i_ep] for e in range(len(scores)))
+            mean_rewards[i_ep] = s / len(scores)
+
+    if len(scores) > 1:
+        for i_ep in range(len(scores[0])):
+            v = sum((scores[e][i_ep]-mean_rewards[i_ep])**2 for e in range(len(scores)))
+            std_rewards[i_ep] = math.sqrt(v / (len(scores)-1))
+
     fig=plt.figure()
-    l = "α=%s, γ=%s, ϵ=%s, pr=%s, nr=%s, s=%s" %(str(lr), str(dr), str(er), str(pr), str(nr), str(ms))
+    l = "α=%s, γ=%s, ϵ=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s" %(str(lr), str(dr), str(er), str(pr), str(nr), str(per), str(nsr), str(ms))
     ax=fig.add_subplot(111)
 
-    ax.plot(np.arange(0, len(scores), 5), scores[::5], color="C1", label=l)
+    ax.plot(np.arange(0, len(mean_rewards), 1), mean_rewards[::1], color="C1", label=l)
+    plt.fill_between(np.arange(0, len(mean_rewards), int(1)), \
+        mean_rewards[::int(1)]-std_rewards[::int(1)], mean_rewards[::int(1)]+std_rewards[::int(1)], alpha = 0.1, color = 'b')
     ax.legend()
     ax.set_xlabel("Training Steps", color="C0")
     ax.set_ylabel("Rewards", color="C0")
     ax.tick_params(axis='x', colors="C0")
     ax.tick_params(axis='y', colors="C0")
-    ax.set_ylim(-1, 1)
+    ax.set_ylim(np.array(scores).min()-1, np.array(scores).max()+1)
     ax.set_title("Learning curve:\nTime: %s" %(str(totle_time)), fontsize = 10)
 
     plt.savefig(filename)
+
 
 def plot_learning_curvess(x, scores, filename, pr, ms, lr, dr, er, total_time):
     fig=plt.figure()
