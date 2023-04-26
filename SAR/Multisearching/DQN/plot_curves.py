@@ -86,8 +86,8 @@ PATH = os.path.join(PATH, 'DQN')
 load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
-step = 1#len(scores[0][0])/10000
-policies = [0,1,2,3,4,5,6,7]
+step = 50#len(scores[0][0])/10000
+policies = [1]
 # policies = [0,1,2,3]
 # policies = [4,5,6,7]
 # policies = [0,1]

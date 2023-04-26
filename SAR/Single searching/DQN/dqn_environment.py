@@ -245,15 +245,22 @@ class Environment:
         # goal_grid = goal_grid.flatten()
 
         # Image state
+        image_grid = np.zeros(self.grid.shape)
+        explored = np.argwhere(self.grid == States.EXP.value)
+        for y,x in explored:
+            image_grid[y, x] = 0.5
+        image_grid[self.pos.y, self.pos.x] = 1.0
+        
 
         # Inputs:
         # 1. Position state:
-        state = position_grid
+        # state = position_grid
 
         # 2. Position state + exploration state
         # state = np.concatenate((position_grid, exploration_grid), axis=0)  
 
         # 3. Image state:
+        state = np.expand_dims(image_grid, axis=0)
 
         return state
 

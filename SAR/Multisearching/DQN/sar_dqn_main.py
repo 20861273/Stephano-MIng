@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import time
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-def dqn(training_sessions, episodes, discount_rate, epsilon,
+def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
         batch_size, n_actions, eps_min, eps_dec, input_dims, 
         learning_rate, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, max_steps, i_exp,
         models_path, env_name, load_checkpoint, replace):
@@ -30,7 +30,7 @@ def dqn(training_sessions, episodes, discount_rate, epsilon,
                     str(positive_reward), str(negative_reward), str(positive_exploration_reward), str(negative_step_reward),\
                     str(max_steps), str(replace)))
         rewards, steps = [], []
-        env = Environment(positive_reward, negative_reward, positive_exploration_reward, negative_step_reward)
+        env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward)
         agent = DQNAgent(gamma=discount_rate, epsilon=epsilon, eps_min=eps_min, eps_dec=eps_dec, lr=learning_rate,
                      n_actions=n_actions, input_dims=input_dims, mem_size=50000,
                      batch_size=batch_size, replace=replace,
@@ -120,9 +120,11 @@ def dqn(training_sessions, episodes, discount_rate, epsilon,
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
-    off_policy = True
-    policy_num = [8]
+    off_policy = False
+    policy_num = [0,1]
     testing_iterations = 10000
+
+    nr = 2
 
     # states:
     # observation states: "position", "position_explored", "image"
@@ -132,14 +134,14 @@ if __name__ == '__main__':
 
     # initialize hyperparameters
     learning_rate = [0.0001]
-    discount_rate = [0.9,0.95]
+    discount_rate = [0.9]
     epsilon = [0.01]
     eps_min = [0.01]
 
     # NN
     batch_size = 64
 
-    n_actions = 4
+    n_actions = 4**nr
     input_dims = []
     if observation_state == "position":
         input_dims = [HEIGHT*WIDTH]
@@ -151,11 +153,11 @@ if __name__ == '__main__':
     replace = 1000
 
     training_sessions = 10
-    episodes = 10000
+    episodes = 20000
     positive_rewards = [1]
-    positive_exploration_rewards = [0]
-    negative_rewards = [0.1]#0,0.1,
-    negative_step_rewards = [0.1]#0,0.1,
+    positive_exploration_rewards = [0,0.1]
+    negative_rewards = [0]
+    negative_step_rewards = [0]
     max_steps = [200]
 
     num_experiences =     len(learning_rate) \
@@ -194,36 +196,34 @@ if __name__ == '__main__':
                             for lr_i in learning_rate:
                                 for dr_i in discount_rate:
                                     for er_i in epsilon:
-                                        if pr_i == 0 and per_i == 0:
-                                            pass
-                                        else:
-                                            rewards = dqn(training_sessions,
-                                                            episodes,
-                                                            dr_i,
-                                                            er_i,
-                                                            batch_size,
-                                                            n_actions,
-                                                            er_i,
-                                                            er_i,
-                                                            input_dims,
-                                                            lr_i,
-                                                            pr_i,
-                                                            nr_i,
-                                                            per_i,
-                                                            nsr_i,
-                                                            ms_i,
-                                                            i_exp,
-                                                            models_path,
-                                                            env_name,
-                                                            load_checkpoint,
-                                                            replace)
-                                            i_exp += 1
+                                        rewards = dqn(nr,
+                                                    training_sessions,
+                                                    episodes,
+                                                    dr_i,
+                                                    er_i,
+                                                    batch_size,
+                                                    n_actions,
+                                                    er_i,
+                                                    er_i,
+                                                    input_dims,
+                                                    lr_i,
+                                                    pr_i,
+                                                    nr_i,
+                                                    per_i,
+                                                    nsr_i,
+                                                    ms_i,
+                                                    i_exp,
+                                                    models_path,
+                                                    env_name,
+                                                    load_checkpoint,
+                                                    replace)
+                                        i_exp += 1
     else:
         for policy in policy_num:
             debug = True
             print("Testing policy %d:" %(policy))
             file_name = "hyperparameters%s.json" %(str(policy))
-            ts, lr, dr, er, pr, nr, per, nsr, ms, r = read_hp_json(load_path, file_name, policy)
+            ts, lr, dr, er, pr, ner, per, nsr, ms, r = read_hp_json(load_path, file_name, policy)
             
             agent = DQNAgent(gamma=dr, epsilon=0, eps_min=0, eps_dec=0, lr=lr,
                         n_actions=n_actions, input_dims=input_dims, mem_size=50000,
@@ -235,100 +235,74 @@ if __name__ == '__main__':
             agent.q_eval.eval()
             agent.q_next.load_state_dict(T.load(file_name))
             agent.q_next.eval()
-            env = Environment(pr, nr, per, nsr)
+            env = Environment(nr, pr, ner, per, nsr)
 
             trajs = []
 
-            print("\nTrajectories of policy %s:" %(policy))
-            test_tab = [""] * (WIDTH*HEIGHT)
-            env.reset(last_start=None)
-            for y in range(HEIGHT):
-                for x in range(WIDTH):
-                    env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-                    env.pos = Point(x,y)
-                    env.prev_pos = Point(x,y)
-                    env.starting_pos = Point(x,y)
-                    env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
-                    observation = env.get_state()
-                    action = agent.choose_action(observation)
-                    if action == Direction.RIGHT.value:
-                        test_tab[y*WIDTH+x] += ">"
-                    elif action == Direction.LEFT.value: 
-                        test_tab[y*WIDTH+x] += "<"
-                    elif action == Direction.UP.value: 
-                        test_tab[y*WIDTH+x] += "^"
-                    elif action == Direction.DOWN.value: 
-                        test_tab[y*WIDTH+x] += "v"
+            # print("\nTrajectories of policy %s:" %(policy))
+            # test_tab = [""] * (WIDTH*HEIGHT)
+            # env.reset(last_start=None)
+            # for y in range(HEIGHT):
+            #     for x in range(WIDTH):
+            #         env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
+            #         env.pos = Point(x,y)
+            #         env.prev_pos = Point(x,y)
+            #         env.starting_pos = Point(x,y)
+            #         env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+            #         observation = env.get_state()
+            #         action = agent.choose_action(observation)
+            #         if action == Direction.RIGHT.value:
+            #             test_tab[y*WIDTH+x] += ">"
+            #         elif action == Direction.LEFT.value: 
+            #             test_tab[y*WIDTH+x] += "<"
+            #         elif action == Direction.UP.value: 
+            #             test_tab[y*WIDTH+x] += "^"
+            #         elif action == Direction.DOWN.value: 
+            #             test_tab[y*WIDTH+x] += "v"
 
-            trajs.append(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
-            print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])))
-
-            file_name = "trajectory%s.txt" %(str(policy))
-            file_name = os.path.join(save_path, file_name)
-            np.savetxt(file_name, np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])), fmt="%s")
+            # trajs.append(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
+            # print(np.reshape(test_tab, (env.grid.shape[1], env.grid.shape[0])).T)
 
             temp_step_grid = np.empty(env.grid.shape, dtype=object)
             for i in np.ndindex(temp_step_grid.shape): temp_step_grid[i] = []
             temp_step_grid = temp_step_grid.tolist()
-            step_grid = np.zeros(env.grid.shape)
             cnt = 0
             trajectories = np.empty(env.grid.shape, dtype=object)
             for i in np.ndindex(trajectories.shape): trajectories[i] = []
             trajectories = trajectories.tolist()
             trajectory_grid = np.empty(env.grid.shape).tolist()
-            for y in range(env.grid.shape[0]):
-                for x in range(env.grid.shape[1]):
-                    print("x=%d, y=%d" %(x, y))
-                    # for i in range(testing_iterations):
-                    for y_g in range(env.grid.shape[0]):
-                        for x_g in range(env.grid.shape[1]):
-                            observation, last_start = env.reset(last_start=None)
-                            env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-                            env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
-                            env.goal = Point(x_g, y_g)
-                            env.grid[env.goal.y, env.goal.x] = States.GOAL.value
-                            
-                            # while env.goal == Point(x,y):
-                            #     observation, last_start = env.reset(last_start=None)
-                            #     env.grid[env.pos.y, env.pos.x] = States.UNEXP.value
-                            
-                            env.pos = Point(x,y)
-                            env.prev_pos = Point(x,y)
-                            env.starting_pos = Point(x,y)
-                            env.grid[env.pos.y, env.pos.x] = States.ROBOT.value
+            for i in range(0, testing_iterations):
+                if i % 1000 == 0 and i != 0: print("%.2f" %(float(cnt)/float(i)*100))
+                observation, last_start = env.reset(last_start=None)
 
-                            trajectory = [env.goal]
+                trajectory = [env.goal]
 
-                            done = False
-                            actions = []
-                            
-                            observation = env.get_state()
-                        
-                            for step in range(int(ms)):
-                                action = agent.choose_action(observation)
-                                actions.append(action)
-                                observation_, reward, done, _ = env.step(action)
-                                observation = observation_
-                                trajectory.append((env.prev_pos, action))
-                                if done:
-                                    trajectories[y][x] = trajectory
-                                    cnt += 1
-                                    break
-                            temp_step_grid[y][x].append(step)
-                    step_grid[y,x] = sum(temp_step_grid[y][x])/len(temp_step_grid[y][x])
+                done = False
+                actions = []
+                
+                observation = env.get_state()
+            
+                for step in range(int(ms)):
+                    action = agent.choose_action(observation)
+                    actions.append(action)
+                    observation_, reward, done, _ = env.step(action)
+                    observation = observation_
+                    trajectory.append((env.prev_pos, action))
+                    if done:
+                        cnt += 1
+                        break
                     
             # p = cnt/((HEIGHT*WIDTH*testing_iterations))*100
-            p = cnt/((HEIGHT*WIDTH*HEIGHT*WIDTH))*100
+            p = cnt/(testing_iterations)*100
             # print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, HEIGHT*WIDTH*testing_iterations, p))
-            print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, HEIGHT*WIDTH*HEIGHT*WIDTH, p))
-            print(step_grid)
-            print("Average steps: %.2f" %(np.mean(step_grid)))
-            file_name = "policy%s_results.txt" %(str(policy))
-            file_name = os.path.join(save_path, file_name)
-            np.savetxt(file_name, step_grid, fmt="%.2f")
-            cnt = 0
-            for i, traj in enumerate(trajectories):
-                for j, t in enumerate(traj):
-                    if len(t) != 0:
-                        PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
-                        PR.print_row(t, save_path, i*env.grid.shape[0]+j, env, round(p, 2), policy, testing_iterations)
+            print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, testing_iterations, p))
+
+            # file_name = "policy%s_results.txt" %(str(policy))
+            # file_name = os.path.join(save_path, file_name)
+            # np.savetxt(file_name, step_grid, fmt="%.2f")
+            # cnt = 0
+            # for i, traj in enumerate(trajectories):
+            #     for j, t in enumerate(traj):
+            #         if len(t) != 0:
+            #             PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
+            #             PR.print_row(t, save_path, i*env.grid.shape[0]+j, env, round(p, 2), policy, testing_iterations)
