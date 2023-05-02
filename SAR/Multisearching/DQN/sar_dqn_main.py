@@ -3,7 +3,7 @@
 
 import numpy as np
 from dqn_agent import DQNAgent
-from utils import plot_learning_curve, make_env, write_json, read_hp_json, read_json
+from utils import plot_learning_curve, write_json, read_hp_json, read_json
 from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from datetime import datetime
 import os
@@ -31,7 +31,7 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
                     str(max_steps), str(replace)))
         rewards, steps = [], []
         env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward)
-        agent = DQNAgent(gamma=discount_rate, epsilon=epsilon, eps_min=eps_min, eps_dec=eps_dec, lr=learning_rate,
+        agent = DQNAgent(nr, gamma=discount_rate, epsilon=epsilon, eps_min=eps_min, eps_dec=eps_dec, lr=learning_rate,
                      n_actions=n_actions, input_dims=input_dims, mem_size=50000,
                      batch_size=batch_size, replace=replace,
                      algo='DQNAgent', env_name=env_name, chkpt_dir=models_path)
@@ -40,17 +40,22 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
 
         cntr = 0
         best_reward = -np.inf
-        # last_start = -1 # iterative start
-        last_start = None # random start
         for i_episode in range(episodes):
             episode_reward = 0
             done = False
-            observation, last_start = env.reset(last_start)
+            observation = env.reset()
+            breakpoint
             for step in range(max_steps):
                 action = agent.choose_action(observation)
-                # observation_, reward, done, info, cntr = env.step(action, cntr)
-                observation_, reward, done, info = env.step(action)
+                observation_, reward, done, info = env.step(action, 0)
                 episode_reward += reward
+                for i_r in range(1,nr):
+                    action = agent.choose_action(observation)
+                    temp_observation, reward, done, info = env.step(action, i_r)
+                    episode_reward += reward
+                    observation_ = np.vstack((observation_, temp_observation))
+                breakpoint
+
                 if not load_checkpoint:
                     agent.store_transition(observation, action,
                                         reward, observation_, done)
@@ -141,19 +146,19 @@ if __name__ == '__main__':
     # NN
     batch_size = 64
 
-    n_actions = 4**nr
+    n_actions = 4
     input_dims = []
     if observation_state == "position":
         input_dims = [HEIGHT*WIDTH]
     elif observation_state == "position_explored":
         input_dims = [HEIGHT*WIDTH*2]
     elif observation_state == "image":
-        input_dims = (1,HEIGHT, WIDTH)
+        input_dims = (nr,HEIGHT, WIDTH)
 
     replace = 1000
 
-    training_sessions = 3
-    episodes = 50000
+    training_sessions = 1
+    episodes = 10000
     positive_rewards = [1]
     positive_exploration_rewards = [0]
     negative_rewards = [0.1]

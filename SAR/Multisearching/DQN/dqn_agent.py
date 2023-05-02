@@ -4,7 +4,7 @@ from deep_q_network import DeepQNetwork
 from replay_memory import ReplayBuffer
 
 class DQNAgent(object):
-    def __init__(self, gamma, epsilon, eps_min, eps_dec, lr, n_actions, input_dims,
+    def __init__(self, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, input_dims,
                  mem_size, batch_size, replace=1000, algo=None, env_name=None, chkpt_dir='tmp/dqn'):
         self.gamma = gamma
         self.epsilon = epsilon
@@ -23,13 +23,13 @@ class DQNAgent(object):
 
         self.memory = ReplayBuffer(mem_size, input_dims, n_actions)
         
-        self.q_eval = DeepQNetwork(self.lr, self.n_actions,
+        self.q_eval = DeepQNetwork(nr, self.lr, self.n_actions,
                                     input_dims=self.input_dims,
                                     fc1_dims=64, fc2_dims=32, fc3_dims=16,
                                     name=self.env_name+'_'+self.algo+'_q_eval',
                                     chkpt_dir=self.chkpt_dir)
 
-        self.q_next = DeepQNetwork(self.lr, self.n_actions,
+        self.q_next = DeepQNetwork(nr, self.lr, self.n_actions,
                                     input_dims=self.input_dims,
                                     fc1_dims=64, fc2_dims=32, fc3_dims=16,
                                     name=self.env_name+'_'+self.algo+'_q_next',

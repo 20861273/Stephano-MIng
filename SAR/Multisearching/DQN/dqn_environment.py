@@ -86,7 +86,7 @@ class Environment:
 
         return grid
 
-    def reset(self, last_start):
+    def reset(self):
         # Clear all visited blocks
         self.grid.fill(0)
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
@@ -105,21 +105,9 @@ class Environment:
         # Set new starting pos
         indices = np.argwhere(self.grid == States.UNEXP.value)
         np.random.shuffle(indices)
-        if last_start != None:
-            last_start += 1
-            if last_start == HEIGHT*WIDTH-1:
-                last_start = 0
-            if last_start % WIDTH == self.goal.x and int(last_start/HEIGHT) == self.goal.y:
-                last_start += 1
-            if last_start == HEIGHT*WIDTH:
-                last_start = 0
-            x = last_start % WIDTH
-            y = int(last_start/HEIGHT)
-            self.starting_pos = Point(x, y)
-        else:
-            for i in range(0, self.nr):
-                self.starting_pos[i] = Point(indices[i,0], indices[i,1])
-                self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+        for i in range(0, self.nr):
+            self.starting_pos[i] = Point(indices[i,0], indices[i,1])
+            self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos.copy()
         self.prev_pos = self.starting_pos.copy()
@@ -129,9 +117,12 @@ class Environment:
         self.score = 0
         self.frame_iteration = 0
         
-        state = self.get_state()
+        state = self.get_state(0)
+        for i_r in range(1,self.nr):
+            temp_state = self.get_state(i_r)
+            state = np.vstack((state, temp_state))
 
-        return state, last_start
+        return state
 
         # visited = np.argwhere(self.grid == States.EXP.value)
         # for i in visited:
@@ -170,13 +161,13 @@ class Environment:
 
         return state
 
-    def step(self, action):
-        action = self.decode_action(action)
+    def step(self, action, selected_r):
+        # action = self.decode_action(action)
         self.frame_iteration += 1
         self.score = 0
 
         # 2. Do action
-        self._move(action) # update the robot
+        self._move(action, selected_r) # update the robot
             
         # 3. Update score and get state
         game_over = False           
@@ -184,7 +175,7 @@ class Environment:
         # 4. Update environment
         self._update_env()
 
-        state = self.get_state()
+        state = self.get_state(selected_r)
 
         self.score += self.calc_reward()
         reward = self.score
@@ -221,7 +212,7 @@ class Environment:
                 score -= self.negative_step_reward
             return score
 
-    def get_state(self):
+    def get_state(self, selected_r=None):
         # Position state
         # position_grid = np.zeros(self.grid.shape)
         # position_grid[self.pos.y, self.pos.x] = 1.0
@@ -244,8 +235,26 @@ class Environment:
         explored = np.argwhere(self.exploration_grid == True)
         for y,x in explored:
             image_grid[y, x] = 0.5
-        for i in range(0, self.nr): image_grid[self.pos[i].y, self.pos[i].x] = 1.0-float(i)/10
+
+        # Centralized simutaneous actions
+        # for i in range(0, self.nr): image_grid[self.pos[i].y, self.pos[i].x] = 1.0-float(i)/10
         
+        # Centralized seperate actions
+        # image_grid = np.zeros((self.nr,) + self.grid.shape)
+        # if selected_r == None:
+        #     for s_r in range(0, self.nr):
+        #         temp_image_grid = np.copy(image_grid)
+        #         for i_r in range(0, self.nr):
+        #             temp_image_grid[self.pos[i_r].y, self.pos[i_r].x] = 0.1
+        #         temp_image_grid[self.pos[s_r].y, self.pos[s_r].x] = 1
+        #         if s_r == 0: pos_image_grid = np.copy(temp_image_grid)
+        #         else: pos_image_grid = np.stack((pos_image_grid, temp_image_grid))
+        #         breakpoint
+        #     image_grid = np.copy(pos_image_grid)
+        # else:
+        for i in range(0, self.nr):
+            image_grid[self.pos[i].y, self.pos[i].x] = 0.1
+        image_grid[self.pos[selected_r].y, self.pos[selected_r].x] = 1
 
         # Inputs:
         # 1. Position state:
@@ -292,37 +301,31 @@ class Environment:
             for i in range(0, self.nr): self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
             
 
-    def _move(self, action):
-        for i in range(0, self.nr):
-            if action[i] == (Direction.LEFT).value:
-                self.direction[i] = action[i]
-            elif action[i] == (Direction.RIGHT).value:
-                self.direction[i] = action[i]
-            elif action[i] == (Direction.UP).value:
-                self.direction[i] = action[i]
-            elif action[i] == (Direction.DOWN).value:
-                self.direction[i] = action[i]
-
-        x = [None]*self.nr
-        y = [None]*self.nr
-        for i in range(0, self.nr):
-            x[i] = self.pos[i].x
-            y[i] = self.pos[i].y
-            if self.direction[i] == (Direction.RIGHT).value:
-                x[i] += 1
-            elif self.direction[i] == (Direction.LEFT).value:
-                x[i] -= 1
-            elif self.direction[i] == (Direction.DOWN).value:
-                y[i] += 1
-            elif self.direction[i] == (Direction.UP).value:
-                y[i] -= 1
-
-        for i in range(0, self.nr):
-            if self._is_collision(Point(x[i],y[i])):
-                self.pos[i] = self.pos[i]
-                self.prev_pos[i] = self.pos[i]
-                self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
-            else:
-                self.prev_pos[i] = self.pos[i]
-                self.pos[i] = Point(x[i],y[i])
-                self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+    def _move(self, action, selected_r):
+        if action == (Direction.LEFT).value:
+            self.direction = action
+        elif action == (Direction.RIGHT).value:
+            self.direction = action
+        elif action == (Direction.UP).value:
+            self.direction = action
+        elif action == (Direction.DOWN).value:
+            self.direction = action
+        x = self.pos[selected_r].x
+        y = self.pos[selected_r].y
+        if self.direction == (Direction.RIGHT).value:
+            x += 1
+        elif self.direction == (Direction.LEFT).value:
+            x -= 1
+        elif self.direction == (Direction.DOWN).value:
+            y += 1
+        elif self.direction == (Direction.UP).value:
+            y -= 1
+        if self._is_collision(Point(x,y)):
+            self.pos[selected_r] = self.pos[selected_r]
+            self.prev_pos[selected_r] = self.pos[selected_r]
+            self.exploration_grid[self.prev_pos[selected_r].y, self.prev_pos[selected_r].x] = True
+        else:
+            self.unexplored = False
+            self.prev_pos[selected_r] = self.pos[selected_r]
+            self.pos[selected_r] = Point(x,y)
+            self.exploration_grid[self.prev_pos[selected_r].y, self.prev_pos[selected_r].x] = True
