@@ -103,8 +103,8 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
     file_name = "rewards%s.json" %(str(i_exp))
     file_name = os.path.join(save_path, file_name)
     write_json(ts_rewards, file_name)
-    spawning = "iterative"
-    if last_start == None: spawning = "random"
+    spawning = "random"
+    # if last_start == None: spawning = ""
     hp = "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s" %(\
         str(training_sessions), \
         str(learning_rate),\
@@ -125,9 +125,9 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
-    off_policy = True
-    policy_num = [0,1]
-    testing_iterations = 100
+    off_policy = False
+    policy_num = [0]
+    testing_iterations = 1000
 
     nr = 2
 
@@ -230,7 +230,7 @@ if __name__ == '__main__':
             file_name = "hyperparameters%s.json" %(str(policy))
             ts, lr, dr, er, pr, ner, per, nsr, ms, r = read_hp_json(load_path, file_name, policy)
             
-            agent = DQNAgent(gamma=dr, epsilon=0, eps_min=0, eps_dec=0, lr=lr,
+            agent = DQNAgent(nr, gamma=dr, epsilon=0, eps_min=0, eps_dec=0, lr=lr,
                         n_actions=n_actions, input_dims=input_dims, mem_size=50000,
                         batch_size=batch_size, replace=r,
                         algo='DQNAgent', env_name=env_name, chkpt_dir=models_path)
@@ -276,19 +276,20 @@ if __name__ == '__main__':
             trajectory_grid = np.empty(env.grid.shape).tolist()
             for i in range(0, testing_iterations):
                 if i % 1000 == 0 and i != 0: print("%.2f" %(float(cnt)/float(i)*100))
-                observation, last_start = env.reset(last_start=None)
+                observation = env.reset()
 
                 trajectory = [env.goal]
 
                 done = False
                 actions = []
-                
-                observation = env.get_state()
             
                 for step in range(int(ms)):
                     action = agent.choose_action(observation)
-                    actions.append(action)
-                    observation_, reward, done, _ = env.step(action)
+                    observation_, reward, done, info = env.step(action, 0)
+                    for i_r in range(1,nr):
+                        action = agent.choose_action(observation)
+                        temp_observation, reward, done, info = env.step(action, i_r)
+                        observation_ = np.vstack((observation_, temp_observation))
                     observation = observation_
                     trajectory.append((env.prev_pos, action))
                     if done:
@@ -306,7 +307,7 @@ if __name__ == '__main__':
             # np.savetxt(file_name, step_grid, fmt="%.2f")
             # cnt = 0
             # for i, traj in enumerate(trajectories):
-            for j, t in enumerate(trajectories):
-                if len(t) != 0:
-                    PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
-                    PR.print_row(t, save_path, i*env.grid.shape[0]+j, env, round(p, 2), policy, testing_iterations)
+            # for j, t in enumerate(trajectories):
+            #     if len(t) != 0:
+            #         PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
+            #         PR.print_row(t, save_path, i*env.grid.shape[0]+j, env, round(p, 2), policy, testing_iterations)
