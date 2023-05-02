@@ -120,9 +120,9 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
-    off_policy = False
+    off_policy = True
     policy_num = [0,1]
-    testing_iterations = 10000
+    testing_iterations = 100
 
     nr = 2
 
@@ -152,12 +152,12 @@ if __name__ == '__main__':
 
     replace = 1000
 
-    training_sessions = 10
-    episodes = 20000
+    training_sessions = 3
+    episodes = 50000
     positive_rewards = [1]
-    positive_exploration_rewards = [0,0.1]
-    negative_rewards = [0]
-    negative_step_rewards = [0]
+    positive_exploration_rewards = [0]
+    negative_rewards = [0.1]
+    negative_step_rewards = [0.1]
     max_steps = [200]
 
     num_experiences =     len(learning_rate) \
@@ -267,9 +267,7 @@ if __name__ == '__main__':
             for i in np.ndindex(temp_step_grid.shape): temp_step_grid[i] = []
             temp_step_grid = temp_step_grid.tolist()
             cnt = 0
-            trajectories = np.empty(env.grid.shape, dtype=object)
-            for i in np.ndindex(trajectories.shape): trajectories[i] = []
-            trajectories = trajectories.tolist()
+            trajectories = []
             trajectory_grid = np.empty(env.grid.shape).tolist()
             for i in range(0, testing_iterations):
                 if i % 1000 == 0 and i != 0: print("%.2f" %(float(cnt)/float(i)*100))
@@ -291,7 +289,8 @@ if __name__ == '__main__':
                     if done:
                         cnt += 1
                         break
-                    
+                if step == int(ms)-1 and not done:
+                    trajectories.append(trajectory)
             # p = cnt/((HEIGHT*WIDTH*testing_iterations))*100
             p = cnt/(testing_iterations)*100
             # print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, HEIGHT*WIDTH*testing_iterations, p))
@@ -302,7 +301,7 @@ if __name__ == '__main__':
             # np.savetxt(file_name, step_grid, fmt="%.2f")
             # cnt = 0
             # for i, traj in enumerate(trajectories):
-            #     for j, t in enumerate(traj):
-            #         if len(t) != 0:
-            #             PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
-            #             PR.print_row(t, save_path, i*env.grid.shape[0]+j, env, round(p, 2), policy, testing_iterations)
+            for j, t in enumerate(trajectories):
+                if len(t) != 0:
+                    PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
+                    PR.print_row(t, save_path, i*env.grid.shape[0]+j, env, round(p, 2), policy, testing_iterations)

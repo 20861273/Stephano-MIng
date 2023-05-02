@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 8
+WIDTH = 8
 
 # DENSITY = 30 # percentage
 

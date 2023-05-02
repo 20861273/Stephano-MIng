@@ -121,7 +121,7 @@ def dqn(training_sessions, episodes, discount_rate, epsilon,
 if __name__ == '__main__':
     # Testing: for on-policy runs
     off_policy = True
-    policy_num = [8]
+    policy_num = [0,1]
     testing_iterations = 10000
 
     # states:
@@ -132,7 +132,7 @@ if __name__ == '__main__':
 
     # initialize hyperparameters
     learning_rate = [0.0001]
-    discount_rate = [0.9,0.95]
+    discount_rate = [0.9]
     epsilon = [0.01]
     eps_min = [0.01]
 
@@ -150,8 +150,8 @@ if __name__ == '__main__':
 
     replace = 1000
 
-    training_sessions = 10
-    episodes = 10000
+    training_sessions = 3
+    episodes = 100000
     positive_rewards = [1]
     positive_exploration_rewards = [0]
     negative_rewards = [0.1]#0,0.1,
@@ -311,9 +311,9 @@ if __name__ == '__main__':
                                 observation = observation_
                                 trajectory.append((env.prev_pos, action))
                                 if done:
-                                    trajectories[y][x] = trajectory
                                     cnt += 1
                                     break
+                            trajectories[y][x] = trajectory
                             temp_step_grid[y][x].append(step)
                     step_grid[y,x] = sum(temp_step_grid[y][x])/len(temp_step_grid[y][x])
                     

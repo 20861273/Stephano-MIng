@@ -75,9 +75,9 @@ class print_results:
 
     #     plt_title = "DQN Results: Step %s" %(str(step)) 
     #     plt.title(plt_title)
-    def get_actions(self, traj, pos):
+    def get_actions(self, traj, pos, r):
         for p, act in traj:
-            if p == pos:
+            if p[r] == pos[r]:
                 yield act
     
     def print_row(self, trajectory, dir_traj, cnt, env, p, policy, ti):
@@ -116,7 +116,7 @@ class print_results:
 
         clabel = ""
         grid = np.zeros((self.rows, self.cols))
-        
+        print(trajectory[0])
         goal = (trajectory[0].x, trajectory[0].y)
         del trajectory[0]
         ax.fill([goal[0] + 0.5, goal[0] + 1.5, goal[0] + 1.5, goal[0] + 0.5], 
@@ -125,35 +125,37 @@ class print_results:
                     alpha=0.5)
         visited = []
         for i, t in enumerate(trajectory):
-            if t[0] in visited: continue
-            visited.append(t[0])
-            x, y = t[0].x, t[0].y
-            label = []
+            for r_i in range(0, len(t)):
+                if t[0][r_i] in visited: continue
+                visited.append(t[0][r_i])
+                x, y = t[0][r_i].x, t[0][r_i].y
+                label = []
 
-            all_actions_on_location = list(self.get_actions(trajectory, t[0]))
-            
-            for action in all_actions_on_location:
-                if action == 0:
-                    clabel = ">"
-                    grid[y][x] += 1
-                elif action == 1:
-                    clabel = "<"
-                    grid[y][x] += 1
-                elif action == 2:
-                    clabel = "v"
-                    grid[y][x] += 1
-                elif action == 3:
-                    clabel = "^"
-                    grid[y][x] += 1
+                all_actions_on_location = list(self.get_actions(trajectory, t[0], r_i))
                 
-                if grid[y][x] % 3 == 0 and grid[y][x] != 0:
-                    temp = "\n" + clabel
-                    label.append(temp)
-                else:
-                    label.append(clabel)
+                for action in all_actions_on_location:
+                    action = env.decode_action(action)
+                    if action[r_i] == 0:
+                        clabel = ">"
+                        grid[y][x] += 1
+                    elif action[r_i] == 1:
+                        clabel = "<"
+                        grid[y][x] += 1
+                    elif action[r_i] == 2:
+                        clabel = "v"
+                        grid[y][x] += 1
+                    elif action[r_i] == 3:
+                        clabel = "^"
+                        grid[y][x] += 1
+                    
+                    if grid[y][x] % 3 == 0 and grid[y][x] != 0:
+                        temp = "\n" + clabel
+                        label.append(temp)
+                    else:
+                        label.append(clabel)
 
             label = " | ".join(label)
-            if (x,y) == (trajectory[0][0].x, trajectory[0][0].y):
+            if (x,y) == (trajectory[0][0][r_i].x, trajectory[0][0][r_i].y):
                 ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
                     [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
                     facecolor="blue", 

@@ -242,8 +242,8 @@ class Environment:
         # Image state
         image_grid = np.zeros(self.grid.shape)
         explored = np.argwhere(self.exploration_grid == True)
-        # for y,x in explored:
-        #     image_grid[y, x] = 0.5
+        for y,x in explored:
+            image_grid[y, x] = 0.5
         for i in range(0, self.nr): image_grid[self.pos[i].y, self.pos[i].x] = 1.0-float(i)/10
         
 
