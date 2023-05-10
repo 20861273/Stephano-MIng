@@ -19,7 +19,7 @@ import time
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 20
+termination_time = 10
 HH = False
 draw = True
 
@@ -86,7 +86,6 @@ class GridWithWeights(object):
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        self.weights = {}
         self.explored_cells = []
 
     def in_bounds(self, id):
@@ -108,7 +107,9 @@ class GridWithWeights(object):
         return results
 
 def closest_unvisited(visited, current):
-    distances = {}
+    distances_to_next = {}
+    distances_to_start = {}
+    reachable_unexplored_cells= []
     # gets the distance to all unvisited blocks within reach
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -120,13 +121,15 @@ def closest_unvisited(visited, current):
                 # distance = get_distance(Point(x,y), current[6])
 
                 if distance <= current[2]:
-                    distances[Point(x,y)] = distance
+                    distances_to_next[Point(x,y)] = dist_to_u
+                    distances_to_start[Point(x,y)] = dist_to_s
+                    reachable_unexplored_cells.append(Point(x,y))
     
     # Check if unexplored blocks reachable
-    if not bool(distances):
-        return None, 0
+    if not bool(distances_to_next):
+        return None, None, reachable_unexplored_cells
     else:
-        return min(distances, key=distances.get), len(distances)#/(HEIGHT*WIDTH)
+        return min(distances_to_next, key=distances_to_next.get), min(distances_to_start, key=distances_to_start.get), reachable_unexplored_cells
 
 def get_distance(end, start):
     return abs(start.x - end.x) + abs(start.y - end.y)
@@ -162,6 +165,19 @@ def check_unexplored(next_node, explored):
         return 0
     else:
         return 1
+    
+def set_explored_cells(explored):
+    for cell in explored:
+        if cell not in graph.explored_cells:
+            graph.explored_cells.append(cell)
+
+def get_explored_so_far(branch):
+    explored_so_far = 0
+    if len(graph.explored_cells) == 0: return explored_so_far
+    for cell in branch:
+        if cell not in graph.explored_cells:
+            explored_so_far += 1
+    return explored_so_far
 
 # A* algorithm
 def a_star(graph, start, termination_time):
@@ -178,8 +194,8 @@ def a_star(graph, start, termination_time):
     cycle_closed_set = {}
     explored.append(start)
     while True:
-        if len(cycle_closed_set) != 0:
-            draw_tree(cycle_closed_set, len(visited_list), save_path, ax=None)
+        # if len(cycle_closed_set) != 0:
+        #     draw_tree(cycle_closed_set, len(visited_list), save_path, ax=None)
         cycle_closed_set = {}
         printer = print_results(env.grid, HEIGHT, WIDTH)
         # 0: id, 1: parent_id, 2: fuel, 3: score_to_come, 4: score_to_go, 5: total_score, 6: position
@@ -190,11 +206,11 @@ def a_star(graph, start, termination_time):
             for p in row:
                 explored.append(p)
         
-        closest_unexplored, reachable_unexplored_cells = closest_unvisited(explored, current)
-        if closest_unexplored == None:
+        closest_unexplored_from_current, closest_unexplored_from_start, reachable_unexplored_cells = closest_unvisited(explored, current)
+        if closest_unexplored_from_current == None:
             return closed_set, last_ids, visited_list, times
 
-        if current[2] >= get_distance(current[6], closest_unexplored)*2:
+        if current[2] >= get_distance(current[6], closest_unexplored_from_current)*2:
             current[4] = 1
         else:
             return closed_set, last_ids, visited_list, times
@@ -205,6 +221,7 @@ def a_star(graph, start, termination_time):
         closed_set[current[0]] = (tuple(current[1:]))
         cycle_closed_set[current[0]] = (tuple(current[1:]))
         open_set.append(current)
+        set_explored_cells(explored)
         
         while len(open_set) > 0:
             current = open_set[-1]
@@ -212,12 +229,13 @@ def a_star(graph, start, termination_time):
 
             branch_from_current = reconstruct_path(closed_set, current)
             explored_from_current = explored+branch_from_current
+            closest_unexplored_from_current, closest_unexplored_from_start, reachable_unexplored_cells = closest_unvisited(explored, current)
 
             # if used all fuel and drone is back at initial position, then goal reached (allow a margin of 1 fuel for even/odd number of moves)
             # if current[2] <= 1 and current[6] == start:
             # if no more reachable unexplored cells and drone is back at initial position, then goal reached
             if (current[6] == start) \
-            and (current[2] < get_distance(current[6], closest_unexplored) + get_distance(closest_unexplored, current[6])):
+            and len(reachable_unexplored_cells) == 0:
                 # reconstruct best coverage path by starting at last state and iterating backwards through parents states
                 path = reconstruct_path(closed_set, current)
                 # Debug purposes
@@ -238,6 +256,7 @@ def a_star(graph, start, termination_time):
                     breakpoint                   
                 
                 next_fuel = current[2] - 1
+                explored_so_far = get_explored_so_far(branch_from_current)
 
                 # check whether there is enough fuel left to get back to the start position from the next state
                 # if the initial position cannot be reached from the next state, then do not add the next state to the tree or the priority queue
@@ -245,26 +264,53 @@ def a_star(graph, start, termination_time):
                 if next_fuel < get_distance(next_node, start):
                     # do not add next_state to tree or priority queue
                     continue
+
+                closest_unexplored_from_next, closest_unexplored_from_start, reachable_unexplored_cells = closest_unvisited(explored_from_current, (0, 0, next_fuel, 0, 0, 0, next_node))
+                
+                # if the next state has not been explored add 1 to explored so far
+                if next_node not in explored_from_current:
+                    explored_so_far += 1
+                elif len(reachable_unexplored_cells) == 0:
+                    breakpoint
+                
+                if len(reachable_unexplored_cells) == 0:
+                    # do not add next_state to tree or priority queue
+                    next_score =    (                                                       \
+                                    explored_so_far                                         \
+                                    +len(reachable_unexplored_cells)                        \
+                                    )                                                       \
+                                    /                                                       \
+                                    (                                                       \
+                                    termination_time-next_fuel                              \
+                                    +get_distance(start, next_node)                         \
+                                    )
                 else:
-                    # the score to come is the score to come so far plus the unexplored status (1 or 0) of the next state
-                    next_score_to_come = trunc(current[3]) + check_unexplored(next_node, explored_from_current)
-
-                # the score to go is the number of unexplored cell that the drone can reach and also return to the initial position afterwards
-                # next_score_to_go = reachable_unexplored_cells
-                closest_unexplored_from_next, reachable_unexplored_cells_from_next = closest_unvisited(explored_from_current, (0, 0, next_fuel, 0, 0, 0, next_node))
-                next_score_to_go = reachable_unexplored_cells_from_next
-
-                # the total score is the sum of the score to come and the score to go
-                next_score = next_score_to_come + next_score_to_go
+# next_score =
+#                              unexplored cells explored so far + number of reachable cells from here
+#               -------------------------------------------------------------------------------------------------
+#(distance travelled so far) + (distance between current position and closest unexplored cell) + (distance betweem home position and reachable unexplored cell closet to it)
+                
+                    next_score =    (                                                       \
+                                    explored_so_far                                         \
+                                    +len(reachable_unexplored_cells)              \
+                                    )                                                       \
+                                    /                                                       \
+                                    (                                                       \
+                                    termination_time-next_fuel                              \
+                                    +get_distance(next_node, closest_unexplored_from_next)  \
+                                    +(len(reachable_unexplored_cells)-1)                         \
+                                    +get_distance(start, closest_unexplored_from_start)     \
+                                    )
 
                 # increment the state ID, record the parent state ID, and add the next state to the tree and the priority queue
                 id = id + 1
                 next_id = id
                 next_parentID = current[0]
-                next_state = (next_id, next_parentID, next_fuel, next_score_to_come, next_score_to_go, next_score, next_node)
+                next_state = (next_id, next_parentID, next_fuel, 0, 0, next_score, next_node)
                 closed_set[id] = (next_state[1:])
                 cycle_closed_set[id] = (next_state[1:])
                 open_set.append(next_state)
+                
                 if save_data:
                     file_name = "closed_set%d.json" %(next_id)
                     file_path = os.path.join(save_path, file_name)

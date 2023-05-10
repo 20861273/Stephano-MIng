@@ -99,3 +99,5 @@ class DQNAgent(object):
         self.learn_step_counter += 1
 
         self.decrement_epsilon()
+
+        return loss

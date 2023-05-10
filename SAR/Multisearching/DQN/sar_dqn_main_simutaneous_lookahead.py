@@ -4,7 +4,7 @@
 import numpy as np
 from dqn_agent import DQNAgent
 from utils import plot_learning_curve, write_json, read_hp_json, read_json
-from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
+from dqn_environment_simutaneous_lookahead import Environment, HEIGHT, WIDTH, Point, States, Direction
 from datetime import datetime
 import os
 import torch as T
@@ -45,23 +45,37 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
             done = False
             observation = env.reset()
             breakpoint
+            action = [0]*nr
             for step in range(max_steps):
+                lookahead_observatoin = np.copy(observation)
                 for i_r in range(0,nr):
-                    action = agent.choose_action(observation)
-                    observation_, reward, done, info = env.step(action, i_r)
-                    episode_reward += reward
+                    action[i_r] = agent.choose_action(lookahead_observatoin[i_r])
+                    if i_r == None:
+                        next_r = 0
+                    else:
+                        next_r = i_r + 1
+                        if next_r % nr == 0: next_r = 0
+                    lookahead_observatoin[next_r] = env.get_next_state(action, \
+                                                                        env.exploration_grid, \
+                                                                        env.pos, \
+                                                                        next_r, 
+                                                                        i_r)
+                    breakpoint
+                
+                observation_, reward, done, info = env.step(action)
+                episode_reward += reward
 
-                    if not load_checkpoint:
-                        agent.store_transition(observation, action,
-                                            reward, observation_, done)
+                if not load_checkpoint:
+                    for i_r in range(0,nr):
+                        agent.store_transition(observation[i_r], action[i_r],
+                                            reward, observation_[i_r], done)
                         agent.learn()
 
-                    observation = observation_
+                observation = observation_
 
-                    if done:
-                        cntr += 1
-                        break
-                if done: break
+                if done:
+                    cntr += 1
+                    break
             rewards.append(episode_reward)
             steps.append(step)
 
@@ -75,7 +89,7 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
                     T.save(agent.q_eval.state_dict(),file_name)
                 best_reward = avg_reward
 
-            if i_episode % 50==0 or i_episode == episodes-1 and i_episode != 0:
+            if i_episode % 5==0 or i_episode == episodes-1 and i_episode != 0:
                 print('episode= ', i_episode,
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
@@ -123,8 +137,9 @@ def dqn(nr, training_sessions, episodes, discount_rate, epsilon,
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
-    off_policy = False
-    show_plot = False
+    off_policy = True
+    show_plot = True
+    save_plot = False
     policy_num = [0]
     testing_iterations = 10000
 
@@ -139,8 +154,8 @@ if __name__ == '__main__':
     # initialize hyperparameters
     learning_rate = [0.0001]
     discount_rate = [0.9]
-    epsilon = [0.01]
-    eps_min = [0.01]
+    epsilon = [0.01, 0.05]
+    eps_min = [0.01, 0.05]
 
     # NN
     batch_size = 64
@@ -160,9 +175,9 @@ if __name__ == '__main__':
     episodes = 20000
     positive_rewards = [1]
     positive_exploration_rewards = [0]
-    negative_rewards = [0.1]
-    negative_step_rewards = [0.01]
-    max_steps = [200]
+    negative_rewards = [0.01]
+    negative_step_rewards = [0.001]
+    max_steps = [400]
 
     num_experiences =     len(learning_rate) \
                         * len(discount_rate) \
@@ -247,49 +262,65 @@ if __name__ == '__main__':
             steps = []
             cnt = 0
             trajectories = []
+            fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
             for i in range(0, testing_iterations):
-                if i % 1000 == 0 and i != 0:
+                if i % 100 == 0 and i != 0:
                     print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
                 observation = env.reset()
 
                 trajectory = []
 
                 done = False
-                actions = []
+                
 
                 if show_plot:
-                    PR.print_trajectories(save_path, policy, env)
-                    plt.close()
+                    PR.print_trajectories(ax, save_path, policy, env)
+                    if save_plot:
+                        file_name = "p%dtrajectory%d%d.png" %(policy, i, 0)
+                        plt.savefig(os.path.join(save_path, file_name))
             
                 for step in range(int(ms)):
                     actions = []
+                    action = [0]*nr
+                    lookahead_observatoin = np.copy(observation)
                     for i_r in range(0,nr):
-                        action = agent.choose_action(observation)
-                        actions.append(action)
-                        trajectory.append((env.pos[i_r], action, i_r))
-                        observation_, reward, done, info = env.step(action, i_r)
+                        action[i_r] = agent.choose_action(lookahead_observatoin[i_r])
+                        if i_r == None:
+                            next_r = 0
+                        else:
+                            next_r = i_r + 1
+                            if next_r % nr == 0: next_r = 0
+                        lookahead_observatoin[next_r] = env.get_next_state(action, \
+                                                                            env.exploration_grid, \
+                                                                            env.pos, \
+                                                                            next_r, 
+                                                                            i_r)
+                    actions.append(action)
+                    trajectory.append((env.pos[i_r], action, i_r))
+                    observation_, reward, done, info = env.step(action)
 
-                        if not load_checkpoint:
-                            agent.store_transition(observation, action,
-                                                reward, observation_, done)
-                            agent.learn()
+                    observation = observation_
 
-                        observation = observation_
-
-                        if done:
-                            if show_plot:
-                                PR.print_trajectories(save_path, policy, env, actions)
-                                plt.close()
-                            trajectories.append(trajectory)
-                            cnt += 1
-                            break
-                    if done: break
+                    if done:
+                        if save_plot:
+                            plt.cla()
+                            PR.print_trajectories(ax, save_path, policy, env, actions[0])
+                            if save_path:
+                                file_name = "p%dtrajectory%d%d.png" %(policy, i, step)
+                                plt.savefig(os.path.join(save_path, file_name))
+                        trajectories.append(trajectory)
+                        cnt += 1
+                        break
                     if show_plot:
-                        PR.print_trajectories(save_path, policy, env, actions)
-                        plt.close()
+                        plt.cla()
+                        PR.print_trajectories(ax, save_path, policy, env, actions[0])
+                        if save_plot:
+                            file_name = "p%dtrajectory%d%d.png" %(policy, i, step)
+                            plt.savefig(os.path.join(save_path, file_name))
+                steps.append(step)
                 # if step == int(ms)-1 and not done:
                 #     trajectories.append(trajectory)
-                steps.append(step)
 
             p = cnt/(testing_iterations)*100
             print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, testing_iterations, p))
+            print("Average steps: %.2f" %(np.mean(np.array(steps))))

@@ -33,10 +33,18 @@ Point = namedtuple('Point', 'x, y')
 
 class Environment:
     
-    def __init__(self, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward):
+    def __init__(self, nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward):
+        self.nr = nr
+
+        # Set robot(s) position
+        self.pos = [Point(0,0)]*self.nr
+        self.prev_pos = [Point(0,0)]*self.nr
+        self.starting_pos = [Point(0,0)]*self.nr
+        
         # Generates grid (Grid[y,x])
         self.grid = self.generate_grid()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
+        self.goal_state = np.ones((HEIGHT, WIDTH), dtype=np.bool_)
 
         # Set robot(s) position
         self.pos = self.starting_pos
@@ -70,13 +78,16 @@ class Environment:
         # Set robot(s) start position
         indices = np.argwhere(grid == States.UNEXP.value)
         np.random.shuffle(indices)
-        self.starting_pos = Point(indices[0,1], indices[0,0])
-
-        grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
+        for i in range(0, self.nr):
+            self.starting_pos[i] = Point(indices[i,0], indices[i,1])
+            grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+            
+        self.pos = self.starting_pos.copy()
+        self.prev_pos = self.starting_pos.copy()
 
         return grid
 
-    def reset(self, last_start):
+    def reset(self):
         # Clear all visited blocks
         self.grid.fill(0)
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
@@ -94,33 +105,22 @@ class Environment:
         # Setup agent
         # Set new starting pos
         indices = np.argwhere(self.grid == States.UNEXP.value)
-        np.random.shuffle(indices)
-        if last_start != None:
-            last_start += 1
-            if last_start == HEIGHT*WIDTH-1:
-                last_start = 0
-            if last_start % WIDTH == self.goal.x and int(last_start/HEIGHT) == self.goal.y:
-                last_start += 1
-            if last_start == HEIGHT*WIDTH:
-                last_start = 0
-            x = last_start % WIDTH
-            y = int(last_start/HEIGHT)
-            self.starting_pos = Point(x, y)
-        else:
-            self.starting_pos = Point(indices[0,1], indices[0,0])
-        self.pos = self.starting_pos
-        self.prev_pos = self.pos
-        self.grid[self.pos.y, self.pos.x] = States.ROBOT.value
+        for i in range(0, self.nr):
+            np.random.shuffle(indices)
+            self.starting_pos[i] = Point(indices[i,1], indices[i,0])
+            self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+            
+        self.pos = self.starting_pos.copy()
+        self.prev_pos = self.starting_pos.copy()
 
-        self.direction = (Direction.RIGHT).value
+        self.direction = [(Direction.RIGHT).value for i in range(self.nr)]
                 
         self.score = 0
         self.frame_iteration = 0
         
         state = self.get_state()
 
-        return state, last_start
-
+        return state
 
         # visited = np.argwhere(self.grid == States.EXP.value)
         # for i in visited:
@@ -159,22 +159,16 @@ class Environment:
 
         return state
 
-    def step(self, action):
-        #print(self.pos, self.prev_pos, action)
-        #print(self.grid,"\n")
+    def step(self, actions):
+        # action = self.decode_action(action)
         self.frame_iteration += 1
         self.score = 0
+
         # 2. Do action
-        self._move(action) # update the robot
+        self._move(actions) # update the robot
             
         # 3. Update score and get state
-        # self.score -= 0.1
-        game_over = False
-
-        # state = self.get_state()
-        # goal_state = self.get_goal_state()
-        # state = np.append(state, goal_state, axis=0)
-           
+        game_over = False           
 
         # 4. Update environment
         self._update_env()
@@ -184,59 +178,48 @@ class Environment:
         self.score += self.calc_reward()
         reward = self.score
 
-        num_explored = len(np.argwhere(self.grid == States.EXP.value))
-
         # 5. Check exit condition
-        if self.pos == self.goal:
-        # if num_explored == WIDTH*HEIGHT:
+        if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
+        # if (self.exploration_grid == self.goal_state).all():
             self.score += self.positive_reward
             reward = self.score
             game_over = True
-            # cntr += 1
-            # print(cntr)
-            return state, reward, game_over, self.score#, cntr
+            return state, reward, game_over, self.score
 
         # 6. return game over and score
-        return state, reward, game_over, self.score#, cntr
+        return state, reward, game_over, self.score
+    
+    def decode_action(self, action):
+        temp_action = action
+        actions_completed = [0] * self.nr
+        for i in range(self.nr):
+            digit = temp_action % 4
+            person = self.nr - i - 1
+            actions_completed[person] = digit
+            temp_action //= 4
+        return actions_completed
 
     def calc_reward(self):
-        if self.unexplored:
-            # grid = self.grid.copy()
-            # grid[self.goal.y, self.goal.x] = States.UNEXP.value
-            # grid[self.pos.y, self.pos.x] = States.UNEXP.value
-            # explored = np.argwhere(self.grid == States.EXP.value)
-            # return (len(explored)/(HEIGHT*WIDTH))*self.positive_reward
-            return self.positive_exploration_reward
-        else:
-            return -self.negative_step_reward
-    
-    def get_position_state(self):
-        grid = np.zeros(self.grid.shape)
-        grid[self.pos.y, self.pos.x] = 1.0
+        temp_arr = np.array([False]*self.nr)
+        score = 0
+        for i in range(0, self.nr):
+            if self.exploration_grid[self.pos[i].y, self.pos[i].x] == False:
+                temp_arr[i] = True
+            if temp_arr[i] == True:
+                score += self.positive_exploration_reward
+            else:
+                score -= self.negative_step_reward
+            return score
 
-        return grid.flatten()
-
-    def get_goal_state(self):
-        grid = np.zeros(self.grid.shape, dtype=np.float32)
-        grid[self.goal.y, self.goal.x] = States.GOAL.value
-        return grid.flatten()
-    
-    def get_state_unex(self):
-        grid = np.zeros(self.grid.shape)
-        explored = np.argwhere(self.grid == States.EXP.value)
-        for y,x in explored:
-            grid[y, x] = 1.0
-        return grid.flatten()
-
-    def get_state(self):
-        # # Position state
+    def get_state(self, selected_r=None):
+        # Position state
         # position_grid = np.zeros(self.grid.shape)
         # position_grid[self.pos.y, self.pos.x] = 1.0
         # position_grid = position_grid.flatten()
 
         # # Exploreation state
         # exploration_grid = np.zeros(self.grid.shape)
-        # explored = np.argwhere(self.grid == States.EXP.value)
+        # explored = np.argwhere(self.exploration_grid == True)
         # for y,x in explored:
         #     exploration_grid[y, x] = 1.0
         # exploration_grid = exploration_grid.flatten()
@@ -247,20 +230,30 @@ class Environment:
         # goal_grid = goal_grid.flatten()
 
         # Image state
-        # Generates location map. Position cell is equal to 1
-        location_map = np.zeros(self.grid.shape)
-        location_map[self.pos.y, self.pos.x] = 1
-
         # Generates exploration map. All explored cells are 1
         exploration_map = np.zeros(self.grid.shape)
         explored = np.argwhere(self.exploration_grid == True)
         for y,x in explored:
             exploration_map[y, x] = 1
 
+        # Generates location map. Position cell is equal to 1
+        location_map = np.zeros((self.nr,) + self.grid.shape)
+        for r_i in range(self.nr):
+            location_map[r_i][self.pos[r_i].y, self.pos[r_i].x] = 1
+
+        # Generates other locations map. Other positions cells are equal to 1
+        other_locations_map = np.zeros((self.nr,) + self.grid.shape)
+        for r_i in range(self.nr):
+            for or_i in range(self.nr):
+                if or_i == r_i: continue
+                other_locations_map[r_i][self.pos[or_i].y, self.pos[or_i].x] = 1
+
         # Generate image map
-        image_map = np.zeros((2,) + self.grid.shape)
-        image_map[0] = location_map
-        image_map[1] = exploration_map
+        image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+        for r_i in range(self.nr):
+            image_map[r_i][0] = location_map[r_i]
+            image_map[r_i][1] = other_locations_map[r_i]
+            image_map[r_i][2] = exploration_map
 
         # Inputs:
         # 1. Position state:
@@ -299,39 +292,50 @@ class Environment:
     def _update_env(self):
         if self.frame_iteration == 0:
             # Update robot position(s) on grid
-            self.grid[self.pos.y,self.pos.x] = States.ROBOT.value
+            for i in range(0, self.nr):
+                self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
         else:
             # Update robot position(s) on grid
-            self.grid[self.prev_pos.y,self.prev_pos.x] = States.EXP.value
-            self.grid[self.pos.y,self.pos.x] = States.ROBOT.value
+            for i in range(0, self.nr): self.grid[self.prev_pos[i].y,self.prev_pos[i].x] = States.EXP.value
+            for i in range(0, self.nr): self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
             
 
     def _move(self, action):
-        if action == (Direction.LEFT).value:
-            self.direction = action
-        elif action == (Direction.RIGHT).value:
-            self.direction = action
-        elif action == (Direction.UP).value:
-            self.direction = action
-        elif action == (Direction.DOWN).value:
-            self.direction = action
-        x = self.pos.x
-        y = self.pos.y
-        if self.direction == (Direction.RIGHT).value:
-            x += 1
-        elif self.direction == (Direction.LEFT).value:
-            x -= 1
-        elif self.direction == (Direction.DOWN).value:
-            y += 1
-        elif self.direction == (Direction.UP).value:
-            y -= 1
-        if self._is_collision(Point(x,y)):
-            self.pos = self.pos
-            self.prev_pos = self.pos
-            self.unexplored = False
-        else:
-            self.unexplored = False
-            self.prev_pos = self.pos
-            self.pos = Point(x,y)
-            if self.grid[self.pos.y, self.pos.x] == States.UNEXP.value:
-                self.unexplored = True
+        # Get directions
+        for i in range(0, self.nr):
+            if action[i] == (Direction.LEFT).value:
+                self.direction[i] = action[i]
+            elif action[i] == (Direction.RIGHT).value:
+                self.direction[i] = action[i]
+            elif action[i] == (Direction.UP).value:
+                self.direction[i] = action[i]
+            elif action[i] == (Direction.DOWN).value:
+                self.direction[i] = action[i]
+
+        # Set temp x and y variables
+        x = [None]*self.nr
+        y = [None]*self.nr
+
+        # Calculate new location
+        for i in range(0, self.nr):
+            x[i] = self.pos[i].x
+            y[i] = self.pos[i].y
+            if self.direction[i] == (Direction.RIGHT).value:
+                x[i] += 1
+            elif self.direction[i] == (Direction.LEFT).value:
+                x[i] -= 1
+            elif self.direction[i] == (Direction.DOWN).value:
+                y[i] += 1
+            elif self.direction[i] == (Direction.UP).value:
+                y[i] -= 1
+
+        # Set position to new location
+        for i in range(0, self.nr):
+            if self._is_collision(Point(x[i],y[i])):
+                self.pos[i] = self.pos[i]
+                self.prev_pos[i] = self.pos[i]
+                self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+            else:
+                self.prev_pos[i] = self.pos[i]
+                self.pos[i] = Point(x[i],y[i])
+                self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True

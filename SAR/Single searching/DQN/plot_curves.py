@@ -24,10 +24,14 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
     fig=plt.figure()
     ax=fig.add_subplot(111)
 
+    print("0", np.mean(mean_rewards[0]))# "1", np.mean(mean_rewards[1]))
+
     l = []
     for i in range(len(scores)):
+        if i==0: text="goal state: coverage"
+        else: text="goal state: missing person"
         l.append("%s:  e=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s, α=%s, γ=%s, ϵ=%s" %(
-                str(i),
+                text,
                 str(ts[i]),
                 str(pr[i]),
                 str(nr[i]),
@@ -56,7 +60,7 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
     ax.tick_params(axis='y', colors="C0")
     np_scores = np.array(scores)
     # np_scores.min()-1
-    ax.set_ylim(np_scores.min()-1, np_scores.max()+1)
+    ax.set_ylim(-5, np_scores.max()+1)
     ax.set_title("Learning curve:")
     # plt.xlabel("Training Steps")
     # plt.ylabel("Rewards")
@@ -87,7 +91,7 @@ load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
 step = 1#len(scores[0][0])/10000
-policies = [0,1,2,3,4,5,6,7]
+policies = [0]
 # policies = [0,1,2,3]
 # policies = [4,5,6,7]
 # policies = [0,1]
@@ -126,5 +130,7 @@ string = ""
 string = [string+","+str(i) for i in policies]
 filename = 'learning_cruves%s, step=%s.png' %(string, str(step))
 filename = os.path.join(load_path, filename)
+
+
 
 plot_learning_curves(rewards, filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)

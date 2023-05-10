@@ -54,7 +54,7 @@ def dqn(training_sessions, episodes, discount_rate, epsilon,
                 if not load_checkpoint:
                     agent.store_transition(observation, action,
                                         reward, observation_, done)
-                    agent.learn()
+                    loss = agent.learn()
                 observation = observation_
                 if done:
                     cntr += 1
@@ -73,11 +73,13 @@ def dqn(training_sessions, episodes, discount_rate, epsilon,
                 best_reward = avg_reward
 
             if i_episode % 50==0 or i_episode == episodes-1 and i_episode != 0:
-                print('episode= ', i_episode,
-                        ',reward= %.2f,' % episode_reward,
-                        'average_reward= %.2f,' % avg_reward,
-                        'average_steps= %.2f,' % avg_steps,
-                        'success= %.4f' % (float(cntr)/50.0*100.0))
+                if loss != None:
+                    print('episode= ', i_episode,
+                            ',reward= %.2f,' % episode_reward,
+                            'average_reward= %.2f,' % avg_reward,
+                            'average_steps= %.2f,' % avg_steps,
+                            'success= %.4f' % (float(cntr)/50.0*100.0),
+                            'loss= %.4f' %(loss))
                 cntr = 0
             
         ts_rewards.append(rewards)
@@ -121,8 +123,8 @@ def dqn(training_sessions, episodes, discount_rate, epsilon,
 if __name__ == '__main__':
     # Testing: for on-policy runs
     off_policy = True
-    policy_num = [0,1]
-    testing_iterations = 10000
+    policy_num = [0]
+    testing_iterations = 100000
 
     # states:
     # observation states: "position", "position_explored", "image"
@@ -133,8 +135,8 @@ if __name__ == '__main__':
     # initialize hyperparameters
     learning_rate = [0.0001]
     discount_rate = [0.9]
-    epsilon = [0.01]
-    eps_min = [0.01]
+    epsilon = [0.03, 0.01]
+    eps_min = [0.03, 0.01]
 
     # NN
     batch_size = 64
@@ -146,17 +148,17 @@ if __name__ == '__main__':
     elif observation_state == "position_explored":
         input_dims = [HEIGHT*WIDTH*2]
     elif observation_state == "image":
-        input_dims = (1,HEIGHT, WIDTH)
+        input_dims = (2,HEIGHT, WIDTH)
 
     replace = 1000
 
     training_sessions = 3
-    episodes = 100000
+    episodes = 30000
     positive_rewards = [1]
     positive_exploration_rewards = [0]
     negative_rewards = [0.1]#0,0.1,
-    negative_step_rewards = [0.1]#0,0.1,
-    max_steps = [200]
+    negative_step_rewards = [0.01]#0,0.1,
+    max_steps = [400]
 
     num_experiences =     len(learning_rate) \
                         * len(discount_rate) \

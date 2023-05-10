@@ -17,8 +17,8 @@ class DeepQNetwork(nn.Module):
         self.fc3_dims = fc3_dims
         self.n_actions = n_actions
 
-        self.conv1 = nn.Conv2d(1, 16, 2, stride=1)
-        self.conv2 = nn.Conv2d(16, 32, 1, stride=1)
+        self.conv1 = nn.Conv2d(input_dims[0], 16, 3, stride=2)
+        self.conv2 = nn.Conv2d(16, 32, 2, stride=1)
         # self.conv3 = nn.Conv2d(32, 32, 3, stride=1)
 
         fc_input_dims = self.calculate_conv_output_dims()
