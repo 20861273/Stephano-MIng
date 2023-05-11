@@ -6,31 +6,31 @@ import torch.optim as optim
 import numpy as np
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, nr, lr, n_actions, input_dims, fc1_dims, fc2_dims, fc3_dims, name, chkpt_dir):
+    def __init__(self, nr, lr,
+                 n_actions, input_dims, c_dims, k_size, s_size,
+                    fc_dims, name, chkpt_dir):
         super(DeepQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
 
         self.input_dims = input_dims
-        self.fc1_dims = fc1_dims
-        self.fc2_dims = fc2_dims
-        self.fc3_dims = fc3_dims
+
+        self.c_dims = c_dims.copy()
+        self.k_size = k_size.copy()
+        self.s_size = s_size.copy()
+
+        self.fc_dims = fc_dims.copy()
+
         self.n_actions = n_actions
 
-        # self.conv1 = nn.Conv2d(input_dims[0], 16, 4, stride=1)
-        self.conv1 = nn.Conv2d(input_dims[0], 16, 2, stride=1)
-        self.conv2 = nn.Conv2d(16, 32, 2, stride=1)
+        self.conv1 = nn.Conv2d(input_dims[0], c_dims[0], k_size[0], stride=s_size[0])
+        self.conv2 = nn.Conv2d(c_dims[0], c_dims[1], k_size[1], stride=s_size[1])
         # self.conv3 = nn.Conv2d(32, 64, 3, stride=1)
 
         fc_input_dims = self.calculate_conv_output_dims()
 
-        self.fc1 = nn.Linear(fc_input_dims, 32)  # 5*5 from image dimension
-        self.fc2 = nn.Linear(32, n_actions)
-
-        # self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims) # * unpacking the input list
-        # self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
-        # self.fc3 = nn.Linear(self.fc2_dims, self.fc3_dims)
-        # self.fc4 = nn.Linear(self.fc3_dims, self.n_actions)
+        self.fc1 = nn.Linear(fc_input_dims, fc_dims[0])  # 5*5 from image dimension
+        self.fc2 = nn.Linear(fc_dims[0], n_actions)
 
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()

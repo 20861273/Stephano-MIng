@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 4
+WIDTH = 4
 
 # DENSITY = 30 # percentage
 
@@ -55,6 +55,7 @@ class Environment:
         self.negative_step_reward = negative_step_reward
 
         self.unexplored = False
+        self.collision = False
 
         # print("\nGrid size: ", self.grid.shape)
 
@@ -176,18 +177,25 @@ class Environment:
         state = self.get_state()
 
         self.score += self.calc_reward()
+        self.score -= self.negative_step_reward
         reward = self.score
 
         # 5. Check exit condition
+        if self.collision:
+            reward = self.score
+            game_over = True
+            self.collision = False
+            return state, reward, game_over, 0
+
         if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
         # if (self.exploration_grid == self.goal_state).all():
             self.score += self.positive_reward
             reward = self.score
             game_over = True
-            return state, reward, game_over, self.score
+            return state, reward, game_over, 1
 
         # 6. return game over and score
-        return state, reward, game_over, self.score
+        return state, reward, game_over, 0
     
     def decode_action(self, action):
         temp_action = action
@@ -207,9 +215,7 @@ class Environment:
                 temp_arr[i] = True
             if temp_arr[i] == True:
                 score += self.positive_exploration_reward
-            else:
-                score -= self.negative_step_reward
-            return score
+        return score
 
     def get_state(self, selected_r=None):
         # Position state
@@ -268,7 +274,12 @@ class Environment:
         return state
 
 
-    def _is_collision(self, pt):
+    def _is_collision(self, pt, r_i):
+        if r_i == None:
+            next_r = 0
+        else:
+            next_r = r_i + 1
+            if next_r % self.nr == 0: next_r = 0
         # hits boundary
         obstacles = np.argwhere(self.grid == States.OBS.value)
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
@@ -276,7 +287,9 @@ class Environment:
         elif not 0 <= pt.y < self.grid.shape[0] or not 0 <= pt.x < self.grid.shape[1]:
             self.score -= self.negative_reward
             return True
-        
+        elif pt in [pos_i for i, pos_i in enumerate(self.pos) if i != r_i]:
+            self.score -= self.negative_reward
+            return True
         return False
 
     def _is_explored(self, pt=None):
@@ -331,10 +344,11 @@ class Environment:
 
         # Set position to new location
         for i in range(0, self.nr):
-            if self._is_collision(Point(x[i],y[i])):
+            if self._is_collision(Point(x[i],y[i]), i):
                 self.pos[i] = self.pos[i]
                 self.prev_pos[i] = self.pos[i]
                 self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+                self.collision = True
             else:
                 self.prev_pos[i] = self.pos[i]
                 self.pos[i] = Point(x[i],y[i])

@@ -7,6 +7,49 @@ from matplotlib.pyplot import cm
 import math
 import pandas as pd
 
+def save_hp(save_path, nr, training_sessions, episodes,
+            positive_rewards, negative_rewards, positive_exploration_rewards, negative_step_rewards,
+            max_steps, learning_rate, discount_rate, epsilon, n_actions,
+            c_dims, k_size, s_size, fc_dims,
+            batch_size, mem_size, replace, env_size):
+    
+    i_exp = 0
+    for pr_i in positive_rewards:
+            for nr_i in negative_rewards:
+                for per_i in positive_exploration_rewards:
+                    for nsr_i in negative_step_rewards:
+                        for ms_i in max_steps:
+                            for lr_i in learning_rate:
+                                for dr_i in discount_rate:
+                                    for er_i in epsilon:
+                                        hp =    {
+                                        "training_sessions":training_sessions,
+                                        "nr":nr,
+                                        "episodes":episodes,
+                                        "learning_rate":lr_i,
+                                        "discount_rate":dr_i,
+                                        "epsilon":er_i,
+                                        "positive_goal":pr_i,
+                                        "negative_collision":nr_i,
+                                        "negative_step":per_i,
+                                        "positive_exploration":nsr_i,
+                                        "max_steps":ms_i,
+                                        "n_actions":n_actions,
+                                        "c_dims":c_dims,
+                                        "k_size":k_size,
+                                        "s_size":s_size,
+                                        "fc_dims":fc_dims,
+                                        "mem_size":mem_size,
+                                        "batch_size":batch_size,
+                                        "replace":replace,
+                                        "env_size":env_size
+                                        }
+                                        file_name = "hyperparameters%s.json" %(str(i_exp))
+                                        file_name = os.path.join(save_path, file_name)
+                                        write_json(hp, file_name)
+                                        i_exp += 1
+
+
 def write_json(lst, file_name):
     with open(file_name, "w") as f:
         json.dump(lst, f)
@@ -15,17 +58,32 @@ def read_json(file_name):
     with open(file_name, "r") as f:
         return json.load(f)
 
-def read_hp_json(path, file_name, policy):
+def read_checkpoint_hp_json(file_name):
+    with open(file_name, "r") as f:
+        data = json.load(f)
+    
+    hps = []
+    for key, value in data.items():
+        try:
+            hp = float(value)
+            hps.append(hp)
+        except ValueError:
+            pass
+
+    ts, ep = hps[:]
+    return int(ts), int(ep)
+
+def read_hp_json(path, file_name):
+    lst = []
     file_path = os.path.join(path, file_name)
     with open(file_path, "r") as f:
-        txt = json.load(f)
-    
-    # For reward system 1
-    # ts, lr, dr, er, pr, nr, ms, _ = txt.split(",")
-    # return float(ts), float(lr), float(dr), float(er), float(pr), float(nr), float(ms), int(1000)
+        data = json.load(f)
 
-    ts, lr, dr, er, pr, nr, per, nsr, ms, _, _, _, r = txt.split(",")
-    return float(ts), float(lr), float(dr), float(er), float(pr), float(nr), float(per), float(nsr), float(ms), int(r)
+    for key in data:
+        lst.append(data[key])
+
+    ts, nr, ep, lr, dr, er, pr, nr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims,mem_size, batch_size, replace,env_size = lst[:]
+    return int(ts), int(nr), int(ep), float(lr), float(dr), float(er), float(pr), float(nr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims,int(mem_size), int(batch_size), int(replace),env_size
 
 def plot_learning_curve(scores, filename, lr, dr, er, pr, nr, per, nsr, ms, totle_time):
     mean_rewards = np.zeros((len(scores[0]),))

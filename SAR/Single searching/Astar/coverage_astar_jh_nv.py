@@ -334,8 +334,8 @@ def a_star(graph, start, termination_time):
 
 env = Environment()
 
-env.starting_pos= env.starting_pos._replace(x=0)
-env.starting_pos =env.starting_pos._replace(y=0)
+env.starting_pos= env.starting_pos._replace(x=50)
+env.starting_pos =env.starting_pos._replace(y=50)
 
 printer = print_results(env.grid, HEIGHT, WIDTH)
 

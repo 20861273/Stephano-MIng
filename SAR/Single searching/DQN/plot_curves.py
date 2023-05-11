@@ -24,14 +24,14 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
     fig=plt.figure()
     ax=fig.add_subplot(111)
 
-    print("0", np.mean(mean_rewards[0]))# "1", np.mean(mean_rewards[1]))
+    print("0", np.mean(mean_rewards[0]), "1", np.mean(mean_rewards[1]), "2", np.mean(mean_rewards[2]), "3", np.mean(mean_rewards[3]))
 
     l = []
     for i in range(len(scores)):
         if i==0: text="goal state: coverage"
         else: text="goal state: missing person"
         l.append("%s:  e=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s, α=%s, γ=%s, ϵ=%s" %(
-                text,
+                str(i),
                 str(ts[i]),
                 str(pr[i]),
                 str(nr[i]),
@@ -90,8 +90,8 @@ PATH = os.path.join(PATH, 'DQN')
 load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
-step = 1#len(scores[0][0])/10000
-policies = [0]
+step = 100#len(scores[0][0])/10000
+policies = [0,1,2,3]
 # policies = [0,1,2,3]
 # policies = [4,5,6,7]
 # policies = [0,1]

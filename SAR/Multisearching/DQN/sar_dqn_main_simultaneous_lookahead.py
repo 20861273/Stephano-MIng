@@ -4,7 +4,7 @@
 import numpy as np
 from dqn_agent import DQNAgent
 from utils import plot_learning_curve, write_json, read_hp_json, read_json
-from dqn_environment_simutaneous_lookahead import Environment, HEIGHT, WIDTH, Point, States, Direction
+from dqn_environment_simultaneous_lookahead import Environment, HEIGHT, WIDTH, Point, States, Direction
 from datetime import datetime
 import os
 import torch as T
