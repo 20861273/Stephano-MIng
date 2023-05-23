@@ -3,27 +3,27 @@
 
 import numpy as np
 from dqn_agent_simultaneous import DQNAgent
-from dqn_centralized_training import dqn
-from utils import plot_learning_curve, write_json, read_hp_json, read_json, save_hp, read_checkpoint_hp_json
-from dqn_environment_simultaneous import Environment, HEIGHT, WIDTH, Point, States, Direction
+from utils_decentralized import plot_learning_curve, write_json, read_hp_json, read_json, save_hp, read_checkpoint_hp_json
+from dqn_environment_simultaneous_decentralized import Environment, HEIGHT, WIDTH, Point, States, Direction
 from datetime import datetime
 import os
 import torch as T
 from dqn_save_results import print_results
 import matplotlib.pyplot as plt
 import time
+from dqn_decentralized_training import dqn
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
     off_policy = True
-    show_plot = True
-    policy_num = [0,2]
+    show_plot = False
+    policy_num = [0,1]
     testing_iterations = 10000
 
     load_checkpoint = False
     n_experiences = 4
-    start_up_exp = 1
+    start_up_exp = 0
 
     nr = 2
 
@@ -35,10 +35,8 @@ if __name__ == '__main__':
 
     # initialize hyperparameters
     learning_rate = [0.0001]
-    discount_rate = [0.9,0.99]
-    epsilon = [1, 1]
-    eps_min = [0.01, 0.05]
-    eps_dec = [0.001, 0.001]
+    discount_rate = [0.5,0.9]
+    epsilon = [[0.01,0.01,0.01]] # epsilon, epsilon min, epsilon dec
 
     # NN
     batch_size = 64
@@ -49,6 +47,10 @@ if __name__ == '__main__':
     s_size = [1, 1]
     fc_dims = [32]
 
+    # PER
+    prioritized = True
+    starting_beta = 0.5
+
     n_actions = 4
     input_dims = []
     if observation_state == "position":
@@ -56,10 +58,10 @@ if __name__ == '__main__':
     elif observation_state == "position_explored":
         input_dims = [HEIGHT*WIDTH*2]
     elif observation_state == "image":
-        input_dims = (3,HEIGHT+2, WIDTH+2)
+        input_dims = (3,HEIGHT, WIDTH)
 
     training_sessions = 10
-    episodes = 100000
+    episodes = 50000
     positive_rewards = [1]
     positive_exploration_rewards = [0]
     negative_rewards = [1]
@@ -104,6 +106,7 @@ if __name__ == '__main__':
         discount_rate = []
         epsilon = []
         eps_min = []
+        eps_dec = []
 
         # NN
         batch_size = 0
@@ -132,6 +135,7 @@ if __name__ == '__main__':
                 discount_rate.append(dr)
                 epsilon.append(er)
                 eps_min.append(er)
+                eps_dec.append(er)
                 positive_rewards.append(pr)
                 positive_exploration_rewards.append(per)
                 negative_rewards.append(neg_r)
@@ -155,12 +159,12 @@ if __name__ == '__main__':
                                 for dr_i in discount_rate:
                                     for er_i in epsilon:
                                         
-                                        rewards = dqn(nr, training_sessions, episodes, dr_i, lr_i, er_i, er_i, er_i,
+                                        load_checkpoint = dqn(nr, training_sessions, episodes, dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                     pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
-                                                    n_actions, input_dims,
+                                                    n_actions, starting_beta, input_dims,
                                                     c_dims, k_size, s_size, fc_dims,
                                                     batch_size, mem_size, replace,
-                                                    models_path, load_path, save_path, env_size, load_checkpoint, start_up_exp)
+                                                    prioritized, models_path, load_path, save_path, env_size, load_checkpoint, start_up_exp)
                                         i_exp += 1
     else:
         for policy in policy_num:
@@ -170,30 +174,34 @@ if __name__ == '__main__':
             ts, lr, dr, er, pr, ner, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims, mem_size, batch_size, r = read_hp_json(load_path, file_name)
             # int(ts),float(lr), float(dr), float(er), float(pr), float(nr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims,int(mem_size), int(batch_size), int(replace),env_size
             
-            agent = DQNAgent(nr, dr, er, er, er, lr,
-                     n_actions, input_dims,
-                     c_dims, k_size, s_size, fc_dims,
-                     mem_size=mem_size,
-                     batch_size=batch_size, replace=replace,
-                     algo='DQNAgent', env_name=env_size, chkpt_dir=models_path)
-            file_name = "experience%s.pth" %(str(policy))
-            file_name = os.path.join(load_path, file_name)
-            agent.q_eval.load_state_dict(T.load(file_name))
-            agent.q_eval.eval()
-            agent.q_next.load_state_dict(T.load(file_name))
-            agent.q_next.eval()
+            agents = []
+            for i in range(nr):
+                agents.append(DQNAgent(nr, dr, er, er, er, lr,
+                            n_actions, starting_beta, input_dims,
+                            c_dims, k_size, s_size, fc_dims,
+                            mem_size=mem_size,
+                            batch_size=batch_size, replace=r,
+                            algo='DQNAgent', env_name=env_size, chkpt_dir=models_path))
+            for r_i, agent in enumerate(agents):
+                file_name = "agent%s_experience%s_checkpoint.pth" %(str(r_i),str(start_up_exp))
+                file_name = os.path.join(load_path, file_name)
+                agent.q_eval.load_state_dict(T.load(file_name, map_location='cuda:0'))
+                agent.q_eval.eval()
+                agent.q_next.load_state_dict(T.load(file_name, map_location='cuda:0'))
+                agent.q_next.eval()
+            
             env = Environment(nr, pr, ner, per, nsr)
 
             PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
 
             trajs = []
             steps = []
-            cnt = 0
+            cnt = [0]*nr
             trajectories = []
             fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
             for i in range(0, testing_iterations):
                 if i % 1000 == 0 and i != 0:
-                    print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
+                    print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt[0]+cnt[1])/float(i)*100, np.mean(np.array(steps))))
                 observation = env.reset()
 
                 trajectory = []
@@ -212,7 +220,10 @@ if __name__ == '__main__':
                     actions.append(action)
                     trajectory.append((env.pos[i_r], action, i_r))
                     observation_, reward, done, info = env.step(action)
-                    cnt += info
+                    if info != None:
+                        for j in range(nr):
+                            if info == j:
+                                cnt[j] += 1
 
                     # if not load_checkpoint:
                     #     for i_r in range(0,nr):
@@ -226,6 +237,7 @@ if __name__ == '__main__':
                         if show_plot:
                             plt.cla()
                             PR.print_trajectories(ax, save_path, policy, env, actions[0])
+                            if not info: plt.pause(1)
                         trajectories.append(trajectory)
                         break
                     if show_plot:
@@ -235,6 +247,11 @@ if __name__ == '__main__':
                 # if step == int(ms)-1 and not done:
                 #     trajectories.append(trajectory)
 
-            p = cnt/(testing_iterations)*100
-            print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, testing_iterations, p))
+            p = (cnt[0]+cnt[1])/(testing_iterations)*100
+            for i in range(nr):
+                print("Percentage success for drone %d: %d / %d x 100 = %.2f %%" %(i, cnt[i], testing_iterations, (cnt[i])/(testing_iterations)*100))
+            print("Total percentage success: %d / %d x 100 = %.2f %%" %(cnt[0]+cnt[1], testing_iterations, p))
             print("Average steps: %.2f" %(np.mean(np.array(steps))))
+            file_name = "Results%s.json" %(str(policy))
+            file_name = os.path.join(save_path, file_name)
+            write_json("Success:%s, Average steps:%s" %(str(p), str(np.mean(np.array(steps)))), file_name)

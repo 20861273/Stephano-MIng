@@ -46,8 +46,13 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
             ax.plot(np.arange(0, len(scores[i][0]), int(step+i)), scores[i][0][::int(step+i)], color=c[i], label=l[i])
     else:
         for i in range(len(policies)):
+            std_top = mean_rewards[i][::int(step+i)]+std_rewards[i][::int(step+i)]
+            std_bottom = mean_rewards[i][::int(step+i)]-std_rewards[i][::int(step+i)]
+            greater_than_one = np.argwhere(np.array(std_top) > 1)
+            for j in greater_than_one:
+                std_top[j] = 1
             ax.plot(np.arange(0, len(mean_rewards[i]), int(step+i)), mean_rewards[i][::int(step+i)], color=c[i], label=l[i])
-            plt.fill_between(np.arange(0, len(mean_rewards[i]), int(step+i)), mean_rewards[i][::int(step+i)]-std_rewards[i][::int(step+i)], mean_rewards[i][::int(step+i)]+std_rewards[i][::int(step+i)], alpha = 0.1, color=c[i])
+            plt.fill_between(np.arange(0, len(mean_rewards[i]), int(step+i)), std_bottom, std_top, alpha = 0.1, color=c[i])
     
     lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     ax.set_xlabel("Training Steps", color="C0")
@@ -69,8 +74,22 @@ def read_json(path, file_name):
     file_path = os.path.join(path, file_name)
     with open(file_path, "r") as f:
         return json.load(f)
-
+    
 def read_hp_json(path, file_name):
+    lst = []
+    file_path = os.path.join(path, file_name)
+    with open(file_path, "r") as f:
+        data = json.load(f)
+
+    for key in data:
+        lst.append(data[key])
+
+        # nr, ep, 
+        #  int(nr), int(ep), 
+    ts, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims,mem_size, batch_size, replace,env_size = lst[:]
+    return int(ts),float(lr), float(dr), float(er), float(pr), float(negr), float(per), float(nsr), int(ms)
+
+def read_hp_jsons(path, file_name):
     file_path = os.path.join(path, file_name)
     with open(file_path, "r") as f:
         txt = json.load(f)
@@ -86,8 +105,8 @@ PATH = os.path.join(PATH, 'DQN')
 load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
-step = 50#len(scores[0][0])/10000
-policies = [1]
+step = 1#len(scores[0][0])/10000
+policies = [3]
 # policies = [0,1,2,3]
 # policies = [4,5,6,7]
 # policies = [0,1]
@@ -124,7 +143,13 @@ for i, policy in enumerate(policies):
 
 string = ""
 string = [string+","+str(i) for i in policies]
-filename = 'learning_cruves%s, step=%s.png' %(string, str(step))
+filename = 'drone_0_learning_cruves%s, step=%s.png' %(string, str(step))
 filename = os.path.join(load_path, filename)
 
-plot_learning_curves(rewards, filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)
+plot_learning_curves([rewards[0][:10]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)
+
+string = ""
+string = [string+","+str(i) for i in policies]
+filename = 'drone_1_learning_cruves%s, step=%s.png' %(string, str(step))
+filename = os.path.join(load_path, filename)
+plot_learning_curves([rewards[0][10:20]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)

@@ -5,7 +5,7 @@ import matplotlib.lines as mlines
 
 import os
 
-from dqn_environment import States, Direction
+from dqn_environment_simultaneous import States, Direction
 
 class print_results:
     """
@@ -180,7 +180,7 @@ class print_results:
 
         # file_name = "p%dtrajectory%d.png" %(policy, cnt)
         # plt.savefig(os.path.join(dir_traj, file_name))
-        plt.pause(1)
+        plt.pause(0.05)
 
     def plot(self, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time, postive_reward):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")
