@@ -61,7 +61,7 @@ class PrioritizedReplayMemory(object):
     # 18: Choose action At∼πθ(St)
     # 19: endfor
 
-    def __init__(self, max_mem, input_dims, n_actions, eps=0.0001, prob_alpha=0.5):
+    def __init__(self, max_mem, input_dims, n_actions, eps=0.00001, prob_alpha=0.5):
         self.prob_alpha = prob_alpha
         self.mem_size = max_mem
         self.memory = []
@@ -76,7 +76,7 @@ class PrioritizedReplayMemory(object):
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
 
-        self.priorities = np.zeros((self.mem_size,), dtype=np.float32)
+        self.priorities = np.zeros((self.mem_size,), dtype=np.float64) # has to be float 64, because float 32 had missing information
         self.max_priority = eps
         self.small_eps = eps
         self.alpha = prob_alpha
@@ -106,9 +106,9 @@ class PrioritizedReplayMemory(object):
         # Calculate probability of sampling transition
         prob_sum = np.sum(self.priorities)
         p = [priority / prob_sum for priority in self.priorities]
-        p[-1] = 1 - np.sum(p[0:-1])
+        # p[-1] = 1 - np.sum(p[0:-1]) #normalize
 
-        batch = np.random.choice(max_mem, batch_size, p=fix_p(p[:max_mem]))
+        batch = np.random.choice(max_mem, batch_size, p=p[:max_mem])
 
         states = self.state_memory[batch]
         actions = self.action_memory[batch]
@@ -126,11 +126,9 @@ class PrioritizedReplayMemory(object):
 
         td_error = self.get_td_error(batch_size, gamma, local, target, states, states_, actions, rewards, terminals)
 
-        td_error_idx = 0
-        for idx in batch:
+        for td_error_idx, idx in enumerate(batch):
             self.priorities[idx] = pow(abs(td_error[td_error_idx]) + self.small_eps, self.prob_alpha).item()
             # print(pow(abs(td_error[td_error_idx]) + small_epsilon, alpha).item())
-            td_error_idx += 1
 
         return states, actions, rewards, states_, terminals, weights
         
@@ -155,67 +153,3 @@ class PrioritizedReplayMemory(object):
 
     def __len__(self):
         return len(self.memory)
-
-def fix_p(p):
-    if sum(p) != 1.0:
-        p = np.array(p, dtype=np.float32)*(1./sum(p))
-    return p
-    
-# class PrioritizedReplayMemory(object):
-#     def __init__(self, mem_size, input_shape, prob_alpha=0.6):
-#         self.prob_alpha = prob_alpha
-#         self.mem_size = mem_size
-#         self.memory = []
-#         self.mem_cntr = 0
-#         self.priorities = np.zeros((mem_size,), dtype=np.float32)
-
-#         self.state_memory = np.zeros((self.mem_size, *input_shape),
-#                                      dtype=np.float32)
-#         self.new_state_memory = np.zeros((self.mem_size, *input_shape),
-#                                          dtype=np.float32)
-
-#         self.action_memory = np.zeros(self.mem_size, dtype=np.int64)
-#         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
-#         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
-
-#     def store_transition(self, state, action, next_state, reward, done):
-
-#         max_prio = self.priorities.max() if self.memory else 1.0
-
-#         """Saves a transition."""
-#         if len(self.memory) < self.mem_size:
-#             self.memory.append(None)
-#         self.state_memory[self.mem_cntr] = state
-#         self.new_state_memory[self.mem_cntr] = next_state
-#         self.action_memory[self.mem_cntr] = action
-#         self.reward_memory[self.mem_cntr] = reward
-#         self.terminal_memory[self.mem_cntr] = done
-#         self.priorities[self.mem_cntr] = max_prio
-
-#         self.mem_cntr = (self.mem_cntr + 1) % self.mem_size
-
-#     def sample_buffer(self, batch_size, beta=0.4):
-#         if len(self.memory) == self.mem_size:
-#             prios = self.priorities
-#         else:
-#             prios = self.priorities[:self.mem_cntr]
-
-#         probs = prios ** self.prob_alpha
-#         probs /= probs.sum()
-
-#         indices = np.random.choice(len(self.memory), batch_size, p=probs)
-#         batch = [self.memory[idx] for idx in indices]
-
-#         total = len(self.memory)
-#         weights = (total * probs[indices]) ** (-beta)
-#         weights /= weights.max()
-#         weights = np.array(weights, dtype=np.float32)
-
-#         return batch, indices, weights
-
-#     def update_priorities(self, batch_indices, batch_priorities):
-#         for idx, prio in zip(batch_indices, batch_priorities):
-#             self.priorities[idx] = prio
-
-#     def __len__(self):
-#         return len(self.memory)

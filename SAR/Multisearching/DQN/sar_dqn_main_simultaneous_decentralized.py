@@ -48,7 +48,7 @@ if __name__ == '__main__':
     fc_dims = [32]
 
     # PER
-    prioritized = True
+    prioritized = False
     starting_beta = 0.5
 
     n_actions = 4
