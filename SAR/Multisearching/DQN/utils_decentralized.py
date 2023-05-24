@@ -85,8 +85,8 @@ def read_hp_json(path, file_name):
         # nr, ep, 
 #  int(nr), int(ep), 
 
-    ts, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims,mem_size, batch_size, replace,env_size = lst[:]
-    return int(ts),float(lr), float(dr), float(er), float(pr), float(negr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims,int(mem_size), int(batch_size), int(replace)
+    ts, nr, ep, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims,mem_size, batch_size, replace,env_size = lst[:]
+    return int(ts), int(nr), int(ep), float(lr), float(dr), er, float(pr), float(negr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims,int(mem_size), int(batch_size), int(replace), env_size
 
 def plot_learning_curve(nr, scores, filename, lr, dr, er, pr, negr, per, nsr, ms, totle_time):
     mean_rewards = np.zeros((len(scores[0]),))

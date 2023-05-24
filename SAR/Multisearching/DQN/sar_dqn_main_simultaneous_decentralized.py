@@ -21,8 +21,8 @@ if __name__ == '__main__':
     policy_num = [0,1]
     testing_iterations = 10000
 
-    load_checkpoint = False
-    n_experiences = 4
+    load_checkpoint = True
+    n_experiences = 2
     start_up_exp = 0
 
     nr = 2
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     elif observation_state == "position_explored":
         input_dims = [HEIGHT*WIDTH*2]
     elif observation_state == "image":
-        input_dims = (3,HEIGHT, WIDTH)
+        input_dims = (3,HEIGHT+2, WIDTH+2)
 
     training_sessions = 10
     episodes = 50000

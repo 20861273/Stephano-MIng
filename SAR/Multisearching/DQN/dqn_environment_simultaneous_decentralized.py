@@ -266,21 +266,21 @@ class Environment:
                 other_locations_map[r_i][self.pos[or_i].y, self.pos[or_i].x] = 1
 
         # Generate image map
-        # shape = list(self.grid.shape)
-        # shape[0] += 2
-        # shape[1] += 2
+        shape = list(self.grid.shape)
+        shape[0] += 2
+        shape[1] += 2
 
-        # image_map = np.ones((self.nr,) + (3,) + tuple(shape))
-        # for r_i in range(self.nr):
-        #     image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
-        #     image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
-        #     image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
-
-        image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+        image_map = np.ones((self.nr,) + (3,) + tuple(shape))
         for r_i in range(self.nr):
-            image_map[r_i][0] = location_map[r_i]
-            image_map[r_i][1] = other_locations_map[r_i]
-            image_map[r_i][2] = exploration_map
+            image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
+            image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
+            image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
+
+        # image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+        # for r_i in range(self.nr):
+        #     image_map[r_i][0] = location_map[r_i]
+        #     image_map[r_i][1] = other_locations_map[r_i]
+        #     image_map[r_i][2] = exploration_map
 
         # Inputs:
         # 1. Position state:
