@@ -136,15 +136,15 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
                         file_name = os.path.join(save_path, file_name)
                         write_json(rewards, file_name)
 
-            if i_episode % 1000==0 or i_episode == episodes-1 and i_episode != 0:
+            if i_episode % 10==0 or i_episode == episodes-1 and i_episode != 0:
                 for i in range(nr):
                     print('agent=', i,
                         'episode= ', i_episode,
                             ',reward= %.2f,' % episode_reward[i],
                             'average_reward= %.2f,' % avg_reward[i],
                             'average_steps= %.2f,' % avg_steps,
-                            'success= %.4f' % (float(cntr[i])/1000.0*100.0))
-                print('total success= %.4f' % (float(sum(cntr))/1000.0*100.0))
+                            'success= %.4f' % (float(cntr[i])/10.0*100.0))
+                print('total success= %.4f' % (float(sum(cntr))/10.0*100.0))
                 cntr = [0]*nr
                 
             

@@ -21,7 +21,7 @@ if __name__ == '__main__':
     policy_num = [0,1]
     testing_iterations = 10000
 
-    load_checkpoint = True
+    load_checkpoint = False
     n_experiences = 2
     start_up_exp = 0
 
@@ -41,14 +41,14 @@ if __name__ == '__main__':
     # NN
     batch_size = 64
     mem_size = 50000
-    replace = 1000
+    replace = 1000 # test 100 replace
     c_dims = [16, 32]
     k_size = [2, 2]
     s_size = [1, 1]
     fc_dims = [32]
 
     # PER
-    prioritized = False
+    prioritized = True
     starting_beta = 0.5
 
     n_actions = 4
