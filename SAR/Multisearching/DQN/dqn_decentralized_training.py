@@ -14,7 +14,7 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
         n_actions, starting_beta, input_dims, 
         c_dims, k_size, s_size, fc_dims,
         batch_size, mem_size, replace,
-        prioritized, models_path, load_path, save_path, env_size, load_checkpoint, start_up_exp):
+        prioritized, models_path, load_path, save_path, load_checkpoint_path, env_size, load_checkpoint, start_up_exp):
     start_time = time.time()
     ts_rewards = []
     show_plot = False
@@ -34,22 +34,22 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
         if load_checkpoint:
             for r_i, agent in enumerate(agents):
                 file_name = "agent%s_experience%s_checkpoint.pth" %(str(r_i),str(start_up_exp))
-                file_name = os.path.join(load_path, file_name)
+                file_name = os.path.join(load_checkpoint_path, file_name)
                 agent.q_eval.load_state_dict(T.load(file_name))
                 agent.q_eval.eval()
                 agent.q_next.load_state_dict(T.load(file_name))
                 agent.q_next.eval()
 
             file_name = "hyperparameters%s_checkpoint.json" %(str(start_up_exp))
-            file_name = os.path.join(load_path, file_name)
+            file_name = os.path.join(load_checkpoint_path, file_name)
             ts, ep = read_checkpoint_hp_json(file_name)
 
             file_name = "ts_rewards%s.json" %(str(start_up_exp))
-            file_name = os.path.join(load_path, file_name)
+            file_name = os.path.join(load_checkpoint_path, file_name)
             ts_rewards = read_json(file_name)
 
             file_name = "rewards%s.json" %(str(start_up_exp))
-            file_name = os.path.join(load_path, file_name)
+            file_name = os.path.join(load_checkpoint_path, file_name)
             rewards = read_json(file_name)
 
         if load_checkpoint:
@@ -136,15 +136,17 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
                         file_name = os.path.join(save_path, file_name)
                         write_json(rewards, file_name)
 
-            if i_episode % 10==0 or i_episode == episodes-1 and i_episode != 0:
+            if i_episode % 1000==0 or i_episode == episodes-1 and i_episode != 0:
                 for i in range(nr):
                     print('agent=', i,
                         'episode= ', i_episode,
                             ',reward= %.2f,' % episode_reward[i],
                             'average_reward= %.2f,' % avg_reward[i],
                             'average_steps= %.2f,' % avg_steps,
-                            'success= %.4f' % (float(cntr[i])/10.0*100.0))
-                print('total success= %.4f' % (float(sum(cntr))/10.0*100.0))
+                            'success= %.4f' % (float(cntr[i])/1000.0*100.0))
+                print('total success= %.4f' % (float(sum(cntr))/1000.0*100.0))
+                print(agents[0].epsilon)
+                
                 cntr = [0]*nr
                 
             
@@ -212,9 +214,11 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
     # if last_start == None: spawning = ""
     hp =    {
             "training_session":training_sessions,
+            "nr":nr,
+            "episodes":episodes,
             "learning_rate":learning_rate,
             "discount_rate":discount_rate,
-            "epsilon":epsilon,
+            "epsilon":[epsilon, eps_min, eps_dec],
             "positive_goal":positive_reward,
             "negative_collision":negative_reward,
             "negative_step":positive_exploration_reward,
@@ -225,6 +229,7 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
             "k_size":k_size,
             "s_size":s_size,
             "fc_dims":fc_dims,
+            "prioritized":prioritized,
             "mem_size":mem_size,
             "batch_size":batch_size,
             "replace":replace,

@@ -19,7 +19,7 @@ import time
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 10
+termination_time = 6
 HH = False
 draw = True
 
@@ -48,13 +48,13 @@ def make_dag(closed_set):
 
     # Initialize the heap list with the root node
     # heap = ["%s\n%s,%s" %(str(0), str(closed_set[0][5].x), str(closed_set[0][5].y))]
-    heap = [(0, (closed_set[0][5].x, closed_set[0][5].y))]
+    heap = [("%.2f\\n(%s,%s)" %(closed_set[0][4], str(closed_set[0][5].x), str(closed_set[0][5].y)))]
 
     # Loop through the rest of the nodes and add them to the heap
     for key in closed_set:
         if key == 0: continue
         # heapq.heappush(heap, ("%s\n%s,%s" %(str(key), str(closed_set[key][5].x), str(closed_set[key][5].y))))
-        heapq.heappush(heap, (key, (closed_set[key][5].x, closed_set[key][5].y)))
+        heapq.heappush(heap, ("%.2f\\n(%s,%s)" %(closed_set[key][4], str(closed_set[key][5].x), str(closed_set[key][5].y))))
         
     return G, heap
 
@@ -62,8 +62,22 @@ def draw_tree(closed_set, cycle_num, dir_path, ax):
     G, heap = make_dag(closed_set)
     pos = hierarchy_pos(G, width=0.1)
     labels = dict(enumerate(heap))
-    if ax == None: nx.draw(G, pos, node_size=2000, labels=labels, alpha=0.4, font_size=14, ax=ax)
-    else: nx.draw(G, pos, node_size=2000, labels=labels, alpha=0.4, font_size=14, ax=ax)
+    if ax == None:
+        nx.draw_networkx_edges(G, pos, alpha=0.4)
+        nx.draw_networkx_nodes(G, pos, alpha=0.4, node_size=500)
+
+        
+        # nx.draw_networkx_labels(G, pos, labels, font_size=8, verticalalignment='center')
+        # nx.draw(G, pos, node_size=2000, labels=labels, alpha=0.4, font_size=14, ax=ax)
+    else:
+        nx.draw_networkx_edges(G, pos, alpha=0.4)
+        nx.draw_networkx_nodes(G, pos, alpha=0.4, node_size=500)
+        # nx.draw_networkx_labels(G, pos, labels, font_size=8, verticalalignment='center')
+        # nx.draw(G, pos, node_size=2000, labels=labels, alpha=0.4, font_size=14, ax=ax)
+
+    for node_i, (node, (x, y)) in enumerate(pos.items()):
+        if node_i == len(labels): break
+        plt.text(x, y, labels[node_i].replace("\\n", "\n"), fontsize=8, ha='center', va='center')
     figure = plt.gcf()  # get current figure
     figure.set_size_inches(32, 18)
     file_name = "tree%s.png"%(str(cycle_num))
@@ -98,8 +112,8 @@ class GridWithWeights(object):
 
     def neighbors(self, id):
         (x, y) = id.x, id.y
-        # (right, left, down, up, stay)
-        results = [Point(x+1, y), Point(x-1, y), Point(x, y-1), Point(x, y+1), Point(x, y)]
+        # (right, left, down, up)
+        results = [Point(x+1, y), Point(x-1, y), Point(x, y-1), Point(x, y+1)]
         # This is done to prioritise straight paths
         # if (x + y) % 2 == 0: results = [Point(x-1, y), Point(x+1, y), Point(x, y-1), Point(x, y+1), Point(x, y)]
         results = list(filter(self.in_bounds, results))
@@ -194,8 +208,8 @@ def a_star(graph, start, termination_time):
     cycle_closed_set = {}
     explored.append(start)
     while True:
-        # if len(cycle_closed_set) != 0:
-        #     draw_tree(cycle_closed_set, len(visited_list), save_path, ax=None)
+        if len(cycle_closed_set) != 0:
+            draw_tree(cycle_closed_set, len(visited_list), save_path, ax=None)
         cycle_closed_set = {}
         printer = print_results(env.grid, HEIGHT, WIDTH)
         # 0: id, 1: parent_id, 2: fuel, 3: score_to_come, 4: score_to_go, 5: total_score, 6: position
@@ -326,7 +340,7 @@ def a_star(graph, start, termination_time):
                             f.write('\n')
                 
             # after generating all the child states from the current state, sort the priority queue from highest to lowest score
-            open_set = list(sorted(open_set, key=itemgetter(0), reverse=True))
+            open_set = list(sorted(open_set, key=itemgetter(0), reverse=False))
             open_set = list(sorted(open_set, key=itemgetter(5)))
 
         # if the priority queue is empty and the initial node was never reached after using all the fuel, then return empty path

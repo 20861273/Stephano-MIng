@@ -51,7 +51,7 @@ class DQNAgent(object):
                                     chkpt_dir=self.chkpt_dir)
 
     def choose_action(self, observation):
-        if np.random.random() > self.epsilon:
+        if np.random.random() > self.epsilon or not self.q_eval.training:
             state = T.tensor(np.array([observation]),dtype=T.float).to(self.q_eval.device)
             actions = self.q_eval.forward(state)
             action = T.argmax(actions).item()
@@ -106,8 +106,12 @@ class DQNAgent(object):
         self.q_next.load_checkpoint()
 
     def learn(self):
-        if self.memory.transitions.index<self.batch_size and self.memory.transitions.full==False:
-            return   
+        if self.prioritized:
+            if self.memory.transitions.index<self.batch_size and self.memory.transitions.full==False:
+                return
+        else:
+            if self.memory.mem_cntr < self.batch_size:
+                return
 
         if self.prioritized:
             # add zero grad before adding trasition
@@ -132,7 +136,7 @@ class DQNAgent(object):
             q_next[dones] = 0.0
             q_target = rewards + self.gamma*q_next
             errors = T.sub(q_target, q_pred).to(self.q_eval.device)
-            loss = self.q_eval.loss(T.multiply(errors, T.tensor(weights).to(self.q_eval.device)).float(), T.zeros(64).to(self.q_eval.device).float()).to(self.q_eval.device)
+            loss = self.q_eval.loss(T.multiply(errors, T.tensor(weights).to(self.q_eval.device)).float(), T.zeros(self.batch_size).to(self.q_eval.device).float()).to(self.q_eval.device)
         
 
             # td_error = self.memory.get_td_error(self.batch_size, self.gamma, self.q_eval, self.q_next, states, states_, actions, rewards, dones)
@@ -159,7 +163,7 @@ class DQNAgent(object):
 
         self.decrement_epsilon()
 
-        self.memory.update_priorities(tree_idxs, errors)
+        if self.prioritized: self.memory.update_priorities(tree_idxs, errors)
 
 
 class SegmentTree():

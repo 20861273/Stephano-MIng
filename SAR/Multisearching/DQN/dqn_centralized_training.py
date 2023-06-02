@@ -168,6 +168,8 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
     # if last_start == None: spawning = ""
     hp =    {
             "training_session":training_sessions,
+            "number_of_drones":nr,
+            "episodes": episodes,
             "learning_rate":learning_rate,
             "discount_rate":discount_rate,
             "epsilon":epsilon,

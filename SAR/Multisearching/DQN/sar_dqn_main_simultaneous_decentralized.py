@@ -16,13 +16,13 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
-    off_policy = True
+    off_policy = False
     show_plot = False
-    policy_num = [0,1]
-    testing_iterations = 10000
+    policy_num = [0]
+    testing_iterations = 1000
 
     load_checkpoint = False
-    n_experiences = 2
+    n_experiences = 3
     start_up_exp = 0
 
     nr = 2
@@ -35,7 +35,7 @@ if __name__ == '__main__':
 
     # initialize hyperparameters
     learning_rate = [0.0001]
-    discount_rate = [0.5,0.9]
+    discount_rate = [0.9]
     epsilon = [[0.01,0.01,0.01]] # epsilon, epsilon min, epsilon dec
 
     # NN
@@ -58,10 +58,10 @@ if __name__ == '__main__':
     elif observation_state == "position_explored":
         input_dims = [HEIGHT*WIDTH*2]
     elif observation_state == "image":
-        input_dims = (3,HEIGHT+2, WIDTH+2)
+        input_dims = (3,HEIGHT, WIDTH)
 
-    training_sessions = 10
-    episodes = 50000
+    training_sessions = 1
+    episodes = 30000
     positive_rewards = [1]
     positive_exploration_rewards = [0]
     negative_rewards = [1]
@@ -90,17 +90,20 @@ if __name__ == '__main__':
     models_path = os.path.join(save_path, 'models')
     if not os.path.exists(models_path): os.makedirs(models_path)
 
+    load_checkpoint_path = os.path.join(PATH, "01-06-2023 11h43m00s")
+    if load_checkpoint: save_path = load_checkpoint_path
+
     env_size = '%sx%s' %(str(WIDTH), str(HEIGHT))
     
+    if not load_checkpoint:
+        save_hp(save_path, nr, training_sessions, episodes,
+                positive_rewards, negative_rewards, positive_exploration_rewards, negative_step_rewards,
+                max_steps, learning_rate, discount_rate, epsilon,
+                n_actions,
+                c_dims, k_size, s_size, fc_dims, prioritized,
+                batch_size, mem_size, replace, env_size)
 
-    save_hp(save_path, nr, training_sessions, episodes,
-            positive_rewards, negative_rewards, positive_exploration_rewards, negative_step_rewards,
-            max_steps, learning_rate, discount_rate, epsilon,
-            n_actions,
-            c_dims, k_size, s_size, fc_dims,
-            batch_size, mem_size, replace, env_size)
-
-    if load_checkpoint:
+    if load_checkpoint and off_policy:
         # initialize hyperparameters
         learning_rate = []
         discount_rate = []
@@ -129,8 +132,8 @@ if __name__ == '__main__':
         for i in range(n_experiences):
             if i >= start_up_exp:
                 file_name = "hyperparameters%s.json" %(str(i))
-                file_name = os.path.join(load_path, file_name)
-                training_sessions, nr, episodes, lr, dr, er, pr, neg_r, per, nsr, ms, n_actions, c_d, k_s, s_s, fc_d,mem_size, batch_size, replace, env_size = read_hp_json(load_path, file_name)
+                file_name = os.path.join(load_checkpoint_path, file_name)
+                training_sessions, nr, episodes, lr, dr, er, pr, neg_r, per, nsr, ms, n_actions, c_d, k_s, s_s, fc_d,prioritized,mem_size, batch_size, replace, env_size = read_hp_json(load_path, file_name)
                 learning_rate.append(lr)
                 discount_rate.append(dr)
                 epsilon.append(er)
@@ -149,7 +152,6 @@ if __name__ == '__main__':
     if off_policy:
         print("Number of training sessoins: ", num_experiences)
         i_exp = 0
-        if load_checkpoint: i_exp = start_up_exp
         for pr_i in positive_rewards:
             for nr_i in negative_rewards:
                 for per_i in positive_exploration_rewards:
@@ -158,32 +160,32 @@ if __name__ == '__main__':
                             for lr_i in learning_rate:
                                 for dr_i in discount_rate:
                                     for er_i in epsilon:
-                                        
+
                                         load_checkpoint = dqn(nr, training_sessions, episodes, dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                     pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
                                                     n_actions, starting_beta, input_dims,
                                                     c_dims, k_size, s_size, fc_dims,
                                                     batch_size, mem_size, replace,
-                                                    prioritized, models_path, load_path, save_path, env_size, load_checkpoint, start_up_exp)
+                                                    prioritized, models_path, load_path, save_path, load_checkpoint_path, env_size, load_checkpoint, start_up_exp)
                                         i_exp += 1
     else:
         for policy in policy_num:
             debug = True
             print("Testing policy %d:" %(policy))
             file_name = "hyperparameters%s.json" %(str(policy))
-            ts, lr, dr, er, pr, ner, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims, mem_size, batch_size, r = read_hp_json(load_path, file_name)
+            ts, nr, ep, lr, dr, er, pr, ner, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims, prioritized, mem_size, batch_size, r, _ = read_hp_json(load_path, file_name)
             # int(ts),float(lr), float(dr), float(er), float(pr), float(nr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims,int(mem_size), int(batch_size), int(replace),env_size
             
             agents = []
             for i in range(nr):
-                agents.append(DQNAgent(nr, dr, er, er, er, lr,
+                agents.append(DQNAgent(nr, dr, er[0], er[1], er[2], lr,
                             n_actions, starting_beta, input_dims,
                             c_dims, k_size, s_size, fc_dims,
-                            mem_size=mem_size,
-                            batch_size=batch_size, replace=r,
+                            mem_size,
+                            batch_size, r, prioritized,
                             algo='DQNAgent', env_name=env_size, chkpt_dir=models_path))
             for r_i, agent in enumerate(agents):
-                file_name = "agent%s_experience%s_checkpoint.pth" %(str(r_i),str(start_up_exp))
+                file_name = "agent%s_experience%s_checkpoint.pth" %(str(r_i),str(policy))
                 file_name = os.path.join(load_path, file_name)
                 agent.q_eval.load_state_dict(T.load(file_name, map_location='cuda:0'))
                 agent.q_eval.eval()
@@ -209,27 +211,26 @@ if __name__ == '__main__':
                 done = False
                 
 
-                if show_plot:
-                    PR.print_trajectories(ax, save_path, policy, env)
+                # if show_plot:
+                #     PR.print_trajectories(ax, save_path, policy, env)
             
                 for step in range(int(ms)):
+                    if step == 0: actions = [None]
+                    if show_plot:
+                        plt.cla()
+                        PR.print_trajectories(ax, save_path, policy, env, actions[0])
+                        # breakpoint
                     actions = []
                     action = [0]*nr
                     for i_r in range(0,nr):
                         action[i_r] = agent.choose_action(observation[i_r])
+                        trajectory.append((env.pos[i_r], action[i_r], i_r))
                     actions.append(action)
-                    trajectory.append((env.pos[i_r], action, i_r))
                     observation_, reward, done, info = env.step(action)
                     if info != None:
                         for j in range(nr):
                             if info == j:
                                 cnt[j] += 1
-
-                    # if not load_checkpoint:
-                    #     for i_r in range(0,nr):
-                    #         agent.store_transition(observation[i_r], action[i_r],
-                    #                             reward, observation_[i_r], done)
-                    #         agent.learn()
 
                     observation = observation_
 
@@ -240,9 +241,7 @@ if __name__ == '__main__':
                             if not info: plt.pause(1)
                         trajectories.append(trajectory)
                         break
-                    if show_plot:
-                        plt.cla()
-                        PR.print_trajectories(ax, save_path, policy, env, actions[0])
+                    
                 steps.append(step)
                 # if step == int(ms)-1 and not done:
                 #     trajectories.append(trajectory)
@@ -253,5 +252,6 @@ if __name__ == '__main__':
             print("Total percentage success: %d / %d x 100 = %.2f %%" %(cnt[0]+cnt[1], testing_iterations, p))
             print("Average steps: %.2f" %(np.mean(np.array(steps))))
             file_name = "Results%s.json" %(str(policy))
-            file_name = os.path.join(save_path, file_name)
+            file_name = os.path.join(load_path, file_name)
             write_json("Success:%s, Average steps:%s" %(str(p), str(np.mean(np.array(steps)))), file_name)
+breakpoint

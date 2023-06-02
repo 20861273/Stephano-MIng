@@ -5,6 +5,15 @@ from matplotlib.pyplot import cm
 import os
 import math
 
+def moving_avarage_smoothing(X,k):
+	S = np.zeros(X.shape[0])
+	for t in range(X.shape[0]):
+		if t < k:
+			S[t] = np.mean(X[:t+1])
+		else:
+			S[t] = np.sum(X[t-k:t])/k
+	return S
+
 def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, dr, er):
     mean_rewards = np.zeros((len(scores), len(scores[0][0])))
     std_rewards = np.zeros((len(scores), len(scores[0][0])))
@@ -21,12 +30,16 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
                 v = sum((scores[i_ts][e][i_ep]-mean_rewards[i_ts][i_ep])**2 for e in range(len(scores[i_ts])))
                 std_rewards[i_ts][i_ep] = math.sqrt(v / (len(scores[0])-1))
     
+    mov_avg_rewards = np.empty(mean_rewards.shape)
+
+    mov_avg_rewards[0] = moving_avarage_smoothing(mean_rewards[0], 10)
+    
     fig=plt.figure()
     ax=fig.add_subplot(111)
 
     l = []
     for i in range(len(scores)):
-        l.append("%s:  e=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s, α=%s, γ=%s, ϵ=%s" %(
+        l.append("%s:  e=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s, \nα=%s, γ=%s, ϵ=%s" %(
                 str(i),
                 str(ts[i]),
                 str(pr[i]),
@@ -51,17 +64,17 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
             greater_than_one = np.argwhere(np.array(std_top) > 1)
             for j in greater_than_one:
                 std_top[j] = 1
-            ax.plot(np.arange(0, len(mean_rewards[i]), int(step+i)), mean_rewards[i][::int(step+i)], color=c[i], label=l[i])
+            ax.plot(np.arange(0, len(mov_avg_rewards[i]), int(step+i)), mov_avg_rewards[i][::int(step+i)], color=c[i], label=l[i])
             plt.fill_between(np.arange(0, len(mean_rewards[i]), int(step+i)), std_bottom, std_top, alpha = 0.1, color=c[i])
     
     lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    ax.set_xlabel("Training Steps", color="C0")
+    ax.set_xlabel("Episodes", color="C0")
     ax.set_ylabel("Rewards", color="C0")
     ax.tick_params(axis='x', colors="C0")
     ax.tick_params(axis='y', colors="C0")
     np_scores = np.array(scores)
     # np_scores.min()-1
-    ax.set_ylim(np_scores.min()-1, np_scores.max()+1)
+    ax.set_ylim(-1.5, np_scores.max()+0.5)
     ax.set_title("Learning curve:")
     # plt.xlabel("Training Steps")
     # plt.ylabel("Rewards")
@@ -86,15 +99,15 @@ def read_hp_json(path, file_name):
 
         # nr, ep, 
         #  int(nr), int(ep), 
-    ts, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims,mem_size, batch_size, replace,env_size = lst[:]
-    return int(ts),float(lr), float(dr), float(er), float(pr), float(negr), float(per), float(nsr), int(ms)
+    ts, _, _, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims, _, mem_size, batch_size, replace,env_size = lst[:]
+    return int(ts),float(lr), float(dr), er, float(pr), float(negr), float(per), float(nsr), int(ms)
 
 def read_hp_jsons(path, file_name):
     file_path = os.path.join(path, file_name)
     with open(file_path, "r") as f:
         txt = json.load(f)
     
-    ts, lr, dr, er, pr, nr, per, nsr, ms, _, _, _, _ = txt.split(",")
+    ts, _, _, lr, dr, er, pr, nr, per, nsr, ms, _, _, _, _ = txt.split(",")
     return ts, lr, dr, er, pr, nr, per, nsr, ms
 
 
@@ -105,22 +118,8 @@ PATH = os.path.join(PATH, 'DQN')
 load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
-step = 1#len(scores[0][0])/10000
-policies = [3]
-# policies = [0,1,2,3]
-# policies = [4,5,6,7]
-# policies = [0,1]
-# policies = [0,2]
-# policies = [0,4]
-# policies = [1,3]
-# policies = [1,5]
-# policies = [2,3]
-# policies = [2,6]
-# policies = [3,7]
-# policies = [4,5]
-# policies = [4,6]
-# policies = [5,7]
-# policies = [6,7]
+step = 100#len(scores[0][0])/10000
+policies = [0]
 
 
 rewards = []
@@ -133,7 +132,7 @@ for i, policy in enumerate(policies):
     tss.append(float(ts))
     lrs.append(float(lr))
     drs.append(float(dr))
-    ers.append(float(er))
+    ers.append(er)
     prs.append(float(pr))
     nrs.append(float(nr))
     pers.append(float(per))
@@ -146,7 +145,7 @@ string = [string+","+str(i) for i in policies]
 filename = 'drone_0_learning_cruves%s, step=%s.png' %(string, str(step))
 filename = os.path.join(load_path, filename)
 
-plot_learning_curves([rewards[0][:10]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)
+plot_learning_curves([rewards[0][0:10]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)
 
 string = ""
 string = [string+","+str(i) for i in policies]

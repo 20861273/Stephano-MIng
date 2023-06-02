@@ -142,7 +142,7 @@ class print_results:
         plt.rc('axes', titlesize=10)
 
         # Prints graph
-        fig,(ax, ax1) = plt.subplots(1, 2, figsize=(WIDTH, HEIGHT))
+        fig,(ax, ax1) = plt.subplots(1, 2, figsize=(WIDTH/10, HEIGHT/10))
 
         ax.set_aspect("equal")
         ax.set_xlim(0.5, self.cols + 0.5)

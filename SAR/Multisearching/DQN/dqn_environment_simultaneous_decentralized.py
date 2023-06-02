@@ -59,6 +59,12 @@ class Environment:
                             'boundary' :   [False]*self.nr,
                             'drone'    :   [False]*self.nr}
         self.collision_state = False
+        self.actions = np.empty((self.nr, 2), dtype=object)
+
+        # Fill each element with lists using a for loop
+        for i in range(self.nr):
+            for j in range(2):
+                self.actions[i, j] = []
 
         # print("\nGrid size: ", self.grid.shape)
 
@@ -112,11 +118,21 @@ class Environment:
 
         # Setup agent
         # Set new starting pos
-        for i in range(0, self.nr):
-            indices = np.argwhere(self.grid == States.UNEXP.value)
-            np.random.shuffle(indices)
-            self.starting_pos[i] = Point(indices[i,1], indices[i,0])
-            self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+        border_spawning = False
+        if border_spawning:
+            for i in range(0, self.nr):
+                indices = np.argwhere(self.grid == States.UNEXP.value == States.UNEXP.value)
+                indices = list(filter(self._is_boundary, indices))
+                np.random.shuffle(indices)
+                self.starting_pos[i] = Point(indices[i,1], indices[i,0])
+                self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+            
+        else:
+            for i in range(0, self.nr):
+                indices = np.argwhere(self.grid == States.UNEXP.value)
+                np.random.shuffle(indices)
+                self.starting_pos[i] = Point(indices[i,1], indices[i,0])
+                self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos.copy()
         self.prev_pos = self.starting_pos.copy()
@@ -166,10 +182,14 @@ class Environment:
         # state = self.get_state()
 
         return state
+    
+    def _is_boundary(self, id):
+        (x, y) = (id.x, id.y)
+        return x == 0 or x == WIDTH or y == 0 or y == HEIGHT
 
     def step(self, actions):
         # action = self.decode_action(action)
-        self.frame_iteration += 1
+        
         self.score = [0]*self.nr
 
         # 2. Do action
@@ -189,6 +209,8 @@ class Environment:
         self.score = temp_score
         reward = self.score
 
+        self.frame_iteration += 1
+
         # 5. Check exit condition
         if self.collision_state:
             reward = self.score
@@ -199,6 +221,9 @@ class Environment:
         if len(found_goal) != 0:
         # if (self.exploration_grid == self.goal_state).all():
             self.score[found_goal[0]] += self.positive_reward
+            # for i in range(self.nr):
+            #     if found_goal[0] == i: self.score[i] += self.positive_reward
+            #     else: self.score[i] += self.positive_reward/2
             reward = self.score
             game_over = True
             for i in range(0, self.nr):
@@ -267,22 +292,22 @@ class Environment:
 
         # Generate image map
         # Padded
-        shape = list(self.grid.shape)
-        shape[0] += 2
-        shape[1] += 2
+        # shape = list(self.grid.shape)
+        # shape[0] += 2
+        # shape[1] += 2
 
-        image_map = np.ones((self.nr,) + (3,) + tuple(shape))
-        for r_i in range(self.nr):
-            image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
-            image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
-            image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
+        # image_map = np.ones((self.nr,) + (3,) + tuple(shape))
+        # for r_i in range(self.nr):
+        #     image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
+        #     image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
+        #     image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
 
         # Non-padded
-        # image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
-        # for r_i in range(self.nr):
-        #     image_map[r_i][0] = location_map[r_i]
-        #     image_map[r_i][1] = other_locations_map[r_i]
-        #     image_map[r_i][2] = exploration_map
+        image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+        for r_i in range(self.nr):
+            image_map[r_i][0] = location_map[r_i]
+            image_map[r_i][1] = other_locations_map[r_i]
+            image_map[r_i][2] = exploration_map
 
         # Inputs:
         # 1. Position state:
@@ -334,14 +359,8 @@ class Environment:
         return False
         
     def _update_env(self):
-        if self.frame_iteration == 0:
-            # Update robot position(s) on grid
-            for i in range(0, self.nr):
-                self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
-        else:
-            # Update robot position(s) on grid
-            for i in range(0, self.nr): self.grid[self.prev_pos[i].y,self.prev_pos[i].x] = States.EXP.value
-            for i in range(0, self.nr): self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
+        for i in range(0, self.nr): self.grid[self.prev_pos[i].y,self.prev_pos[i].x] = States.EXP.value
+        for i in range(0, self.nr): self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
             
 
     def _move(self, action):

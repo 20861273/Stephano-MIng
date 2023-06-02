@@ -7,8 +7,10 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 10
+WIDTH = 10
+
+N = 4
 
 # DENSITY = 30 # percentage
 
@@ -59,6 +61,12 @@ class Environment:
                             'boundary' :   [False]*self.nr,
                             'drone'    :   [False]*self.nr}
         self.collision_state = False
+        self.actions = np.empty((self.nr, 2), dtype=object)
+
+        # Fill each element with lists using a for loop
+        for i in range(self.nr):
+            for j in range(2):
+                self.actions[i, j] = []
 
         # print("\nGrid size: ", self.grid.shape)
 
@@ -74,10 +82,13 @@ class Environment:
         # grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         # Random goal location spawning
-        indices = np.argwhere(grid == States.UNEXP.value)
-        np.random.shuffle(indices)
-        self.goal = Point(indices[0,1], indices[0,0])
-        grid[self.goal.y, self.goal.x] = States.GOAL.value
+        self.goal = []*N
+        for i in range(N):
+            indices = np.argwhere(grid == States.UNEXP.value)
+            np.random.shuffle(indices)
+            self.goal.append(Point(indices[i,1], indices[i,0]))
+
+            grid[self.goal[i].y, self.goal[i].x] = States.GOAL.value
 
         # Set robot(s) start position
         for i in range(0, self.nr):
@@ -105,10 +116,13 @@ class Environment:
         # grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         # Random goal location spawning
-        indices = np.argwhere(self.grid == States.UNEXP.value)
-        np.random.shuffle(indices)
-        self.goal = Point(indices[0,1], indices[0,0])
-        self.grid[self.goal.y, self.goal.x] = States.GOAL.value
+        self.goal = []*N
+        for i in range(N):
+            indices = np.argwhere(self.grid == States.UNEXP.value)
+            np.random.shuffle(indices)
+            self.goal.append(Point(indices[i,1], indices[i,0]))
+
+            self.grid[self.goal[i].y, self.goal[i].x] = States.GOAL.value
 
         # Setup agent
         # Set new starting pos
@@ -169,8 +183,8 @@ class Environment:
 
     def step(self, actions):
         # action = self.decode_action(action)
-        self.frame_iteration += 1
-        self.score = 0
+        
+        self.score = [0]*self.nr
 
         # 2. Do action
         self._move(actions) # update the robot
@@ -183,25 +197,32 @@ class Environment:
 
         state = self.get_state()
 
-        self.score += self.calc_reward()
-        self.score -= self.negative_step_reward
+        temp_score = [agnet_score + reward for agnet_score, reward in zip(self.score, self.calc_reward())]
+        self.score = temp_score
+        temp_score = [agnet_score - self.negative_step_reward for agnet_score in self.score]
+        self.score = temp_score
         reward = self.score
+
+        self.frame_iteration += 1
 
         # 5. Check exit condition
         if self.collision_state:
             reward = self.score
             game_over = True
-            return state, reward, game_over, 0
+            return state, reward, game_over, None
 
-        if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
+        found_goal = [i for i in range(0, self.nr) if any([True for goal in self.goal if goal == self.pos[i]])]
+        if len(found_goal) != 0:
         # if (self.exploration_grid == self.goal_state).all():
-            self.score += self.positive_reward
+            self.score[found_goal[0]] += self.positive_reward
             reward = self.score
             game_over = True
-            return state, reward, game_over, 1
+            for i in range(0, self.nr):
+                if any([True for goal in self.goal if goal == self.pos[i]]):
+                    return state, reward, game_over, i
 
         # 6. return game over and score
-        return state, reward, game_over, 0
+        return state, reward, game_over, None
     
     def decode_action(self, action):
         temp_action = action
@@ -215,12 +236,12 @@ class Environment:
 
     def calc_reward(self):
         temp_arr = np.array([False]*self.nr)
-        score = 0
+        score = [0]*self.nr
         for i in range(0, self.nr):
             if self.exploration_grid[self.pos[i].y, self.pos[i].x] == False:
                 temp_arr[i] = True
             if temp_arr[i] == True:
-                score += self.positive_exploration_reward
+                score[i] += self.positive_exploration_reward
         return score
 
     def get_state(self, selected_r=None):
@@ -261,21 +282,23 @@ class Environment:
                 other_locations_map[r_i][self.pos[or_i].y, self.pos[or_i].x] = 1
 
         # Generate image map
-        shape = list(self.grid.shape)
-        shape[0] += 2
-        shape[1] += 2
+        # Padded
+        # shape = list(self.grid.shape)
+        # shape[0] += 2
+        # shape[1] += 2
 
-        image_map = np.ones((self.nr,) + (3,) + tuple(shape))
-        for r_i in range(self.nr):
-            image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
-            image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
-            image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
-
-        # image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+        # image_map = np.ones((self.nr,) + (3,) + tuple(shape))
         # for r_i in range(self.nr):
-        #     image_map[r_i][0] = location_map[r_i]
-        #     image_map[r_i][1] = other_locations_map[r_i]
-        #     image_map[r_i][2] = exploration_map
+        #     image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
+        #     image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
+        #     image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
+
+        # Non-padded
+        image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+        for r_i in range(self.nr):
+            image_map[r_i][0] = location_map[r_i]
+            image_map[r_i][1] = other_locations_map[r_i]
+            image_map[r_i][2] = exploration_map
 
         # Inputs:
         # 1. Position state:
@@ -301,14 +324,16 @@ class Environment:
         obstacles = np.argwhere(self.grid == States.OBS.value)
         # Collision with obstacle
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
+            self.score[r_i] -= self.negative_reward
             self.collision['obstacle'][r_i] = True
         # Collision with boundary
         elif not 0 <= pt.y < self.grid.shape[0] or not 0 <= pt.x < self.grid.shape[1]:
-            self.score -= self.negative_reward
+            self.score[r_i] -= self.negative_reward
             self.collision['boundary'][r_i] = True
         # Collision with other drone
         for i, pos_i in enumerate(new_pos):
             if i != r_i and pt == pos_i:
+                self.score[r_i] -= self.negative_reward
                 self.collision['drone'][r_i] = True
                 self.collision['drone'][i] = True
         

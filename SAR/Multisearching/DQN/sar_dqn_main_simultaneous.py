@@ -16,10 +16,10 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
-    off_policy = True
+    off_policy = False
     show_plot = True
-    policy_num = [0,2]
-    testing_iterations = 10000
+    policy_num = [0,1,2,3]
+    testing_iterations = 1000
 
     load_checkpoint = False
     n_experiences = 4
@@ -170,11 +170,15 @@ if __name__ == '__main__':
             ts, lr, dr, er, pr, ner, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims, mem_size, batch_size, r = read_hp_json(load_path, file_name)
             # int(ts),float(lr), float(dr), float(er), float(pr), float(nr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims,int(mem_size), int(batch_size), int(replace),env_size
             
+            # nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
+            #      input_dims, c_dims, k_size, s_size, fc_dims,
+            #      mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn'
+
             agent = DQNAgent(nr, dr, er, er, er, lr,
-                     n_actions, input_dims,
+                     n_actions, 0.4, input_dims,
                      c_dims, k_size, s_size, fc_dims,
                      mem_size=mem_size,
-                     batch_size=batch_size, replace=replace,
+                     batch_size=batch_size, replace=replace, prioritized=False,
                      algo='DQNAgent', env_name=env_size, chkpt_dir=models_path)
             file_name = "experience%s.pth" %(str(policy))
             file_name = os.path.join(load_path, file_name)

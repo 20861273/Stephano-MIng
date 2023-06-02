@@ -5,12 +5,11 @@ import json
 import os
 from matplotlib.pyplot import cm
 import math
-import pandas as pd
 
 def save_hp(save_path, nr, training_sessions, episodes,
             positive_rewards, negative_rewards, positive_exploration_rewards, negative_step_rewards,
             max_steps, learning_rate, discount_rate, epsilon, n_actions,
-            c_dims, k_size, s_size, fc_dims,
+            c_dims, k_size, s_size, fc_dims, prioritized,
             batch_size, mem_size, replace, env_size):
     
     i_exp = 0
@@ -39,6 +38,7 @@ def save_hp(save_path, nr, training_sessions, episodes,
                                         "k_size":k_size,
                                         "s_size":s_size,
                                         "fc_dims":fc_dims,
+                                        "prioritized":prioritized,
                                         "mem_size":mem_size,
                                         "batch_size":batch_size,
                                         "replace":replace,
@@ -85,8 +85,8 @@ def read_hp_json(path, file_name):
         # nr, ep, 
 #  int(nr), int(ep), 
 
-    ts, nr, ep, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims,mem_size, batch_size, replace,env_size = lst[:]
-    return int(ts), int(nr), int(ep), float(lr), float(dr), er, float(pr), float(negr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims,int(mem_size), int(batch_size), int(replace), env_size
+    ts, nr, ep, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims, prioritized, mem_size, batch_size, replace,env_size = lst[:]
+    return int(ts),int(nr), int(ep), float(lr), float(dr), er, float(pr), float(negr), float(per), float(nsr), int(ms), int(n_actions), c_dims, k_size, s_size, fc_dims, prioritized, int(mem_size), int(batch_size), int(replace), env_size
 
 def plot_learning_curve(nr, scores, filename, lr, dr, er, pr, negr, per, nsr, ms, totle_time):
     mean_rewards = np.zeros((len(scores[0]),))
@@ -96,6 +96,8 @@ def plot_learning_curve(nr, scores, filename, lr, dr, er, pr, negr, per, nsr, ms
         for i_ep in range(len(scores[0])):
             s = sum(scores[e][i_ep] for e in range(len(scores)))
             mean_rewards[i_ep] = s / len(scores)
+    else:
+        mean_rewards = scores[0]
 
     if len(scores) > 1:
         for i_ep in range(len(scores[0])):
@@ -107,8 +109,9 @@ def plot_learning_curve(nr, scores, filename, lr, dr, er, pr, negr, per, nsr, ms
     ax=fig.add_subplot(111)
 
     ax.plot(np.arange(0, len(mean_rewards), 1), mean_rewards[::1], color="C1", label=l)
-    plt.fill_between(np.arange(0, len(mean_rewards), int(1)), \
-        mean_rewards[::int(1)]-std_rewards[::int(1)], mean_rewards[::int(1)]+std_rewards[::int(1)], alpha = 0.1, color = 'b')
+    if len(scores) > 1:
+        plt.fill_between(np.arange(0, len(mean_rewards), int(1)), \
+            mean_rewards[::int(1)]-std_rewards[::int(1)], mean_rewards[::int(1)]+std_rewards[::int(1)], alpha = 0.1, color = 'b')
     # plt.fill_between(np.arange(0, len(mean_rewards), int(1)), \
     #     mean_rewards[::int(1)], mean_rewards[::int(1)]+std_rewards[::int(1)], alpha = 0.1, color = 'b')
     lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))

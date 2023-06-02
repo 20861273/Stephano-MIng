@@ -34,8 +34,8 @@ GSD_H = (height * sensor_h) / (focal_length * pixel_h) # m
 FOV_W = GSD_W * pixel_w
 FOV_H = GSD_H * pixel_h
 
-src_file = r"C:\Users\Stephano\Downloads\search_area.geojson"
-dst_file = r"C:\Users\Stephano\Documents\Stephano-MIng\search_area.geojson"
+src_file = r"E:\Stephano\Downloads\search_area.geojson"
+dst_file = r"E:\Stephano\Documents\Stephano-MIng\search_area.geojson"
 os.rename(src_file, dst_file)
 
 # Load the .geojson file
@@ -107,10 +107,10 @@ for i in range(0, grid_height):
         
         # check if the rectangle is inside the polygon and draw it
         if polygon.contains(point0) or polygon.contains(point1) or polygon.contains(point2) or polygon.contains(point3):
-            folium.Rectangle([coordinate0, coordinate1], color='black').add_to(m)
+            folium.Rectangle([coordinate0, coordinate1], color='black', weight=0.5).add_to(m)
             grid[i,j] = 0
         else:
-            folium.Rectangle([coordinate0, coordinate1], color='black', fill=True,).add_to(m)
+            folium.Rectangle([coordinate0, coordinate1], color='black', weight=0.5, fill=True).add_to(m)
             grid[i,j] = 1
 
         coordinate0[1] += cell_w
