@@ -340,7 +340,7 @@ def a_star(graph, start, termination_time):
                             f.write('\n')
                 
             # after generating all the child states from the current state, sort the priority queue from highest to lowest score
-            open_set = list(sorted(open_set, key=itemgetter(0), reverse=False))
+            open_set = list(sorted(open_set, key=itemgetter(0), reverse=True))
             open_set = list(sorted(open_set, key=itemgetter(5)))
 
         # if the priority queue is empty and the initial node was never reached after using all the fuel, then return empty path
@@ -348,8 +348,8 @@ def a_star(graph, start, termination_time):
 
 env = Environment()
 
-env.starting_pos= env.starting_pos._replace(x=50)
-env.starting_pos =env.starting_pos._replace(y=50)
+env.starting_pos= env.starting_pos._replace(x=15)
+env.starting_pos =env.starting_pos._replace(y=15)
 
 printer = print_results(env.grid, HEIGHT, WIDTH)
 

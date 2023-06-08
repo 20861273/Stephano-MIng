@@ -64,10 +64,23 @@ class DeepQNetwork(nn.Module):
 
         return actions
 
-    def save_checkpoint(self):
-        # print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+    def save_checkpoint(self, epoch, episode, time, loss):
+        T.save({
+            'epoch': epoch,
+            'episode': episode,
+            'time': time,
+            'model_state_dict': self.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': loss,
+            }, self.checkpoint_file)
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
-        self.load_state_dict(T.load(self.checkpoint_file))
+        checkpoint = T.load(self.checkpoint_file)
+        self.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        for state in self.optimizer.state.values():
+            for k, v in state.items():
+                if isinstance(v, T.Tensor):
+                    state[k] = v.cuda()
+        return checkpoint

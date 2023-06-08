@@ -11,18 +11,18 @@ import torch as T
 from dqn_save_results import print_results
 import matplotlib.pyplot as plt
 import time
-from dqn_decentralized_training import dqn
+from dqn_decentralized_training import decentralized_dqn
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     # Testing: for on-policy runs
-    off_policy = False
+    off_policy = True
     show_plot = False
     policy_num = [0]
     testing_iterations = 1000
 
-    load_checkpoint = False
-    n_experiences = 3
+    load_checkpoint = True
+    n_experiences = 1
     start_up_exp = 0
 
     nr = 2
@@ -90,10 +90,10 @@ if __name__ == '__main__':
     models_path = os.path.join(save_path, 'models')
     if not os.path.exists(models_path): os.makedirs(models_path)
 
-    load_checkpoint_path = os.path.join(PATH, "01-06-2023 11h43m00s")
+    load_checkpoint_path = os.path.join(PATH, "05-06-2023 11h04m57s")
     if load_checkpoint: save_path = load_checkpoint_path
 
-    env_size = '%sx%s' %(str(WIDTH), str(HEIGHT))
+    env_size = '%sx%s_agent_' %(str(WIDTH), str(HEIGHT))
     
     if not load_checkpoint:
         save_hp(save_path, nr, training_sessions, episodes,
@@ -161,7 +161,7 @@ if __name__ == '__main__':
                                 for dr_i in discount_rate:
                                     for er_i in epsilon:
 
-                                        load_checkpoint = dqn(nr, training_sessions, episodes, dr_i, lr_i, er_i[0], er_i[1], er_i[2],
+                                        load_checkpoint = decentralized_dqn(nr, training_sessions, episodes, dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                     pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
                                                     n_actions, starting_beta, input_dims,
                                                     c_dims, k_size, s_size, fc_dims,
@@ -202,7 +202,7 @@ if __name__ == '__main__':
             trajectories = []
             fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
             for i in range(0, testing_iterations):
-                if i % 1000 == 0 and i != 0:
+                if i % 100 == 0 and i != 0:
                     print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt[0]+cnt[1])/float(i)*100, np.mean(np.array(steps))))
                 observation = env.reset()
 

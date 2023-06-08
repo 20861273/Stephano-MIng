@@ -12,5 +12,10 @@ import matplotlib.cm as cm
 from datetime import datetime
 
 from collections import namedtuple
+ls = True
 
-
+for i in range(10):
+    if ls:
+        i = 8
+        ls = False
+    print(i)

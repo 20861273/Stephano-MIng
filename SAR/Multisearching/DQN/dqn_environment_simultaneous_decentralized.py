@@ -121,7 +121,7 @@ class Environment:
         border_spawning = False
         if border_spawning:
             for i in range(0, self.nr):
-                indices = np.argwhere(self.grid == States.UNEXP.value == States.UNEXP.value)
+                indices = np.argwhere(self.grid == States.UNEXP.value)
                 indices = list(filter(self._is_boundary, indices))
                 np.random.shuffle(indices)
                 self.starting_pos[i] = Point(indices[i,1], indices[i,0])
@@ -140,7 +140,6 @@ class Environment:
         self.direction = [(Direction.RIGHT).value for i in range(self.nr)]
                 
         self.score = 0
-        self.frame_iteration = 0
         
         state = self.get_state()
 
@@ -209,8 +208,6 @@ class Environment:
         self.score = temp_score
         reward = self.score
 
-        self.frame_iteration += 1
-
         # 5. Check exit condition
         if self.collision_state:
             reward = self.score
@@ -221,9 +218,12 @@ class Environment:
         if len(found_goal) != 0:
         # if (self.exploration_grid == self.goal_state).all():
             self.score[found_goal[0]] += self.positive_reward
+
+            # Give other agents half positive reward
             # for i in range(self.nr):
             #     if found_goal[0] == i: self.score[i] += self.positive_reward
             #     else: self.score[i] += self.positive_reward/2
+
             reward = self.score
             game_over = True
             for i in range(0, self.nr):
@@ -359,9 +359,9 @@ class Environment:
         return False
         
     def _update_env(self):
+        # Update robot position(s) on grid
         for i in range(0, self.nr): self.grid[self.prev_pos[i].y,self.prev_pos[i].x] = States.EXP.value
         for i in range(0, self.nr): self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
-            
 
     def _move(self, action):
         # Get directions

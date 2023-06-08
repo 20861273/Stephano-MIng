@@ -33,6 +33,8 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
     mov_avg_rewards = np.empty(mean_rewards.shape)
 
     mov_avg_rewards[0] = moving_avarage_smoothing(mean_rewards[0], 10)
+
+    # mov_avg_rewards = mean_rewards
     
     fig=plt.figure()
     ax=fig.add_subplot(111)

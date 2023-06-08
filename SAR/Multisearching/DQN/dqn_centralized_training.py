@@ -1,51 +1,65 @@
-from dqn_environment_simultaneous import Environment, HEIGHT, WIDTH, Point, States, Direction
+from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from utils import plot_learning_curve, write_json, read_hp_json, read_json, save_hp, read_checkpoint_hp_json
-from dqn_agent_simultaneous import DQNAgent
+from dqn_agent import DQNAgent
+from dqn_save_results import print_results
 import numpy as np
 import os
 import torch as T
 import time
+import matplotlib.pyplot as plt
 
-def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, eps_min, eps_dec,
-        positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, max_steps, i_exp,
-        n_actions, input_dims, 
-        c_dims, k_size, s_size, fc_dims,
-        batch_size, mem_size, replace,
-        models_path, load_path, save_path, env_size, load_checkpoint, start_up_exp):
+def centralized_dqn(nr, training_sessions, episodes, print_interval,
+                    discount_rate, learning_rate, epsilon, eps_min, eps_dec,
+                    positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
+                    max_steps, i_exp,
+                    n_actions, starting_beta, input_dims, 
+                    c_dims, k_size, s_size, fc_dims,
+                    batch_size, mem_size, replace,
+                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint):
+    
+    # initialize training session variables
     start_time = time.time()
     ts_rewards = []
+    show_plot = False
+
+    # training sessions loop
     for i_ts in range(training_sessions):
+        # initialized in epoch variables
         rewards, steps = [], []
+        cntr = 0
+        loss = 0
+
+        # initialize environment
         env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward)
+        
+        # initialize agents
+        model_name = env_size
         agent = DQNAgent(nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
-                     n_actions, input_dims,
-                     c_dims, k_size, s_size, fc_dims,
-                     mem_size=mem_size,
-                     batch_size=batch_size, replace=replace,
-                     algo='DQNAgent', env_name=env_size, chkpt_dir=models_path)
+                        n_actions, starting_beta, input_dims,
+                        c_dims, k_size, s_size, fc_dims,
+                        mem_size, batch_size, replace, prioritized,
+                        algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path)
+        
+        # for debugging
+        if show_plot:
+            fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
+            PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
+        
+        # load agent experiences and rewards
+        # Redone not tested
+        #################################################################################
         if load_checkpoint:
-            file_name = "experience%s_checkpoint.pth" %(str(start_up_exp))
-            file_name = os.path.join(load_path, file_name)
-            agent.q_eval.load_state_dict(T.load(file_name))
-            agent.q_eval.eval()
-            agent.q_next.load_state_dict(T.load(file_name))
-            agent.q_next.eval()
+            checkpoint = agent.load_models()
+            i_ts = checkpoint['epoch']
 
-            file_name = "hyperparameters%s_checkpoint.json" %(str(start_up_exp))
-            file_name = os.path.join(load_path, file_name)
-            ts, ep = read_checkpoint_hp_json(file_name)
-
-            file_name = "ts_rewards%s.json" %(str(start_up_exp))
-            file_name = os.path.join(load_path, file_name)
+            file_name = "ts_rewards%s.json" %(str(checkpoint['epoch']))
+            file_name = os.path.join(load_checkpoint_path, file_name)
             ts_rewards = read_json(file_name)
 
-            file_name = "rewards%s.json" %(str(start_up_exp))
-            file_name = os.path.join(load_path, file_name)
+            file_name = "rewards%s.json" %(str(checkpoint['epoch']))
+            file_name = os.path.join(load_checkpoint_path, file_name)
             rewards = read_json(file_name)
-
-        if load_checkpoint:
-            if i_ts < ts:
-                continue
+        #################################################################################
 
         print("Experience: %s, Epoch: %s,\n\
             Discount rate: %s, Learning rate: %s, Epsilon: %s\n\
@@ -57,54 +71,78 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
                     str(positive_reward), str(negative_reward), str(positive_exploration_reward), str(negative_step_reward),\
                     str(max_steps), str(replace)))
 
-        cntr = 0
-        best_reward = -np.inf
+        # epochs loop (multiple episodes are called an epoch)
         for i_episode in range(episodes):
+
+            # if epoch loaded the epoch should start at the right episode
+            # UPDATED not tested
+            #################################################################################
             if load_checkpoint:
-                if i_episode <= ep:
+                if i_episode <= checkpoint['episode']:
                     continue
                 else:
                     load_checkpoint = False
+            #################################################################################
+            
+            # initialize episodic variables
             episode_reward = 0
-            done = False
-            observation = env.reset()
-            breakpoint
             action = [0]*nr
+
+            # reset environment
+            observation = env.reset()
+            
+            # episode loop
             for step in range(max_steps):
+
+                # action selection
                 for i_r in range(0,nr):
                     action[i_r] = agent.choose_action(observation[i_r])
-                observation_, reward, done, info = env.step(action)
+                
+                # execute step
+                observation_, reward, done, info = env.step_centralized(action)
+                
+                # add step reward to episode reward
                 episode_reward += reward
+                
+                # update success counter
                 cntr += info
 
+                # store transitions and execute learn function
                 if not load_checkpoint:
                     for i_r in range(0,nr):
                         agent.store_transition(observation[i_r], action[i_r],
                                             reward, observation_[i_r], done)
-                        agent.learn()
+                        loss = agent.learn()
 
                 observation = observation_
 
+                # for debugging
+                # Done not tested
+                #################################################################################
+                if show_plot:
+                    plt.cla()
+                    PR.print_trajectories(ax, save_path, i_ts, env, action)
+                #################################################################################
+
+                # checks if termination condition was met
                 if done:
                     break
+
+            # add episode rewards/steps to rewards/steps lists
             rewards.append(episode_reward)
             steps.append(step)
 
+            # calculate average rewards over last 100 episodes (only for display purposes)
             avg_reward = np.mean(rewards[-100:])
             avg_steps = np.mean(steps[-100:])
-            if i_episode % 10000 == 0 and i_episode != 0:
+
+            # save checkpoint
+            # REDONE not tested
+            #################################################################################
+            if i_episode % 1000 == 0 and i_episode != 0:
                 if not load_checkpoint:
-                    file_name = "experience%s_checkpoint.pth" %(str(i_exp))
-                    file_name = os.path.join(save_path, file_name)
-                    T.save(agent.q_eval.state_dict(),file_name)
-                    
-                    hp =    {
-                            "current_training_session":i_ts,
-                            "current_episode":i_episode
-                            }
-                    file_name = "hyperparameters%s_checkpoint.json" %(str(i_exp))
-                    file_name = os.path.join(save_path, file_name)
-                    write_json(hp, file_name)
+                    print('... saving checkpoint ...')
+                    agent.save_models(i_ts, i_episode, time.time()-start_time, loss)
 
                     file_name = "ts_rewards%s.json" %(str(i_exp))
                     file_name = os.path.join(save_path, file_name)
@@ -114,6 +152,9 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
                     file_name = os.path.join(save_path, file_name)
                     write_json(rewards, file_name)
 
+            #################################################################################
+
+            # display progress
             if i_episode % 1000==0 or i_episode == episodes-1 and i_episode != 0:
                 print('episode= ', i_episode,
                         ',reward= %.2f,' % episode_reward,
@@ -122,23 +163,14 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
                         'success= %.4f' % (float(cntr)/1000.0*100.0))
                 cntr = 0
             
+        # save rewards in training session rewards
         ts_rewards.append(rewards)
+
+        # save model and rewards
+        # REDONE not tested
+        #################################################################################
         if not load_checkpoint:
-            file_name = "experience%s.pth" %(str(i_exp))
-            file_name = os.path.join(save_path, file_name)
-            T.save(agent.q_eval.state_dict(),file_name)
-
-            file_name = "experience%s_checkpoint.pth" %(str(i_exp))
-            file_name = os.path.join(save_path, file_name)
-            T.save(agent.q_eval.state_dict(),file_name)
-
-            hp =    {
-                    "current_training_session":i_ts,
-                    "current_episode":i_episode
-                    }
-            file_name = "hyperparameters%s_checkpoint.json" %(str(i_exp))
-            file_name = os.path.join(save_path, file_name)
-            write_json(hp, file_name)
+            agent.save_models(i_ts, i_episode, time.time()-start_time, loss)
 
             file_name = "ts_rewards%s.json" %(str(i_exp))
             file_name = os.path.join(save_path, file_name)
@@ -147,47 +179,34 @@ def dqn(nr, training_sessions, episodes, discount_rate, learning_rate, epsilon, 
             file_name = "rewards%s.json" %(str(i_exp))
             file_name = os.path.join(save_path, file_name)
             write_json(rewards, file_name)
+        #################################################################################
+
+            
     
+    # if loaded from wrong training session and all epochs have been trained to final episode,
+    # this makes sure the load_checkpoint variable is false for the next training session
+    if load_checkpoint:
+        load_checkpoint = False
+    
+    # calculate total time of training session
     end_time = time.time()
     total_time = end_time - start_time
     print(total_time)
 
+    # save reward lists and plot learning curve
     filename = 'learning_cruve%s.png' %(str(i_exp))
     filename = os.path.join(save_path, filename)
     plot_learning_curve(ts_rewards, filename, \
         learning_rate, discount_rate, epsilon, \
             positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
                 max_steps, total_time)
-    # file_name = "experience%s.pth" %(str(i_exp))
-    # file_name = os.path.join(save_path, file_name)
-    # T.save(agent.q_eval.state_dict(),file_name)
-    file_name = "rewards%s.json" %(str(i_exp))
+    
+    file_name = "ts_rewards%s.json" %(str(i_exp))
     file_name = os.path.join(save_path, file_name)
     write_json(ts_rewards, file_name)
-    spawning = "random"
-    # if last_start == None: spawning = ""
-    hp =    {
-            "training_session":training_sessions,
-            "number_of_drones":nr,
-            "episodes": episodes,
-            "learning_rate":learning_rate,
-            "discount_rate":discount_rate,
-            "epsilon":epsilon,
-            "positive_goal":positive_reward,
-            "negative_collision":negative_reward,
-            "negative_step":positive_exploration_reward,
-            "positive_exploration":negative_step_reward,
-            "max_steps":max_steps,
-            "n_actions":n_actions,
-            "c_dims":c_dims,
-            "k_size":k_size,
-            "s_size":s_size,
-            "fc_dims":fc_dims,
-            "mem_size":mem_size,
-            "batch_size":batch_size,
-            "replace":replace,
-            "env_size":env_size
-            }
-    file_name = "hyperparameters%s.json" %(str(i_exp))
+
+    file_name = "rewards%s.json" %(str(i_exp))
     file_name = os.path.join(save_path, file_name)
-    write_json(hp, file_name)
+    write_json(rewards, file_name)
+
+    return load_checkpoint
