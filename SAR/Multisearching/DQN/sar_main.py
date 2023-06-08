@@ -24,14 +24,14 @@ if __name__ == '__main__':
     }
 
     hp = {
-                    "number of drones": 1,
-                    "training type": "centralized",
+                    "number of drones": 2,
+                    "training type": "decentralized",
                     "learning rate": [0.0001],
                     "discount rate": [0.9],
                     "epsilon": [[0.01,0.01,0.01]],
 
                     "training sessions": 3,
-                    "episodes": 300,
+                    "episodes": 100,
                     "positive rewards": [1],
                     "positive exploration rewards": [0],
                     "negative rewards": [1],

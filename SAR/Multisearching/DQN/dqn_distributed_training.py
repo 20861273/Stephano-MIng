@@ -1,6 +1,6 @@
 import numpy as np
 from dqn_agent import DQNAgent
-from utils_decentralized import plot_learning_curve, write_json, read_json
+from dqn_utils import plot_learning_curve, write_json, read_json
 from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from datetime import datetime
 import os
