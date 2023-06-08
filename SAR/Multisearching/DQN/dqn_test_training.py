@@ -1,6 +1,6 @@
-from dqn_environment_simultaneous import Environment, HEIGHT, WIDTH, Point, States, Direction
+from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from utils import plot_learning_curve, write_json, read_hp_json, read_json, save_hp, read_checkpoint_hp_json
-from dqn_agent_simultaneous import DQNAgent
+from dqn_agent import DQNAgent
 import numpy as np
 import os
 import torch as T

@@ -153,7 +153,7 @@ class Environment:
         self.score = 0
 
         # 2. Do action
-        self._move(actions) # update the robot
+        self._move_centralized(actions) # update the robot
             
         # 3. Update score and get state
         game_over = False           
@@ -189,7 +189,7 @@ class Environment:
         self.score = [0]*self.nr
 
         # 2. Do action
-        self._move(actions) # update the robot
+        self._move_decentralized(actions) # update the robot
             
         # 3. Update score and get state
         game_over = False           
@@ -386,7 +386,7 @@ class Environment:
         for i in range(0, self.nr): self.grid[self.pos[i].y,self.pos[i].x] = States.ROBOT.value
             
 
-    def _move(self, action):
+    def _move_centralized(self, action):
         # Get directions
         for i in range(0, self.nr):
             if action[i] == (Direction.LEFT).value:
@@ -417,7 +417,7 @@ class Environment:
 
         # Set position to new location
         for i in range(0, self.nr):
-            self.collision = self._is_collision(Point(x[i],y[i]), i, x, y)
+            self.collision = self._is_collision_centralized(Point(x[i],y[i]), i, x, y)
         
         collision_types = []
         for collision_type, collision_states in self.collision.items():
@@ -441,3 +441,59 @@ class Environment:
                 self.prev_pos[i] = self.pos[i]
                 self.pos[i] = Point(x[i],y[i])
                 self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+
+def _move_decentralized(self, action):
+    # Get directions
+    for i in range(0, self.nr):
+        if action[i] == (Direction.LEFT).value:
+            self.direction[i] = action[i]
+        elif action[i] == (Direction.RIGHT).value:
+            self.direction[i] = action[i]
+        elif action[i] == (Direction.UP).value:
+            self.direction[i] = action[i]
+        elif action[i] == (Direction.DOWN).value:
+            self.direction[i] = action[i]
+
+    # Set temp x and y variables
+    x = [None]*self.nr
+    y = [None]*self.nr
+
+    # Calculate new location
+    for i in range(0, self.nr):
+        x[i] = self.pos[i].x
+        y[i] = self.pos[i].y
+        if self.direction[i] == (Direction.RIGHT).value:
+            x[i] += 1
+        elif self.direction[i] == (Direction.LEFT).value:
+            x[i] -= 1
+        elif self.direction[i] == (Direction.DOWN).value:
+            y[i] += 1
+        elif self.direction[i] == (Direction.UP).value:
+            y[i] -= 1
+
+    # Set position to new location
+    for i in range(0, self.nr):
+        self.collision = self._is_collision_decentralized(Point(x[i],y[i]), i, x, y)
+    
+    collision_types = []
+    for collision_type, collision_states in self.collision.items():
+        if any(collision_states):
+            collision_types.append(collision_type)
+    
+    for i in range(0, self.nr):
+        for collisions in collision_types:
+            if self.collision[collisions][i]:
+                if collisions == "obstacle" or collisions == "boundary":
+                    self.pos[i] = self.pos[i]
+                    self.prev_pos[i] = self.pos[i]
+                    self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+                    self.collision_state = True
+                elif collisions == "drone":
+                    self.prev_pos[i] = self.pos[i]
+                    self.pos[i] = Point(x[i],y[i])
+                    self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+                    self.collision_state = True
+        if not self.collision_state:
+            self.prev_pos[i] = self.pos[i]
+            self.pos[i] = Point(x[i],y[i])
+            self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True

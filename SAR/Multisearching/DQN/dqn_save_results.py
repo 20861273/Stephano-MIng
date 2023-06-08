@@ -5,7 +5,7 @@ import matplotlib.lines as mlines
 
 import os
 
-from dqn_environment_simultaneous import States, Direction
+from dqn_environment import States, Direction
 
 class print_results:
     """

@@ -1,6 +1,6 @@
 import numpy as np
 from dqn_agent import DQNAgent
-from utils_decentralized import plot_learning_curve, write_json, read_hp_json, read_json, save_hp, read_checkpoint_hp_json
+from utils_decentralized import plot_learning_curve, write_json, read_json
 from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from datetime import datetime
 import os
@@ -11,7 +11,7 @@ import time
 
 # implement loss tracking
 
-def distributed_dqn(nr, training_sessions, episodes, print_interval,
+def distributed_dqn(nr, training_sessions, episodes, print_interval, training_type, encoding,
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
                     max_steps, i_exp,
@@ -33,7 +33,7 @@ def distributed_dqn(nr, training_sessions, episodes, print_interval,
         loss = [0]*nr
 
         # initialize environment
-        env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward)
+        env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding)
         
         # for debugging
         if show_plot:
@@ -53,7 +53,8 @@ def distributed_dqn(nr, training_sessions, episodes, print_interval,
         if load_checkpoint:
             for r_i, agent in enumerate(agents):
                 checkpoint = agent.load_models()
-            i_ts = checkpoint['epoch']
+            if i_ts <= checkpoint['epoch']:
+                continue
 
             file_name = "ts_rewards%s.json" %(str(checkpoint['epoch']))
             file_name = os.path.join(load_checkpoint_path, file_name)
@@ -140,11 +141,11 @@ def distributed_dqn(nr, training_sessions, episodes, print_interval,
             avg_steps = np.mean(steps[-100:])
 
             # save checkpoint
-            if i_episode % 1000 == 0 and i_episode != 0:
+            if i_episode % 10000 == 0 and i_episode != 0:
                 if not load_checkpoint:
                     print('... saving checkpoint ...')
                     for i_r, agent in enumerate(agents):
-                        agent.save_models(i_ts, i_episode, time.time()-start_time, loss)
+                        agent.save_models(i_exp, i_ts, i_episode, time.time()-start_time, loss)
 
                         file_name = "ts_rewards%s.json" %(str(i_exp))
                         file_name = os.path.join(save_path, file_name)
@@ -174,7 +175,7 @@ def distributed_dqn(nr, training_sessions, episodes, print_interval,
         # save model and rewards
         if not load_checkpoint:
             for i_r, agent in enumerate(agents):
-                agent.save_models(i_ts, i_episode, time.time()-start_time, loss)
+                agent.save_models(i_exp, i_ts, i_episode, time.time()-start_time, loss)
 
                 file_name = "ts_rewards%s.json" %(str(i_exp))
                 file_name = os.path.join(save_path, file_name)
@@ -218,7 +219,7 @@ def distributed_dqn(nr, training_sessions, episodes, print_interval,
         for n_ts_rewards in temp_ts_rewards:
             ts_rewards.append(n_ts_rewards[r_i])
 
-        plot_learning_curve(r_i, ts_rewards[r_i*training_sessions:r_i*training_sessions+training_sessions], filename, \
+        plot_learning_curve(r_i, training_type, ts_rewards[r_i*training_sessions:r_i*training_sessions+training_sessions], filename, \
             learning_rate, discount_rate, epsilon, \
                 positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
                     max_steps, total_time)

@@ -21,7 +21,7 @@ def read_json(file_name):
     with open(file_name, "r") as f:
         return json.load(f)
     
-def plot_learning_curve(scores, filename, lr, dr, er, pr, negr, per, nsr, ms, totle_time):
+def plot_learning_curve(nr, training_type, scores, filename, lr, dr, er, pr, negr, per, nsr, ms, totle_time):
     mean_rewards = np.zeros((len(scores[0]),))
     std_rewards = np.zeros((len(scores[0]),))
 
@@ -29,6 +29,8 @@ def plot_learning_curve(scores, filename, lr, dr, er, pr, negr, per, nsr, ms, to
         for i_ep in range(len(scores[0])):
             s = sum(scores[e][i_ep] for e in range(len(scores)))
             mean_rewards[i_ep] = s / len(scores)
+    else:
+        mean_rewards = scores[0]
 
     if len(scores) > 1:
         for i_ep in range(len(scores[0])):
@@ -36,14 +38,19 @@ def plot_learning_curve(scores, filename, lr, dr, er, pr, negr, per, nsr, ms, to
             std_rewards[i_ep] = math.sqrt(v / (len(scores)-1))
 
     fig=plt.figure()
-    l = "α=%s, γ=%s, ϵ=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s" %(str(lr), str(dr), str(er), str(pr), str(negr), str(per), str(nsr), str(ms))
+    if training_type == "centralized":
+        l = "α=%s,\nγ=%s,\nϵ=%s,\npositive reward=%s,\nnegative reward=%s,\npositive eexploration reward=%s,\nnegative step reward=%s,\nmax steps=%s" %(str(lr), str(dr), str(er), str(pr), str(negr), str(per), str(nsr), str(ms))
+    elif training_type == "decentralized":
+        l = "drone=%s\nα=%s,\nγ=%s,\nϵ=%s,\npositive reward=%s,\nnegative reward=%s,\npositive eexploration reward=%s,\nnegative step reward=%s,\nmax steps=%s" %(str(nr), str(lr), str(dr), str(er), str(pr), str(negr), str(per), str(nsr), str(ms))
     ax=fig.add_subplot(111)
 
     ax.plot(np.arange(0, len(mean_rewards), 1), mean_rewards[::1], color="C1", label=l)
-    plt.fill_between(np.arange(0, len(mean_rewards), int(1)), \
-        mean_rewards[::int(1)]-std_rewards[::int(1)], mean_rewards[::int(1)]+std_rewards[::int(1)], alpha = 0.1, color = 'b')
-    ax.legend()
-    ax.set_xlabel("Training Steps", color="C0")
+    if len(scores) > 1:
+        plt.fill_between(np.arange(0, len(mean_rewards), int(1)), \
+            mean_rewards[::int(1)]-std_rewards[::int(1)], mean_rewards[::int(1)]+std_rewards[::int(1)], alpha = 0.1, color = 'b')
+    lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    # ax.legend()
+    ax.set_xlabel("Episodes", color="C0")
     ax.set_ylabel("Rewards", color="C0")
     ax.tick_params(axis='x', colors="C0")
     ax.tick_params(axis='y', colors="C0")
@@ -53,7 +60,7 @@ def plot_learning_curve(scores, filename, lr, dr, er, pr, negr, per, nsr, ms, to
     if m >= 60: h, m = divmod(m, 60)
     ax.set_title("Learning curve:\nTime: %sh%sm%ss" %(str(h), str(m), str(s)), fontsize = 10)
 
-    plt.savefig(filename)
+    plt.savefig(filename, bbox_extra_artists=(lgd,), bbox_inches='tight')
 
 
 def plot_learning_curvess(x, scores, filename, pr, ms, lr, dr, er, total_time):

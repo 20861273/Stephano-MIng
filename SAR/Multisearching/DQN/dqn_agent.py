@@ -1,6 +1,6 @@
 import numpy as np
 import torch as T
-from deep_q_network_simultaneous import DeepQNetwork
+from deep_q_network import DeepQNetwork
 from replay_memory import ReplayBuffer, PrioritizedReplayMemory
 
 class DQNAgent(object):
@@ -97,9 +97,9 @@ class DQNAgent(object):
         self.epsilon = self.epsilon - self.eps_dec \
                            if self.epsilon > self.eps_min else self.eps_min
 
-    def save_models(self, i_ts, i_episode, time, loss):
-        self.q_eval.save_checkpoint(i_ts, i_episode, time, loss)
-        self.q_next.save_checkpoint(i_ts, i_episode, time, loss)
+    def save_models(self, i_exp, i_ts, i_episode, time, loss):
+        self.q_eval.save_checkpoint(i_exp, i_ts, i_episode, time, loss)
+        self.q_next.save_checkpoint(i_exp, i_ts, i_episode, time, loss)
 
     def load_models(self):
         checkpoint = self.q_eval.load_checkpoint()

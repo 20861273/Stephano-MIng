@@ -1,5 +1,5 @@
 from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
-from utils import plot_learning_curve, write_json, read_hp_json, read_json, save_hp, read_checkpoint_hp_json
+from dqn_utils import plot_learning_curve, write_json, read_json
 from dqn_agent import DQNAgent
 from dqn_save_results import print_results
 import numpy as np
@@ -8,7 +8,7 @@ import torch as T
 import time
 import matplotlib.pyplot as plt
 
-def centralized_dqn(nr, training_sessions, episodes, print_interval,
+def centralized_dqn(nr, training_sessions, episodes, print_interval, training_type, encoding,
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
                     max_steps, i_exp,
@@ -30,7 +30,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval,
         loss = 0
 
         # initialize environment
-        env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward)
+        env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding)
         
         # initialize agents
         model_name = env_size
@@ -49,14 +49,16 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval,
         # Redone not tested
         #################################################################################
         if load_checkpoint:
-            checkpoint = agent.load_models()
-            i_ts = checkpoint['epoch']
+            checkpoint = agent.load_models() 
 
-            file_name = "ts_rewards%s.json" %(str(checkpoint['epoch']))
+            if i_ts < checkpoint['epoch']:
+                continue           
+
+            file_name = "ts_rewards%s.json" %(str(checkpoint['session']))
             file_name = os.path.join(load_checkpoint_path, file_name)
             ts_rewards = read_json(file_name)
 
-            file_name = "rewards%s.json" %(str(checkpoint['epoch']))
+            file_name = "rewards%s.json" %(str(checkpoint['session']))
             file_name = os.path.join(load_checkpoint_path, file_name)
             rewards = read_json(file_name)
         #################################################################################
@@ -73,6 +75,8 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval,
 
         # epochs loop (multiple episodes are called an epoch)
         for i_episode in range(episodes):
+            # if i_episode > 101 and i_ts == 1:
+            #     quit()
 
             # if epoch loaded the epoch should start at the right episode
             # UPDATED not tested
@@ -139,10 +143,10 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval,
             # save checkpoint
             # REDONE not tested
             #################################################################################
-            if i_episode % 1000 == 0 and i_episode != 0:
+            if i_episode % 10000 == 0 and i_episode != 0:
                 if not load_checkpoint:
                     print('... saving checkpoint ...')
-                    agent.save_models(i_ts, i_episode, time.time()-start_time, loss)
+                    agent.save_models(i_exp, i_ts, i_episode, time.time()-start_time, loss)
 
                     file_name = "ts_rewards%s.json" %(str(i_exp))
                     file_name = os.path.join(save_path, file_name)
@@ -155,7 +159,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval,
             #################################################################################
 
             # display progress
-            if i_episode % 1000==0 or i_episode == episodes-1 and i_episode != 0:
+            if i_episode % print_interval == 0 or i_episode == episodes-1 and i_episode != 0:
                 print('episode= ', i_episode,
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
@@ -170,7 +174,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval,
         # REDONE not tested
         #################################################################################
         if not load_checkpoint:
-            agent.save_models(i_ts, i_episode, time.time()-start_time, loss)
+            agent.save_models(i_exp, i_ts, i_episode, time.time()-start_time, loss)
 
             file_name = "ts_rewards%s.json" %(str(i_exp))
             file_name = os.path.join(save_path, file_name)
@@ -196,7 +200,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval,
     # save reward lists and plot learning curve
     filename = 'learning_cruve%s.png' %(str(i_exp))
     filename = os.path.join(save_path, filename)
-    plot_learning_curve(ts_rewards, filename, \
+    plot_learning_curve(nr, training_type, ts_rewards, filename, \
         learning_rate, discount_rate, epsilon, \
             positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
                 max_steps, total_time)
