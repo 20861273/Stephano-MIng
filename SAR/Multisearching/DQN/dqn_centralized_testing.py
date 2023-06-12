@@ -27,8 +27,8 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
             if hp_lens[key] < max_len:
                 [hp[key].append(hp[key][0]) for i in range(max_len-1)]
 
-        # model_name = str(policy) + "_" + hp["env size"]
-        model_name = hp["env size"]
+        model_name = str(policy) + "_" + hp["env size"]
+        # model_name = hp["env size"]
         agent = DQNAgent(hp["number of drones"], hp["discount rate"][policy], hp["epsilon"][policy][0], hp["epsilon"][policy][1], hp["epsilon"][policy][2], hp["learning rate"][policy],
                         hp["n actions"], hp["starting beta"], hp["input dims"],
                         hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],

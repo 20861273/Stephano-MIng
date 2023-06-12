@@ -32,7 +32,7 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
     
     mov_avg_rewards = np.empty(mean_rewards.shape)
 
-    mov_avg_rewards[0] = moving_avarage_smoothing(mean_rewards[0], 10)
+    mov_avg_rewards[0] = moving_avarage_smoothing(mov_avg_rewards, 100)
 
     # mov_avg_rewards = mean_rewards
     
@@ -58,7 +58,8 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
     
     if len(scores[0]) == 1:
         for i in range(len(policies)):
-            ax.plot(np.arange(0, len(scores[i][0]), int(step+i)), scores[i][0][::int(step+i)], color=c[i], label=l[i])
+            mov_avg_rewards[0] = moving_avarage_smoothing(np.array(scores[0][0]), 10)
+            ax.plot(np.arange(0, len(mov_avg_rewards[i]), int(step+i)), mov_avg_rewards[i][::int(step+i)], color=c[i], label=l[i])
     else:
         for i in range(len(policies)):
             std_top = mean_rewards[i][::int(step+i)]+std_rewards[i][::int(step+i)]

@@ -16,12 +16,12 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-                        "training": True,
-                        "load checkpoint": True,
+                        "training": False,
+                        "load checkpoint": False,
                         "show rewards interval": 1000,
                         "show plot": True,
                         "save plot": False,
-                        "policy number": [0],
+                        "policy number": [2],
                         "testing iterations": 1000
     }
 

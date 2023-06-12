@@ -3,7 +3,7 @@ import torch as T
 from deep_q_network import DeepQNetwork
 from replay_memory import ReplayBuffer, PrioritizedReplayMemory
 
-class DQNAgent(object):
+class DDQNAgent(object):
     def __init__(self, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
                  input_dims, c_dims, k_size, s_size, fc_dims,
                  mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn'):
@@ -153,16 +153,23 @@ class DQNAgent(object):
             states, actions, rewards, states_, dones = self.sample_memory()
 
             indices = np.arange(self.batch_size)
+
             q_pred = self.q_eval.forward(states)[indices, actions]
-            q_next = self.q_next.forward(states_).max(dim=1)[0]
+            q_next = self.q_next.forward(states_)
+            q_eval = self.q_eval.forward(states_)
+
+            max_actions = T.argmax(q_eval, dim=1)
 
             q_next[dones] = 0.0
-            q_target = rewards + self.gamma*q_next
+
+            q_target = rewards + self.gamma*q_next[indices, max_actions]
             loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
 
-
+        # self.q_eval.optimizer.zero_grad()
         loss.backward()
         self.q_eval.optimizer.step()
+
+        # self.replace_target_network()
 
         self.learn_step_counter += 1
 
