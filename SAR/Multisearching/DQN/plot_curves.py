@@ -95,14 +95,7 @@ def read_hp_json(path, file_name):
     file_path = os.path.join(path, file_name)
     with open(file_path, "r") as f:
         data = json.load(f)
-
-    for key in data:
-        lst.append(data[key])
-
-        # nr, ep, 
-        #  int(nr), int(ep), 
-    ts, _, _, lr, dr, er, pr, negr, per, nsr, ms, n_actions, c_dims, k_size, s_size, fc_dims, _, mem_size, batch_size, replace,env_size = lst[:]
-    return int(ts),float(lr), float(dr), er, float(pr), float(negr), float(per), float(nsr), int(ms)
+    return data["training sessions"],data["learning rate"], data["discount rate"], data["epsilon"], data["positive rewards"], data["negative rewards"], data["positive exploration rewards"], data["negative step rewards"], data["max steps"]
 
 def read_hp_jsons(path, file_name):
     file_path = os.path.join(path, file_name)
@@ -121,25 +114,25 @@ load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
 step = 100#len(scores[0][0])/10000
-policies = [0]
+policies = [1]
 
 
 rewards = []
 tss, lrs, drs, ers, prs, nrs, pers, nsrs, mss = [], [], [], [], [], [], [], [], []
 for i, policy in enumerate(policies):
-    file_name = "rewards%s.json" %(str(policy))
+    file_name = "ts_rewards%s.json" %(str(policy))
     rewards.append(read_json(load_path, file_name))
-    file_name = "hyperparameters%s.json" %(str(policy))
+    file_name = "hyperparameters.json"
     ts, lr, dr, er, pr, nr, per, nsr, ms = read_hp_json(load_path, file_name)
     tss.append(float(ts))
-    lrs.append(float(lr))
-    drs.append(float(dr))
-    ers.append(er)
-    prs.append(float(pr))
-    nrs.append(float(nr))
-    pers.append(float(per))
-    nsrs.append(float(nsr))
-    mss.append(float(ms))
+    lrs.append(float(lr[0]))
+    drs.append(float(dr[policy]))
+    ers.append(er[0])
+    prs.append(float(pr[0]))
+    nrs.append(float(nr[0]))
+    pers.append(float(per[0]))
+    nsrs.append(float(nsr[0]))
+    mss.append(float(ms[0]))
 
 
 string = ""
@@ -149,8 +142,8 @@ filename = os.path.join(load_path, filename)
 
 plot_learning_curves([rewards[0][0:10]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)
 
-string = ""
-string = [string+","+str(i) for i in policies]
-filename = 'drone_1_learning_cruves%s, step=%s.png' %(string, str(step))
-filename = os.path.join(load_path, filename)
-plot_learning_curves([rewards[0][10:20]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)
+# string = ""
+# string = [string+","+str(i) for i in policies]
+# filename = 'drone_1_learning_cruves%s, step=%s.png' %(string, str(step))
+# filename = os.path.join(load_path, filename)
+# plot_learning_curves([rewards[0][10:20]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)

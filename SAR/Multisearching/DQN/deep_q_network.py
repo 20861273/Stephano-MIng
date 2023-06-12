@@ -77,7 +77,7 @@ class DeepQNetwork(nn.Module):
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
-        checkpoint = T.load(self.checkpoint_file)
+        checkpoint = T.load(self.checkpoint_file, map_location='cuda:0')
         self.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         for state in self.optimizer.state.values():

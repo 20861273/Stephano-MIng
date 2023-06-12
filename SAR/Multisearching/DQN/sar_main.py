@@ -1,5 +1,5 @@
 from dqn_utils import plot_learning_curve, write_json, read_json, save_hp
-from dqn_environment_simultaneous_decentralized import Environment, HEIGHT, WIDTH, Point, States, Direction
+from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from datetime import datetime
 import os
 import torch as T
@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from dqn_decentralized_testing import test_dqn
 from dqn_distributed_training import distributed_dqn
 from dqn_centralized_training import centralized_dqn
+from dqn_centralized_testing import test_centralized_dqn
 from dqn_test_training import test_dqn
 from dqn_agent import DQNAgent
 
@@ -16,22 +17,23 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 if __name__ == '__main__':
     testing_parameters = {
                         "training": True,
-                        "load checkpoint": False,
-                        "show rewards interval": 100,
-                        "show plot": False,
+                        "load checkpoint": True,
+                        "show rewards interval": 1000,
+                        "show plot": True,
+                        "save plot": False,
                         "policy number": [0],
                         "testing iterations": 1000
     }
 
     hp = {
-                    "number of drones": 2,
-                    "training type": "decentralized",
+                    "number of drones": 1,
+                    "training type": "centralized",
                     "learning rate": [0.0001],
-                    "discount rate": [0.9],
-                    "epsilon": [[0.01,0.01,0.01]],
+                    "discount rate": [0.5,0.7,0.9],
+                    "epsilon": [[0.005,0.005,0.005]],
 
-                    "training sessions": 3,
-                    "episodes": 100,
+                    "training sessions": 1,
+                    "episodes": 50000,
                     "positive rewards": [1],
                     "positive exploration rewards": [0],
                     "negative rewards": [1],
@@ -44,16 +46,17 @@ if __name__ == '__main__':
                     "input dims": (3,HEIGHT, WIDTH),
 
                     "batch size": 64,
-                    "mem size": 50000,
+                    "mem size": 100000,
                     "replace": 1000,
                     "channels": [16, 32],
                     "kernel": [2, 2],
                     "stride": [1, 1],
                     "fc dims": [32],
 
-
                     "prioritized": True,
-                    "starting beta": 0.5
+                    "starting beta": 0.5,
+
+                    "curriculum_learning": {"sparse reward": False, "collisions": False}
     }
 
     num_experiences =     len(hp["learning rate"]) \
@@ -77,7 +80,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "08-06-2023 12h12m03s")
+    load_checkpoint_path = os.path.join(PATH, "12-06-2023 13h58m08s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -97,12 +100,7 @@ if __name__ == '__main__':
         file_name = "hyperparameters.json"
         file_name = os.path.join(load_checkpoint_path, file_name)
         hp = read_json(file_name)
-        agent = DQNAgent(hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
-                        hp["n actions"], hp["starting beta"], hp["input dims"],
-                        hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
-                        hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
-                        algo='DQNAgent_distributed', env_name=env_size, chkpt_dir=models_path)
-        checkpoint = agent.load_models() 
+        checkpoint = {'session':os.listdir(models_path)[-1][0]}
     else:
         checkpoint = {'session':0}
 
@@ -122,6 +120,7 @@ if __name__ == '__main__':
                                             if hp["training type"] == "centralized":
                                                 load_checkpoint = centralized_dqn(
                                                             hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
+                                                            hp["curriculum_learning"],
                                                             dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                             pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
                                                             hp["n actions"], hp["starting beta"], hp["input dims"],
@@ -148,5 +147,6 @@ if __name__ == '__main__':
                                                             hp["prioritized"], models_path, load_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"])
                                         i_exp += 1
     else:
-        test_dqn()
+        if hp["training type"] == "centralized":
+            test_centralized_dqn(testing_parameters["policy number"], load_path, save_path, models_path, testing_parameters["testing iterations"], testing_parameters["show plot"], testing_parameters["save plot"])
 

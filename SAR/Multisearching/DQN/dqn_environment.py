@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 6
+WIDTH = 6
 
 # DENSITY = 30 # percentage
 
@@ -22,8 +22,8 @@ class Direction(Enum):
 # Block states
 class States(Enum):
     UNEXP = 0
-    OBS = 4
-    ROBOT = 1
+    OBS = 1
+    ROBOT = 4
     GOAL = 2
     EXP = 3
 
@@ -33,16 +33,19 @@ Point = namedtuple('Point', 'x, y')
 
 class Environment:
     
-    def __init__(self, nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding):
+    def __init__(self, nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, total_episodes):
         self.nr = nr
 
         # Set robot(s) position
         self.pos = [Point(0,0)]*self.nr
         self.prev_pos = [Point(0,0)]*self.nr
         self.starting_pos = [Point(0,0)]*self.nr
+
+        self.curriculum_learning = curriculum_learning
+        self.total_episodes = total_episodes
         
         # Generates grid (Grid[y,x])
-        self.grid = self.generate_grid()
+        self.generate_grid()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
         self.goal_state = np.ones((HEIGHT, WIDTH), dtype=np.bool_)
 
@@ -61,13 +64,16 @@ class Environment:
         self.collision_state = False
 
         self.training_type = training_type
-        self.encoding = encoding
+        self.encoding = encoding        
 
         # print("\nGrid size: ", self.grid.shape)
 
     def generate_grid(self):        
         # Ggenerate grid of zeros 
-        grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
+        self.grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
+
+        if self.curriculum_learning['collisions']:
+            self.draw_bounds(0)
         # Note: grid[y][x]
         # Generate obstacles
         # CODE GOES HERE
@@ -77,24 +83,30 @@ class Environment:
         # grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         # Random goal location spawning
-        indices = np.argwhere(grid == States.UNEXP.value)
-        np.random.shuffle(indices)
-        self.goal = Point(indices[0,1], indices[0,0])
-        grid[self.goal.y, self.goal.x] = States.GOAL.value
+        if self.curriculum_learning['sparse reward']:
+            self.goal = [0]*self.clear_rows.shape[0]
+            for i, row in enumerate(self.clear_rows):
+                indices = np.argwhere(self.grid == States.UNEXP.value)
+                np.random.shuffle(indices)
+                self.goal[i] = Point(indices[0,1], row)
+                self.grid[self.goal[i].y, self.goal[i].x] = States.GOAL.value
+        else:
+            indices = np.argwhere(self.grid == States.UNEXP.value)
+            np.random.shuffle(indices)
+            self.goal = Point(indices[0,1], indices[0,0])
+            self.grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         # Set robot(s) start position
         for i in range(0, self.nr):
-            indices = np.argwhere(grid == States.UNEXP.value)
+            indices = np.argwhere(self.grid == States.UNEXP.value)
             np.random.shuffle(indices)
             self.starting_pos[i] = Point(indices[i,0], indices[i,1])
-            grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+            self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos.copy()
         self.prev_pos = self.starting_pos.copy()
 
-        return grid
-
-    def reset(self):
+    def reset(self, current_episode):
         self.collision = {  'obstacle' :   [False]*self.nr,
                             'boundary' :   [False]*self.nr,
                             'drone'    :   [False]*self.nr}
@@ -103,15 +115,26 @@ class Environment:
         self.grid.fill(0)
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
 
+        if self.curriculum_learning['collisions']:
+            self.draw_bounds(current_episode)
+
         # Static goal location spawning
         # self.goal = Point(0,0)
         # grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         # Random goal location spawning
-        indices = np.argwhere(self.grid == States.UNEXP.value)
-        np.random.shuffle(indices)
-        self.goal = Point(indices[0,1], indices[0,0])
-        self.grid[self.goal.y, self.goal.x] = States.GOAL.value
+        if self.curriculum_learning['sparse reward']:
+            self.goal = [0]*self.clear_rows.shape[0]
+            for i, row in enumerate(self.clear_rows):
+                indices = np.argwhere(self.grid == States.UNEXP.value)
+                np.random.shuffle(indices)
+                self.goal[i] = Point(indices[0,1], row)
+                self.grid[self.goal[i].y, self.goal[i].x] = States.GOAL.value
+        else:
+            indices = np.argwhere(self.grid == States.UNEXP.value)
+            np.random.shuffle(indices)
+            self.goal = Point(indices[0,1], indices[0,0])
+            self.grid[self.goal.y, self.goal.x] = States.GOAL.value
 
         # Setup agent
         # Set new starting pos
@@ -173,12 +196,18 @@ class Environment:
             game_over = True
             return state, reward, game_over, 0
 
-        if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
-        # if (self.exploration_grid == self.goal_state).all():
-            self.score += self.positive_reward
-            reward = self.score
-            game_over = True
-            return state, reward, game_over, 1
+        if self.curriculum_learning['sparse reward']:
+            if self._found_all_goals():
+                self.score += self.positive_reward
+                reward = self.score
+                game_over = True
+                return state, reward, game_over, 1
+        else:
+            if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
+                self.score += self.positive_reward
+                reward = self.score
+                game_over = True
+                return state, reward, game_over, 1
 
         # 6. return game over and score
         return state, reward, game_over, 0
@@ -497,3 +526,34 @@ class Environment:
                 self.prev_pos[i] = self.pos[i]
                 self.pos[i] = Point(x[i],y[i])
                 self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+
+    def _found_all_goals(self):
+        goals_found = [False]*HEIGHT
+        for row in range(self.clear_rows.shape[0]):
+            if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal[row]]).any() == True:
+                goals_found[row] = True
+                self.score += 1
+        if all(found for found in goals_found):
+            return True
+        else:
+            return False
+        
+    def draw_bounds(self, episode):
+        if episode < self.total_episodes//10:
+            self.grid = np.ones((HEIGHT, WIDTH))
+            middle_rows = math.ceil(HEIGHT / 3)
+            middle_columns = math.ceil(WIDTH / 3)
+            self.grid[middle_rows:-middle_rows, middle_columns:-middle_columns] = 0
+
+        elif self.total_episodes//10 <= episode < self.total_episodes//5:
+            self.grid = np.ones((HEIGHT, WIDTH))
+            middle_rows = HEIGHT // 4
+            middle_columns = WIDTH // 4
+            self.grid[middle_rows:-middle_rows, middle_columns:-middle_columns] = 0
+
+        self.clear_rows = np.where(np.any(self.grid == States.UNEXP.value, axis=1))[0]
+        if self.clear_rows.shape[0] > 5:
+            np.random.shuffle(self.clear_rows)
+            self.clear_rows = self.clear_rows[:5]
+        # breakpoint
+        # if episode > self.total_episodes//5 then nothing
