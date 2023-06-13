@@ -33,7 +33,7 @@ Point = namedtuple('Point', 'x, y')
 
 class Environment:
     
-    def __init__(self, nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, total_episodes):
+    def __init__(self, nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, total_episodes):
         self.nr = nr
 
         # Set robot(s) position
@@ -52,6 +52,7 @@ class Environment:
         # Set robot(s) position
         self.pos = self.starting_pos
 
+        self.reward_system = reward_system
         self.positive_reward = positive_reward
         self.positive_exploration_reward = positive_exploration_reward
         self.negative_reward = negative_reward
@@ -196,14 +197,21 @@ class Environment:
             game_over = True
             return state, reward, game_over, 0
 
-        if self.curriculum_learning['sparse reward']:
-            if self._found_all_goals():
-                self.score += self.positive_reward
-                reward = self.score
-                game_over = True
-                return state, reward, game_over, 1
-        else:
-            if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
+        if self.reward_system["find goal"]:
+            if self.curriculum_learning['sparse reward']:
+                if self._found_all_goals():
+                    self.score += self.positive_reward
+                    reward = self.score
+                    game_over = True
+                    return state, reward, game_over, 1
+            else:
+                if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
+                    self.score += self.positive_reward
+                    reward = self.score
+                    game_over = True
+                    return state, reward, game_over, 1
+        elif self.reward_system["coverage"]:
+            if self.exploration_grid.all():
                 self.score += self.positive_reward
                 reward = self.score
                 game_over = True
@@ -290,70 +298,91 @@ class Environment:
         return score
 
     def get_state(self):
-        # Position state
-        # position_grid = np.zeros(self.grid.shape)
-        # position_grid[self.pos.y, self.pos.x] = 1.0
-        # position_grid = position_grid.flatten()
+        # Position state: flattened array of environment where position is equal to 1
+        if self.encoding == "position" or self.encoding == "position_exploration":
+            location_map = np.zeros((self.nr,) + self.grid.shape)
+            for r_i in range(self.nr):
+                location_map[r_i][self.pos[r_i].y, self.pos[r_i].x] = 1
 
-        # # Exploreation state
-        # exploration_grid = np.zeros(self.grid.shape)
-        # explored = np.argwhere(self.exploration_grid == True)
-        # for y,x in explored:
-        #     exploration_grid[y, x] = 1.0
-        # exploration_grid = exploration_grid.flatten()
+            position_array = np.zeros((self.nr,) + (self.grid.shape[0]*self.grid.shape[1],))
+            for r_i in range(self.nr):
+                position_array[r_i] = location_map[r_i].flatten()
+
+            if self.encoding == "position":
+                state = np.zeros(((self.nr,) + (self.grid.shape[0]*self.grid.shape[1],)))
+                for r_i in range(self.nr):
+                    state[r_i] = position_array.flatten()
+
+            # NB!!!!!!!!!!!!! other drone locations not included
+            # should be included
+
+            # Exploreation state: flattened concentrated arrays of environment where,
+            # first array of environment position is equal to 1 and
+            # second array of environment all explored cells are equal to 1
+            if self.encoding == "position_exploration":
+                exploration_grid = np.zeros(self.grid.shape)
+                explored = np.argwhere(self.exploration_grid == True)
+                for y,x in explored:
+                    exploration_grid[y, x] = 1.0
+                exploration_grid = exploration_grid.flatten()
+
+                state = np.zeros(((self.nr,) + (self.grid.shape[0]*self.grid.shape[1]*2,)))
+
+                for r_i in range(self.nr):
+                    state[r_i] = np.concatenate((position_array[r_i], exploration_grid), axis=0)
+                    
+        # Image state
+        elif self.encoding == "image":
+            # Generates exploration map. All explored cells are equal to 1
+            exploration_map = np.zeros(self.grid.shape)
+            explored = np.argwhere(self.exploration_grid == True)
+            for y,x in explored:
+                exploration_map[y, x] = 1
+
+            # Generates location map. Position cell is equal to 1
+            location_map = np.zeros((self.nr,) + self.grid.shape)
+            for r_i in range(self.nr):
+                location_map[r_i][self.pos[r_i].y, self.pos[r_i].x] = 1
+
+            # Generates other locations map. Other positions cells are equal to 1
+            # other_locations_map = np.zeros((self.nr,) + self.grid.shape)
+            # for r_i in range(self.nr):
+            #     for or_i in range(self.nr):
+            #         if or_i == r_i: continue
+            #         other_locations_map[r_i][self.pos[or_i].y, self.pos[or_i].x] = 1
+
+            # Generate image map
+            # Padded
+            # shape = list(self.grid.shape)
+            # shape[0] += 2
+            # shape[1] += 2
+
+            # image_map = np.ones((self.nr,) + (3,) + tuple(shape))
+            # for r_i in range(self.nr):
+            #     image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
+            #     image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
+            #     image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
+
+            # Non-padded
+            image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
+            for r_i in range(self.nr):
+                image_map[r_i][0] = location_map[r_i]
+                # image_map[r_i][1] = other_locations_map[r_i]
+                image_map[r_i][1] = exploration_map
+
+            state = np.copy(image_map)
 
         # Goal state
         # goal_grid = np.zeros(self.grid.shape, dtype=np.float32)
         # goal_grid[self.goal.y, self.goal.x] = States.GOAL.value
         # goal_grid = goal_grid.flatten()
 
-        # Image state
-        # Generates exploration map. All explored cells are 1
-        exploration_map = np.zeros(self.grid.shape)
-        explored = np.argwhere(self.exploration_grid == True)
-        for y,x in explored:
-            exploration_map[y, x] = 1
-
-        # Generates location map. Position cell is equal to 1
-        location_map = np.zeros((self.nr,) + self.grid.shape)
-        for r_i in range(self.nr):
-            location_map[r_i][self.pos[r_i].y, self.pos[r_i].x] = 1
-
-        # Generates other locations map. Other positions cells are equal to 1
-        other_locations_map = np.zeros((self.nr,) + self.grid.shape)
-        for r_i in range(self.nr):
-            for or_i in range(self.nr):
-                if or_i == r_i: continue
-                other_locations_map[r_i][self.pos[or_i].y, self.pos[or_i].x] = 1
-
-        # Generate image map
-        # Padded
-        # shape = list(self.grid.shape)
-        # shape[0] += 2
-        # shape[1] += 2
-
-        # image_map = np.ones((self.nr,) + (3,) + tuple(shape))
-        # for r_i in range(self.nr):
-        #     image_map[r_i][0][1:shape[0]-1,1:shape[1]-1] = location_map[r_i]
-        #     image_map[r_i][1][1:shape[0]-1,1:shape[1]-1] = other_locations_map[r_i]
-        #     image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
-
-        # Non-padded
-        image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
-        for r_i in range(self.nr):
-            image_map[r_i][0] = location_map[r_i]
-            image_map[r_i][1] = other_locations_map[r_i]
-            image_map[r_i][2] = exploration_map
-
-        # Inputs:
-        # 1. Position state:
-        # state = position_grid
-
-        # 2. Position state + exploration state
-        # state = np.concatenate((position_grid, exploration_grid), axis=0)  
-
-        # 3. Image state:
-        state = np.copy(image_map)
+        # Obstacles state
+        # obstacle_grid = np.zeros(self.grid.shape)
+        # obstables = np.argwhere(self.grid == States.OBS.value)
+        # for y,x in obstables:
+        #     obstacle_grid[y, x] = 1.0
+        # obstacle_grid = obstacle_grid.flatten()
 
         return state
 

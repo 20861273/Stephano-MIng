@@ -6,35 +6,44 @@ import torch.optim as optim
 import numpy as np
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, nr, lr,
+    def __init__(self, encoding, lr,
                  n_actions, input_dims, c_dims, k_size, s_size,
-                    fc_dims, name, chkpt_dir):
+                    fc_dims, device_num, name, chkpt_dir):
         super(DeepQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
 
+        self.encoding = encoding
+
         self.input_dims = input_dims
 
-        self.c_dims = c_dims.copy()
-        self.k_size = k_size.copy()
-        self.s_size = s_size.copy()
-
         self.fc_dims = fc_dims.copy()
-
         self.n_actions = n_actions
 
-        self.conv1 = nn.Conv2d(input_dims[0], c_dims[0], k_size[0], stride=s_size[0])
-        self.conv2 = nn.Conv2d(c_dims[0], c_dims[1], k_size[1], stride=s_size[1])
-        # self.conv3 = nn.Conv2d(c_dims[1], c_dims[2], k_size[2], stride=s_size[2])
+        if self.encoding == "image":
+            self.c_dims = c_dims.copy()
+            self.k_size = k_size.copy()
+            self.s_size = s_size.copy()
 
-        fc_input_dims = self.calculate_conv_output_dims()
+            self.conv1 = nn.Conv2d(input_dims[0], c_dims[0], k_size[0], stride=s_size[0])
+            self.conv2 = nn.Conv2d(c_dims[0], c_dims[1], k_size[1], stride=s_size[1])
+            # self.conv3 = nn.Conv2d(c_dims[1], c_dims[2], k_size[2], stride=s_size[2])
 
-        self.fc1 = nn.Linear(fc_input_dims, fc_dims[0])  # 5*5 from image dimension
-        self.fc2 = nn.Linear(fc_dims[0], n_actions)
+            fc_input_dims = self.calculate_conv_output_dims()
+
+            self.fc1 = nn.Linear(fc_input_dims, fc_dims[0])
+            self.fc2 = nn.Linear(fc_dims[0], n_actions)
+        else:
+            self.fc1 = nn.Linear(*self.input_dims, self.fc_dims[0]) # * unpacking the input list
+            self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
+            self.fc3 = nn.Linear(self.fc_dims[1], self.fc_dims[2])
+            self.fc4 = nn.Linear(self.fc_dims[2], self.n_actions)
 
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device_num = device_num
+        cuda_string = 'cuda:' + str(self.device_num)
+        self.device = T.device(cuda_string if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def calculate_conv_output_dims(self):
@@ -45,22 +54,23 @@ class DeepQNetwork(nn.Module):
         return int(np.prod(dims.size()))
 
     def forward(self, state):
-        conv1 = F.relu(self.conv1(state))
-        conv2 = F.relu(self.conv2(conv1))
-        # conv3 = F.relu(self.conv3(conv2))
-        # conv3 shape is BS x n_filters x H x W
+        if self.encoding == "image":
+            conv1 = F.relu(self.conv1(state))
+            conv2 = F.relu(self.conv2(conv1))
+            # conv3 = F.relu(self.conv3(conv2))
+            # conv3 shape is BS x n_filters x H x W
 
-        # conv_state = conv1.view(conv1.size()[0], -1)
-        conv_state = conv2.view(conv2.size()[0], -1)
-        # conv_state = conv3.view(conv3.size()[0], -1)
-        # conv_state shape is BS x (n_filters * H * W)
-        flat1 = F.relu(self.fc1(conv_state))
-        actions = self.fc2(flat1)
-
-        # x = F.relu(self.fc1(state))
-        # x = F.relu(self.fc2(x))
-        # x = F.relu(self.fc3(x))
-        # actions = self.fc4(x)
+            # conv_state = conv1.view(conv1.size()[0], -1)
+            conv_state = conv2.view(conv2.size()[0], -1)
+            # conv_state = conv3.view(conv3.size()[0], -1)
+            # conv_state shape is BS x (n_filters * H * W)
+            flat1 = F.relu(self.fc1(conv_state))
+            actions = self.fc2(flat1)
+        else:
+            x = F.relu(self.fc1(state))
+            x = F.relu(self.fc2(x))
+            x = F.relu(self.fc3(x))
+            actions = self.fc4(x)
 
         return actions
 
@@ -77,11 +87,12 @@ class DeepQNetwork(nn.Module):
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
-        checkpoint = T.load(self.checkpoint_file, map_location='cuda:0')
+        cuda_string = 'cuda:' + str(self.device_num)
+        checkpoint = T.load(self.checkpoint_file, map_location=cuda_string)
         self.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         for state in self.optimizer.state.values():
             for k, v in state.items():
                 if isinstance(v, T.Tensor):
-                    state[k] = v.cuda()
+                    state[k] = v.cuda(device=self.device_num)
         return checkpoint

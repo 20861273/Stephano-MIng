@@ -4,9 +4,9 @@ from deep_q_network import DeepQNetwork
 from replay_memory import ReplayBuffer, PrioritizedReplayMemory
 
 class DQNAgent(object):
-    def __init__(self, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
+    def __init__(self, encoding, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
                  input_dims, c_dims, k_size, s_size, fc_dims,
-                 mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn'):
+                 mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
         self.gamma = gamma
         self.epsilon = epsilon
         self.lr = lr
@@ -37,16 +37,18 @@ class DQNAgent(object):
         else:
             self.memory = ReplayBuffer(mem_size, input_dims, n_actions)
         
-        self.q_eval = DeepQNetwork(nr, self.lr, self.n_actions,
+        self.q_eval = DeepQNetwork(encoding, self.lr, self.n_actions,
                                     self.input_dims,
                                     c_dims, k_size, s_size,
                                     fc_dims,
+                                    device_num,
                                     name=self.env_name+'_'+self.algo+'_q_eval',
                                     chkpt_dir=self.chkpt_dir)
 
-        self.q_next = DeepQNetwork(nr, self.lr, self.n_actions,
+        self.q_next = DeepQNetwork(encoding, self.lr, self.n_actions,
                                     self.input_dims,
                                     c_dims, k_size, s_size, fc_dims,
+                                    device_num,
                                     name=self.env_name+'_'+self.algo+'_q_next',
                                     chkpt_dir=self.chkpt_dir)
 
@@ -170,7 +172,7 @@ class DQNAgent(object):
 
         if self.prioritized: self.memory.update_priorities(tree_idxs, errors)
 
-        return loss
+        return loss.cpu().detach().numpy()
 
 
 class SegmentTree():

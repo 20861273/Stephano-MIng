@@ -9,14 +9,14 @@ import time
 import matplotlib.pyplot as plt
 
 def centralized_dqn(nr, training_sessions, episodes, print_interval, training_type, encoding,
-                    curriculum_learning,
+                    curriculum_learning, reward_system,
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
                     max_steps, i_exp,
                     n_actions, starting_beta, input_dims, 
                     c_dims, k_size, s_size, fc_dims,
                     batch_size, mem_size, replace,
-                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint):
+                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num):
     
     # initialize training session variables
     start_time = time.time()
@@ -30,15 +30,15 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
         cntr = 0
 
         # initialize environment
-        env = Environment(nr, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, episodes)
+        env = Environment(nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, episodes)
         
         # initialize agents
         model_name = str(i_exp) + "_" + env_size
-        agent = DQNAgent(nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+        agent = DQNAgent(encoding, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
                         n_actions, starting_beta, input_dims,
                         c_dims, k_size, s_size, fc_dims,
                         mem_size, batch_size, replace, prioritized,
-                        algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path)
+                        algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
         
         # for debugging
         fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
@@ -82,6 +82,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
                     continue
                 else:
                     load_checkpoint = False
+                    print('episode', i_episode)
             
             # initialize episodic variables
             episode_reward = 0
@@ -117,12 +118,9 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
                 observation = observation_
 
                 # for debugging
-                # Done not tested
-                #################################################################################
                 if show_plot:
                     plt.cla()
                     PR.print_trajectories(ax, save_path, i_ts, env, action)
-                #################################################################################
 
                 # checks if termination condition was met
                 if done:
@@ -152,12 +150,13 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
 
             # display progress
             if i_episode % print_interval == 0 or i_episode == episodes-1 and i_episode != 0:
+                if loss == None: loss = 0
                 print('episode= ', i_episode,
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
                         'average_steps= %.2f,' % avg_steps,
                         'loss=%.2f' % loss,
-                        'success= %.4f' % (float(cntr)/1000.0*100.0))
+                        'success= %.4f' % (float(cntr)/float(print_interval)*100.0))
                 cntr = 0
             
         # save rewards in training session rewards

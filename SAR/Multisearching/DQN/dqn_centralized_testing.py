@@ -18,6 +18,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
 
         load_models_path = os.path.join(load_path, 'models')
 
+        # fills hps but doesn't work yet
         hp_lens = {}
         for key in hp:
             if key == "n actions": break
@@ -27,9 +28,12 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
             if hp_lens[key] < max_len:
                 [hp[key].append(hp[key][0]) for i in range(max_len-1)]
 
+        # print("Discount rate: %s, Learning rate: %s, Epsilon: %s"\
+        #          %(str(hp["discount rate"][policy]), str(hp["learning rate"][policy]), str(hp["epsilon"][policy])))
+
         model_name = str(policy) + "_" + hp["env size"]
         # model_name = hp["env size"]
-        agent = DQNAgent(hp["number of drones"], hp["discount rate"][policy], hp["epsilon"][policy][0], hp["epsilon"][policy][1], hp["epsilon"][policy][2], hp["learning rate"][policy],
+        agent = DQNAgent(hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
                         hp["n actions"], hp["starting beta"], hp["input dims"],
                         hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                         hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],

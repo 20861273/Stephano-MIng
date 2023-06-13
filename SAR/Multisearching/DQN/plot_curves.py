@@ -115,7 +115,7 @@ load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
 step = 100#len(scores[0][0])/10000
-policies = [1]
+policies = [6]
 
 
 rewards = []

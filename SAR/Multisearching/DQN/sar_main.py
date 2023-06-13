@@ -16,12 +16,12 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-                        "training": False,
+                        "training": True,
                         "load checkpoint": False,
                         "show rewards interval": 1000,
-                        "show plot": True,
+                        "show plot": False,
                         "save plot": False,
-                        "policy number": [2],
+                        "policy number": [5,6],
                         "testing iterations": 1000
     }
 
@@ -42,8 +42,8 @@ if __name__ == '__main__':
 
                     "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
-                    "encoding": "image",
-                    "input dims": (3,HEIGHT, WIDTH),
+                    "encoding": "position",
+                    "input dims": (2,HEIGHT, WIDTH),
 
                     "batch size": 64,
                     "mem size": 100000,
@@ -51,26 +51,22 @@ if __name__ == '__main__':
                     "channels": [16, 32],
                     "kernel": [2, 2],
                     "stride": [1, 1],
-                    "fc dims": [32],
+                    "fc dims": [64,32,16],
 
                     "prioritized": True,
                     "starting beta": 0.5,
 
-                    "curriculum_learning": {"sparse reward": False, "collisions": False}
-    }
+                    "device": 0,
 
-    num_experiences =     len(hp["learning rate"]) \
-                        * len(hp["discount rate"]) \
-                        * len(hp["epsilon"]) \
-                        * len(hp["positive rewards"]) \
-                        * len(hp["negative rewards"]) \
-                        * len(hp["positive exploration rewards"]) \
-                        * len(hp["negative step rewards"]) \
-                        * len(hp["max steps"]) \
-                        * hp["training sessions"]
+                    "curriculum_learning": {"sparse reward": False, "collisions": False},
+                    "reward system": {"find goal": True, "coverage": False}
+    }
     
     if hp["number of drones"] < 2 and hp["training type"] == "decentralized":
         print("Cannot have less than 2 drones and train decentralized...")
+        quit()
+    if hp["number of drones"] < 2 and not hp["input dims"][0] == 2:
+        print("Input dimensions error...")
         quit()
 
     PATH = os.getcwd()
@@ -80,7 +76,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "12-06-2023 13h58m08s")
+    load_checkpoint_path = os.path.join(PATH, "13-06-2023 11h58m33s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -104,6 +100,21 @@ if __name__ == '__main__':
     else:
         checkpoint = {'session':0}
 
+    num_experiences =     len(hp["learning rate"]) \
+                        * len(hp["discount rate"]) \
+                        * len(hp["epsilon"]) \
+                        * len(hp["positive rewards"]) \
+                        * len(hp["negative rewards"]) \
+                        * len(hp["positive exploration rewards"]) \
+                        * len(hp["negative step rewards"]) \
+                        * len(hp["max steps"]) \
+                        * hp["training sessions"]
+    
+    if hp["encoding"] == "position":
+        hp["input dims"] = [HEIGHT*WIDTH]
+    elif hp["encoding"] == "position_exploration":
+        hp["input dims"] = [HEIGHT*WIDTH*2]
+
     if testing_parameters["training"]:
         print("Number of training sessoins: ", num_experiences)
         i_exp = 0
@@ -116,17 +127,17 @@ if __name__ == '__main__':
                             for lr_i in hp["learning rate"]:
                                 for dr_i in hp["discount rate"]:
                                     for er_i in hp["epsilon"]:
-                                        if i_exp >= checkpoint['session']:
+                                        if i_exp >= int(checkpoint['session']):
                                             if hp["training type"] == "centralized":
                                                 load_checkpoint = centralized_dqn(
                                                             hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
-                                                            hp["curriculum_learning"],
+                                                            hp["curriculum_learning"], hp["reward system"],
                                                             dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                             pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
                                                             hp["n actions"], hp["starting beta"], hp["input dims"],
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"],
-                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"])
+                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"])
                                             elif hp["training type"] == "decentralized":
                                                 load_checkpoint = distributed_dqn(
                                                             hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
