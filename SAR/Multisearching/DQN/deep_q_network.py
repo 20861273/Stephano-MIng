@@ -6,12 +6,14 @@ import torch.optim as optim
 import numpy as np
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, encoding, lr,
+    def __init__(self, encoding, nr, lr,
                  n_actions, input_dims, c_dims, k_size, s_size,
                     fc_dims, device_num, name, chkpt_dir):
         super(DeepQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
+
+        self.nr = nr
 
         self.encoding = encoding
 
@@ -51,11 +53,11 @@ class DeepQNetwork(nn.Module):
         dims = self.conv1(state)
         dims = self.conv2(dims)
         # dims = self.conv3(dims)
-        return int(np.prod(dims.size()))
+        return int(np.prod(dims.size())) + 4*self.nr + 1 # image size + surrounding states + percentage explored
 
-    def forward(self, state):
+    def forward(self, image_state, non_image_state=None):
         if self.encoding == "image":
-            conv1 = F.relu(self.conv1(state))
+            conv1 = F.relu(self.conv1(image_state))
             conv2 = F.relu(self.conv2(conv1))
             # conv3 = F.relu(self.conv3(conv2))
             # conv3 shape is BS x n_filters x H x W
@@ -64,10 +66,14 @@ class DeepQNetwork(nn.Module):
             conv_state = conv2.view(conv2.size()[0], -1)
             # conv_state = conv3.view(conv3.size()[0], -1)
             # conv_state shape is BS x (n_filters * H * W)
-            flat1 = F.relu(self.fc1(conv_state))
+
+            # consentrate output of convolutional layers and non-image state
+            concatenated_state = T.cat((conv_state, non_image_state), dim=1)
+
+            flat1 = F.relu(self.fc1(concatenated_state))
             actions = self.fc2(flat1)
         else:
-            x = F.relu(self.fc1(state))
+            x = F.relu(self.fc1(image_state))
             x = F.relu(self.fc2(x))
             x = F.relu(self.fc3(x))
             actions = self.fc4(x)

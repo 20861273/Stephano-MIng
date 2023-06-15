@@ -28,13 +28,14 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
         # initialized in epoch variables
         rewards, steps = [], []
         cntr = 0
+        percentage = 0.0
 
         # initialize environment
         env = Environment(nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, episodes)
         
         # initialize agents
         model_name = str(i_exp) + "_" + env_size
-        agent = DQNAgent(encoding, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+        agent = DQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
                         n_actions, starting_beta, input_dims,
                         c_dims, k_size, s_size, fc_dims,
                         mem_size, batch_size, replace, prioritized,
@@ -90,17 +91,17 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
             loss = 0
 
             # reset environment
-            observation = env.reset(i_episode)
+            percentage = float(cntr)/float(print_interval)*100.0
+            image_observation, non_image_observation = env.reset(i_episode, percentage)
             
             # episode loop
             for step in range(max_steps):
-
                 # action selection
                 for i_r in range(0,nr):
-                    action[i_r] = agent.choose_action(observation[i_r])
+                    action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r])
                 
                 # execute step
-                observation_, reward, done, info = env.step_centralized(action)
+                image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)
                 
                 # add step reward to episode reward
                 episode_reward += reward
@@ -111,16 +112,17 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
                 # store transitions and execute learn function
                 if not load_checkpoint:
                     for i_r in range(0,nr):
-                        agent.store_transition(observation[i_r], action[i_r],
-                                            reward, observation_[i_r], done)
+                        agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
+                                            reward, image_observation_[i_r], non_image_observation_[i_r], done)
                         loss = agent.learn()
 
-                observation = observation_
+                image_observation = image_observation_
+                non_image_observation = non_image_observation_
 
                 # for debugging
                 if show_plot:
                     plt.cla()
-                    PR.print_trajectories(ax, save_path, i_ts, env, action)
+                    PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info)
 
                 # checks if termination condition was met
                 if done:
@@ -150,13 +152,14 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
 
             # display progress
             if i_episode % print_interval == 0 or i_episode == episodes-1 and i_episode != 0:
+                percentage = float(cntr)/float(print_interval)*100.0
                 if loss == None: loss = 0
                 print('episode= ', i_episode,
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
                         'average_steps= %.2f,' % avg_steps,
                         'loss=%.2f' % loss,
-                        'success= %.4f' % (float(cntr)/float(print_interval)*100.0))
+                        'success= %.4f' % (percentage))
                 cntr = 0
             
         # save rewards in training session rewards

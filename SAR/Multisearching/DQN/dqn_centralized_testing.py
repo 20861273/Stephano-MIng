@@ -33,7 +33,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
 
         model_name = str(policy) + "_" + hp["env size"]
         # model_name = hp["env size"]
-        agent = DQNAgent(hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
+        agent = DQNAgent(hp["encoding"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
                         hp["n actions"], hp["starting beta"], hp["input dims"],
                         hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                         hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
@@ -42,8 +42,8 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         checkpoint = agent.load_models()
         agent.q_eval.eval()
         agent.q_next.eval()
-
-        env = Environment(hp["number of drones"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], {"collisions": False, "sparse reward": False}, 50000)
+                        #nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, episodes
+        env = Environment(hp["number of drones"], hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], {"collisions": False, "sparse reward": False}, 50000)
 
         PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
 

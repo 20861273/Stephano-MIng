@@ -18,19 +18,19 @@ if __name__ == '__main__':
     testing_parameters = {
                         "training": True,
                         "load checkpoint": False,
-                        "show rewards interval": 1000,
+                        "show rewards interval": 100,
                         "show plot": False,
                         "save plot": False,
-                        "policy number": [5,6],
-                        "testing iterations": 1000
+                        "policy number": [12,13,14],
+                        "testing iterations": 10000
     }
 
     hp = {
                     "number of drones": 1,
                     "training type": "centralized",
                     "learning rate": [0.0001],
-                    "discount rate": [0.5,0.7,0.9],
-                    "epsilon": [[0.005,0.005,0.005]],
+                    "discount rate": [0.99],
+                    "epsilon": [[0.01,0.01,0.01]],
 
                     "training sessions": 1,
                     "episodes": 50000,
@@ -42,16 +42,16 @@ if __name__ == '__main__':
 
                     "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
-                    "encoding": "position",
+                    "encoding": "image",
                     "input dims": (2,HEIGHT, WIDTH),
 
                     "batch size": 64,
                     "mem size": 100000,
-                    "replace": 1000,
+                    "replace": 100,
                     "channels": [16, 32],
                     "kernel": [2, 2],
                     "stride": [1, 1],
-                    "fc dims": [64,32,16],
+                    "fc dims": [32],
 
                     "prioritized": True,
                     "starting beta": 0.5,
@@ -59,7 +59,7 @@ if __name__ == '__main__':
                     "device": 0,
 
                     "curriculum_learning": {"sparse reward": False, "collisions": False},
-                    "reward system": {"find goal": True, "coverage": False}
+                    "reward system": {"find goal": False, "coverage": True}
     }
     
     if hp["number of drones"] < 2 and hp["training type"] == "decentralized":

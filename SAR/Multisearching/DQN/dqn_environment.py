@@ -43,6 +43,7 @@ class Environment:
 
         self.curriculum_learning = curriculum_learning
         self.total_episodes = total_episodes
+        self.stage = 0
         
         # Generates grid (Grid[y,x])
         self.generate_grid()
@@ -65,13 +66,14 @@ class Environment:
         self.collision_state = False
 
         self.training_type = training_type
-        self.encoding = encoding        
+        self.encoding = encoding  
 
         # print("\nGrid size: ", self.grid.shape)
 
     def generate_grid(self):        
         # Ggenerate grid of zeros 
         self.grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
+        self.draw_edges()
 
         if self.curriculum_learning['collisions']:
             self.draw_bounds(0)
@@ -107,17 +109,22 @@ class Environment:
         self.pos = self.starting_pos.copy()
         self.prev_pos = self.starting_pos.copy()
 
-    def reset(self, current_episode):
+    def reset(self, current_episode, percentage = 0.0):
         self.collision = {  'obstacle' :   [False]*self.nr,
                             'boundary' :   [False]*self.nr,
                             'drone'    :   [False]*self.nr}
         self.collision_state = False
         # Clear all visited blocks
         self.grid.fill(0)
+        self.draw_edges()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
 
         if self.curriculum_learning['collisions']:
-            self.draw_bounds(current_episode)
+            self.draw_bounds(current_episode, percentage)
+
+        explored = np.argwhere(self.grid == States.OBS.value)
+        for cell in explored:
+            self.exploration_grid[cell[0], cell[1]] = True
 
         # Static goal location spawning
         # self.goal = Point(0,0)
@@ -169,9 +176,9 @@ class Environment:
                 
         self.score = 0
         
-        state = self.get_state()
+        image_state, non_image_state = self.get_state()
 
-        return state
+        return image_state, non_image_state
 
     def step_centralized(self, actions):
         self.score = 0
@@ -185,7 +192,7 @@ class Environment:
         # 4. Update environment
         self._update_env()
 
-        state = self.get_state()
+        image_state, non_image_state = self.get_state()
 
         self.score += self.calc_reward_centralized()
         self.score -= self.negative_step_reward
@@ -195,7 +202,7 @@ class Environment:
         if self.collision_state:
             reward = self.score
             game_over = True
-            return state, reward, game_over, 0
+            return image_state, non_image_state, reward, game_over, 0
 
         if self.reward_system["find goal"]:
             if self.curriculum_learning['sparse reward']:
@@ -203,22 +210,22 @@ class Environment:
                     self.score += self.positive_reward
                     reward = self.score
                     game_over = True
-                    return state, reward, game_over, 1
+                    return image_state, non_image_state, reward, game_over, 1
             else:
                 if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
                     self.score += self.positive_reward
                     reward = self.score
                     game_over = True
-                    return state, reward, game_over, 1
+                    return image_state, non_image_state, reward, game_over, 1
         elif self.reward_system["coverage"]:
             if self.exploration_grid.all():
                 self.score += self.positive_reward
                 reward = self.score
                 game_over = True
-                return state, reward, game_over, 1
+                return image_state, non_image_state, reward, game_over, 1
 
         # 6. return game over and score
-        return state, reward, game_over, 0
+        return image_state, non_image_state, reward, game_over, 0
     
     def step_decentralized(self, actions):
         # action = self.decode_action(action)
@@ -330,9 +337,15 @@ class Environment:
 
                 for r_i in range(self.nr):
                     state[r_i] = np.concatenate((position_array[r_i], exploration_grid), axis=0)
+
+            return state
                     
         # Image state
         elif self.encoding == "image":
+            percentage_explored = [np.mean(self.exploration_grid)]
+            surroundings_state = self.check_surrounding_cells()
+            non_image_state = [percentage_explored + sublist for sublist in surroundings_state]
+
             # Generates exploration map. All explored cells are equal to 1
             exploration_map = np.zeros(self.grid.shape)
             explored = np.argwhere(self.exploration_grid == True)
@@ -370,7 +383,9 @@ class Environment:
                 # image_map[r_i][1] = other_locations_map[r_i]
                 image_map[r_i][1] = exploration_map
 
-            state = np.copy(image_map)
+            image_state = np.copy(image_map)
+
+            return image_state, non_image_state
 
         # Goal state
         # goal_grid = np.zeros(self.grid.shape, dtype=np.float32)
@@ -383,8 +398,6 @@ class Environment:
         # for y,x in obstables:
         #     obstacle_grid[y, x] = 1.0
         # obstacle_grid = obstacle_grid.flatten()
-
-        return state
 
     def _is_collision_centralized(self, pt, r_i, x ,y):
         new_pos = [Point(x[i], y[i]) for i in range(self.nr)]
@@ -486,8 +499,8 @@ class Environment:
             for collisions in collision_types:
                 if self.collision[collisions][i]:
                     if collisions == "obstacle" or collisions == "boundary":
-                        self.pos[i] = self.pos[i]
                         self.prev_pos[i] = self.pos[i]
+                        self.pos[i] = Point(x[i],y[i])
                         self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
                         self.collision_state = True
                     elif collisions == "drone":
@@ -499,6 +512,7 @@ class Environment:
                 self.prev_pos[i] = self.pos[i]
                 self.pos[i] = Point(x[i],y[i])
                 self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
+                breakpoint
 
     def _move_decentralized(self, action):
         # Get directions
@@ -525,9 +539,9 @@ class Environment:
             elif self.direction[i] == (Direction.LEFT).value:
                 x[i] -= 1
             elif self.direction[i] == (Direction.DOWN).value:
-                y[i] += 1
-            elif self.direction[i] == (Direction.UP).value:
                 y[i] -= 1
+            elif self.direction[i] == (Direction.UP).value:
+                y[i] += 1
 
         # Set position to new location
         for i in range(0, self.nr):
@@ -567,22 +581,58 @@ class Environment:
         else:
             return False
         
-    def draw_bounds(self, episode):
-        if episode < self.total_episodes//10:
-            self.grid = np.ones((HEIGHT, WIDTH))
-            middle_rows = math.ceil(HEIGHT / 3)
-            middle_columns = math.ceil(WIDTH / 3)
-            self.grid[middle_rows:-middle_rows, middle_columns:-middle_columns] = 0
+    def draw_bounds(self, episode, percentage=0.0):
+        # if episode < self.total_episodes//10:
+        if not self.stage == 2:
+            if episode < self.total_episodes//10 or self.stage == 0:
+                self.grid = np.ones((HEIGHT, WIDTH))
+                middle_rows = math.ceil(HEIGHT / 3)
+                middle_columns = math.ceil(WIDTH / 3)
+                self.grid[middle_rows:-middle_rows, middle_columns:-middle_columns] = 0
+                if percentage > 98.0:
+                    self.stage = 1
+                    percentage = 0.0
 
-        elif self.total_episodes//10 <= episode < self.total_episodes//5:
-            self.grid = np.ones((HEIGHT, WIDTH))
-            middle_rows = HEIGHT // 4
-            middle_columns = WIDTH // 4
-            self.grid[middle_rows:-middle_rows, middle_columns:-middle_columns] = 0
+            # elif self.total_episodes//10 <= episode < self.total_episodes//5 and percentage > 98.0:
+            elif self.stage == 1:
+                self.grid = np.ones((HEIGHT, WIDTH))
+                middle_rows = HEIGHT // 4
+                middle_columns = WIDTH // 4
+                self.grid[middle_rows:-middle_rows, middle_columns:-middle_columns] = 0
+                if percentage > 98.0:
+                    self.stage = 2
 
         self.clear_rows = np.where(np.any(self.grid == States.UNEXP.value, axis=1))[0]
-        if self.clear_rows.shape[0] > 5:
+        if self.clear_rows.shape[0]:
             np.random.shuffle(self.clear_rows)
             self.clear_rows = self.clear_rows[:5]
         # breakpoint
         # if episode > self.total_episodes//5 then nothing
+
+    def check_surrounding_cells(self):
+        surroundings = []
+        for r_i in range(self.nr):
+            # Check if the surrounding cells are on the edge
+            right_is_boundary = self.pos[r_i].x == WIDTH - 1
+            left_is_boundary = self.pos[r_i].x == 0
+            top_is_boundary = self.pos[r_i].y == 0
+            bottom_is_boundary = self.pos[r_i].y == HEIGHT - 1
+
+            surroundings.append([
+                right_is_boundary or (self.grid[self.pos[r_i].y][self.pos[r_i].x+1] == States.OBS.value if not right_is_boundary else True),
+                left_is_boundary or (self.grid[self.pos[r_i].y][self.pos[r_i].x-1] == States.OBS.value if not left_is_boundary else True),
+                top_is_boundary or (self.grid[self.pos[r_i].y-1][self.pos[r_i].x] == States.OBS.value if not top_is_boundary else True),
+                bottom_is_boundary or (self.grid[self.pos[r_i].y+1][self.pos[r_i].x] == States.OBS.value if not bottom_is_boundary else True)
+            ])
+
+        return surroundings
+    
+    def draw_edges(self):
+        # Set left and right edges to 2
+        for row in self.grid:
+            row[0] = States.OBS.value
+            row[HEIGHT - 1] = States.OBS.value
+
+        # Set top and bottom edges to 2
+        self.grid[0] = [States.OBS.value] * HEIGHT
+        self.grid[WIDTH - 1] = [States.OBS.value] * HEIGHT

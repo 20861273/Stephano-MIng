@@ -14,7 +14,7 @@ def moving_avarage_smoothing(X,k):
 			S[t] = np.sum(X[t-k:t])/k
 	return S
 
-def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, dr, er):
+def plot_learning_curves(scores, filename, policy, c, step, ts, pr, nr, per, nsr, ms, lr, dr, er):
     mean_rewards = np.zeros((len(scores), len(scores[0][0])))
     std_rewards = np.zeros((len(scores), len(scores[0][0])))
 
@@ -40,35 +40,21 @@ def plot_learning_curves(scores, filename, step, ts, pr, nr, per, nsr, ms, lr, d
     ax=fig.add_subplot(111)
 
     l = []
-    for i in range(len(scores)):
-        l.append("%s:  e=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s, \nα=%s, γ=%s, ϵ=%s" %(
-                str(i),
-                str(ts[i]),
-                str(pr[i]),
-                str(nr[i]),
-                str(per[i]),
-                str(nsr[i]),
-                str(ms[i]),
-                str(lr[i]), 
-                str(dr[i]), 
-                str(er[i])
-                ))
+    l.append("%s:  e=%s, pr=%s, nr=%s, per=%s, nsr=%s, s=%s, \nα=%s, γ=%s, ϵ=%s" %(
+            str(policy),
+            str(ts),
+            str(pr[policy]),
+            str(nr[policy]),
+            str(per[policy]),
+            str(nsr[policy]),
+            str(ms[policy]),
+            str(lr[policy]), 
+            str(dr[policy]), 
+            str(er[policy])
+            ))
 
-    c = cm.rainbow(np.linspace(0, 1, len(scores)))
-    
-    if len(scores[0]) == 1:
-        for i in range(len(policies)):
-            mov_avg_rewards[0] = moving_avarage_smoothing(np.array(scores[0][0]), 10)
-            ax.plot(np.arange(0, len(mov_avg_rewards[i]), int(step+i)), mov_avg_rewards[i][::int(step+i)], color=c[i], label=l[i])
-    else:
-        for i in range(len(policies)):
-            std_top = mean_rewards[i][::int(step+i)]+std_rewards[i][::int(step+i)]
-            std_bottom = mean_rewards[i][::int(step+i)]-std_rewards[i][::int(step+i)]
-            greater_than_one = np.argwhere(np.array(std_top) > 1)
-            for j in greater_than_one:
-                std_top[j] = 1
-            ax.plot(np.arange(0, len(mov_avg_rewards[i]), int(step+i)), mov_avg_rewards[i][::int(step+i)], color=c[i], label=l[i])
-            plt.fill_between(np.arange(0, len(mean_rewards[i]), int(step+i)), std_bottom, std_top, alpha = 0.1, color=c[i])
+    mov_avg_rewards[0] = moving_avarage_smoothing(np.array(scores[0][0]), 10)
+    ax.plot(np.arange(0, len(mov_avg_rewards[0]), int(step)), mov_avg_rewards[0][::int(step)], color=c[policy], label=l[0])
     
     lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     ax.set_xlabel("Episodes", color="C0")
@@ -96,7 +82,7 @@ def read_hp_json(path, file_name):
     file_path = os.path.join(path, file_name)
     with open(file_path, "r") as f:
         data = json.load(f)
-    return data["training sessions"],data["learning rate"], data["discount rate"], data["epsilon"], data["positive rewards"], data["negative rewards"], data["positive exploration rewards"], data["negative step rewards"], data["max steps"]
+    return data
 
 def read_hp_jsons(path, file_name):
     file_path = os.path.join(path, file_name)
@@ -115,33 +101,65 @@ load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
 step = 100#len(scores[0][0])/10000
-policies = [6]
+policies = [0,1,2]
 
 
 rewards = []
 tss, lrs, drs, ers, prs, nrs, pers, nsrs, mss = [], [], [], [], [], [], [], [], []
-for i, policy in enumerate(policies):
+file_name = "hyperparameters.json"
+hp = read_hp_json(load_path, file_name)
+num_policies =     len(hp["learning rate"]) \
+                        * len(hp["discount rate"]) \
+                        * len(hp["epsilon"]) \
+                        * len(hp["positive rewards"]) \
+                        * len(hp["negative rewards"]) \
+                        * len(hp["positive exploration rewards"]) \
+                        * len(hp["negative step rewards"]) \
+                        * len(hp["max steps"])
+for policy in range(num_policies):
     file_name = "ts_rewards%s.json" %(str(policy))
     rewards.append(read_json(load_path, file_name))
-    file_name = "hyperparameters.json"
-    ts, lr, dr, er, pr, nr, per, nsr, ms = read_hp_json(load_path, file_name)
-    tss.append(float(ts))
-    lrs.append(float(lr[0]))
-    drs.append(float(dr[policy]))
-    ers.append(er[0])
-    prs.append(float(pr[0]))
-    nrs.append(float(nr[0]))
-    pers.append(float(per[0]))
-    nsrs.append(float(nsr[0]))
-    mss.append(float(ms[0]))
 
 
-string = ""
-string = [string+","+str(i) for i in policies]
-filename = 'drone_0_learning_cruves%s, step=%s.png' %(string, str(step))
-filename = os.path.join(load_path, filename)
 
-plot_learning_curves([rewards[0][0:10]], filename, step, tss, prs, nrs, pers, nsrs, mss, lrs, drs, ers)
+
+pr = np.zeros((num_policies, ))
+nr = np.zeros((num_policies, ))
+per = np.zeros((num_policies, ))
+nsr = np.zeros((num_policies, ))
+ms = np.zeros((num_policies, ))
+lr = np.zeros((num_policies, ))
+dr = np.zeros((num_policies, ))
+er = np.zeros((num_policies, 3))
+
+policy = 0
+
+for pr_i in hp["positive rewards"]:
+    for nr_i in hp["negative rewards"]:
+        for per_i in hp["positive exploration rewards"]:
+            for nsr_i in hp["negative step rewards"]:
+                for ms_i in hp["max steps"]:
+                    for lr_i in hp["learning rate"]:
+                        for dr_i in hp["discount rate"]:
+                            for er_i in hp["epsilon"]:
+                                if policy in policies:
+                                      pr[policy] = pr_i
+                                      nr[policy] = nr_i
+                                      per[policy] = per_i
+                                      nsr[policy] = nsr_i
+                                      ms[policy] = ms_i
+                                      lr[policy] = lr_i
+                                      dr[policy] = dr_i
+                                      er[policy] = er_i
+                                policy += 1
+
+c = cm.rainbow(np.linspace(0, 1, num_policies))
+
+for policy in policies:
+    filename = 'drone_0_learning_cruves%s, step=%s.png' %(str(policy), str(step))
+    filename = os.path.join(load_path, filename)
+
+    plot_learning_curves([rewards[policy]], filename, policy, c, step, hp["training sessions"], pr, nr, per, nsr, ms, lr, dr, er)
 
 # string = ""
 # string = [string+","+str(i) for i in policies]

@@ -4,7 +4,7 @@ from deep_q_network import DeepQNetwork
 from replay_memory import ReplayBuffer, PrioritizedReplayMemory
 
 class DQNAgent(object):
-    def __init__(self, encoding, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
+    def __init__(self, encoding, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
                  input_dims, c_dims, k_size, s_size, fc_dims,
                  mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
         self.gamma = gamma
@@ -26,8 +26,8 @@ class DQNAgent(object):
 
         global Transition_dtype
         global blank_trans 
-        Transition_dtype = np.dtype([('timestep', np.int32), ('state', np.float32, (self.input_dims)), ('action', np.int64), ('reward', np.float32), ('next_state', np.float32, (self.input_dims)), ('done', np.bool_)])
-        blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), False)
+        Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (4*nr+1)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (4*nr+1)), ('done', np.bool_)])
+        blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((4*nr+1), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((4*nr+1), dtype=np.float32), False)
         
 
         if self.prioritized:
@@ -37,7 +37,7 @@ class DQNAgent(object):
         else:
             self.memory = ReplayBuffer(mem_size, input_dims, n_actions)
         
-        self.q_eval = DeepQNetwork(encoding, self.lr, self.n_actions,
+        self.q_eval = DeepQNetwork(encoding, nr, self.lr, self.n_actions,
                                     self.input_dims,
                                     c_dims, k_size, s_size,
                                     fc_dims,
@@ -45,50 +45,48 @@ class DQNAgent(object):
                                     name=self.env_name+'_'+self.algo+'_q_eval',
                                     chkpt_dir=self.chkpt_dir)
 
-        self.q_next = DeepQNetwork(encoding, self.lr, self.n_actions,
+        self.q_next = DeepQNetwork(encoding, nr, self.lr, self.n_actions,
                                     self.input_dims,
                                     c_dims, k_size, s_size, fc_dims,
                                     device_num,
                                     name=self.env_name+'_'+self.algo+'_q_next',
                                     chkpt_dir=self.chkpt_dir)
 
-    def choose_action(self, observation):
+    def choose_action(self, image_observation, non_image_observation):
         if np.random.random() > self.epsilon or not self.q_eval.training:
-            state = T.tensor(np.array([observation]),dtype=T.float).to(self.q_eval.device)
-            actions = self.q_eval.forward(state)
+            image_state = T.tensor(np.array([image_observation]),dtype=T.float).to(self.q_eval.device)
+            non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float).to(self.q_eval.device)
+            actions = self.q_eval.forward(image_state, non_image_state)
             action = T.argmax(actions).item()
         else:
             action = np.random.choice(self.action_space)
 
         return action
 
-    def store_transition(self, state, action, reward, state_, done):
-        self.memory.store_transition(state, action, reward, state_, done)
+    def store_transition(self, image_state, non_image_state, action, reward, image_state_, non_image_state_, done):
+        self.memory.store_transition(image_state, non_image_state, action, reward, image_state_, non_image_state_, done)
 
     def sample_memory(self, beta=0, prioritized=False):
         if not prioritized:
-            state, action, reward, new_state, done = \
+            image_state, non_image_state, action, reward, new_image_state, new_non_image_state, done = \
                                     self.memory.sample_buffer(self.batch_size)
             
-            states = T.tensor(state).to(self.q_eval.device)
+            image_states = T.tensor(image_state).to(self.q_eval.device)
+            non_image_states = T.tensor(non_image_state).to(self.q_eval.device)
             rewards = T.tensor(reward).to(self.q_eval.device)
             dones = T.tensor(done).to(self.q_eval.device)
             actions = T.tensor(action).to(self.q_eval.device)
-            states_ = T.tensor(new_state).to(self.q_eval.device)
+            image_states_ = T.tensor(new_image_state).to(self.q_eval.device)
+            non_image_states_ = T.tensor(new_non_image_state).to(self.q_eval.device)
 
-            return states, actions, rewards, states_, dones
+            return image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones
         elif prioritized:
-            states, actions, rewards, states_, dones, weights = \
+            image_states, non_image_state, actions, rewards, image_states_, non_image_states_, dones, weights = \
                                     self.memory.sample_buffer(self.gamma, self.batch_size, self.q_eval, self.q_next, beta)
             
-            # states = T.tensor(states).to(self.q_eval.device)
-            # rewards = T.tensor(rewards).to(self.q_eval.device)
-            # dones = T.tensor(dones).to(self.q_eval.device)
-            # actions = T.tensor(actions).to(self.q_eval.device)
-            # states_ = T.tensor(states_).to(self.q_eval.device)
             weights = T.tensor(weights).to(self.q_eval.device)
             
-            return states, actions, rewards, states_, dones, weights
+            return image_states, non_image_state, actions, rewards, image_states_, non_image_states_, dones, weights
     
 
     def replace_target_network(self):
@@ -127,15 +125,17 @@ class DQNAgent(object):
             self.beta = min(1, self.beta)
             # states, actions, rewards, states_, dones, weights = self.sample_memory(self.beta, self.prioritized)
             tree_idxs, data, weights = self.memory.sample(self.beta)
-            states=T.tensor(np.copy(data[:]['state'])).to(self.q_eval.device)
+            image_states=T.tensor(np.copy(data[:]['image_state'])).to(self.q_eval.device)
+            non_image_states=T.tensor(np.copy(data[:]['non_image_state'])).to(self.q_eval.device)
             rewards=T.tensor(np.copy(data[:]['reward'])).to(self.q_eval.device)
             dones=T.tensor(np.copy(data[:]['done'])).to(self.q_eval.device)
             actions=T.tensor(np.copy(data[:]['action'])).to(self.q_eval.device)
-            states_=T.tensor(np.copy(data[:]['next_state'])).to(self.q_eval.device)
+            image_states_=T.tensor(np.copy(data[:]['next_image_state'])).to(self.q_eval.device)
+            non_image_states_=T.tensor(np.copy(data[:]['next_non_image_state'])).to(self.q_eval.device)
 
             indices = np.arange(self.batch_size)
-            q_pred = self.q_eval.forward(states)[indices, actions]
-            q_next = self.q_next.forward(states_).max(dim=1)[0]
+            q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
+            q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
 
             q_next[dones] = 0.0
             q_target = rewards + self.gamma*q_next
@@ -152,11 +152,11 @@ class DQNAgent(object):
             # replace target here
             self.replace_target_network()
 
-            states, actions, rewards, states_, dones = self.sample_memory()
+            image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones = self.sample_memory()
 
             indices = np.arange(self.batch_size)
-            q_pred = self.q_eval.forward(states)[indices, actions]
-            q_next = self.q_next.forward(states_).max(dim=1)[0]
+            q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
+            q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
 
             q_next[dones] = 0.0
             q_target = rewards + self.gamma*q_next
@@ -257,8 +257,8 @@ class ReplayMemory:
         self.transitions = SegmentTree(self.capacity)
         self.t = 0
 
-    def store_transition(self, state, action, reward, next_state, done):
-        self.transitions.append((self.t, state, action, reward, next_state, done), self.transitions.max)  # Store new transition with maximum priority
+    def store_transition(self, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done):
+        self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
     
     def sample(self, replay_beta):

@@ -83,7 +83,7 @@ class print_results:
                 actions.append((r, act))
         return actions
     
-    def print_trajectories(self, ax, dir_traj, p, env, actions=None):
+    def print_trajectories(self, ax, dir_traj, p, env, actions=None, reward=0, done=False):
         """
         Prints the grid environment
         """
@@ -117,9 +117,14 @@ class print_results:
                             [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
                                 facecolor="k", alpha=0.5*scale)
                 elif env.grid[i][j] == States.EXP.value:
-                    ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
-                            [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
-                                facecolor="green", alpha=0.5*scale)
+                    if done:
+                        ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
+                                [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
+                                    facecolor="yellow", alpha=0.5*scale)
+                    else:
+                        ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
+                                [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
+                                    facecolor="green", alpha=0.5*scale)
                 elif env.grid[i][j] == States.GOAL.value:
                     ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
                             [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
@@ -160,7 +165,7 @@ class print_results:
                     action = "Down [v]"
                 elif actions[i] == Direction.DOWN.value:
                     action = "Up [^]"
-                text.set_text(f"Drone {i}: Action: {action}")
+                text.set_text(f"Drone {i}:\nAction: {action}\nReward: {reward}")
         else:
             legend = ax.legend([0]*env.nr, loc='center left', bbox_to_anchor=(1, 0.5))
             handles = legend.legendHandles
@@ -181,6 +186,7 @@ class print_results:
         # file_name = "p%dtrajectory%d.png" %(policy, cnt)
         # plt.savefig(os.path.join(dir_traj, file_name))
         plt.pause(0.05)
+        if done: plt.pause(0.5)
 
     def plot(self, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time, postive_reward):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")

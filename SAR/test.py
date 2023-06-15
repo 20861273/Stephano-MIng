@@ -13,30 +13,39 @@ from datetime import datetime
 
 from collections import namedtuple
 
-PATH = os.getcwd()
-PATH = os.path.join(PATH, 'SAR')
-PATH = os.path.join(PATH, 'Results')
-PATH = os.path.join(PATH, 'DQN')
-load_path = os.path.join(PATH, 'Saved_data')
-if not os.path.exists(load_path): os.makedirs(load_path) 
-load_checkpoint_path = os.path.join(PATH, "12-06-2023 13h58m08s")
-save_path = load_checkpoint_path
-models_path = os.path.join(save_path, 'models')
+def check_surrounding_cells(grid, locations):
+    num_rows = len(grid)
+    num_cols = len(grid[0])
+    num_ones = len(locations)
 
-n = np.zeros((2,4,4), dtype=np.bool_)
+    surroundings = []
+    for i in range(num_ones):
+        y,x = locations[i]
 
-for k in range(n.shape[0]):
-    for i in range(n.shape[1]):
-        for j in range(n.shape[2]):
-            if k ==0:n[k,i,j] = True
-            elif k == 1:n[k,i,j] = False
-print(n)
-m = np.zeros((2,4*4))       
-m[0] = n[0].flatten()
-m[1] = n[1].flatten()
+        # Check if the surrounding cells are on the edge
+        right_is_boundary = x == num_cols - 1
+        left_is_boundary = x == 0
+        top_is_boundary = y == 0
+        bottom_is_boundary = y == num_rows - 1
 
-print(m)
+        surroundings.append([
+            right_is_boundary or (grid[y][x+1] == 2 if not right_is_boundary else True),
+            left_is_boundary or (grid[y][x-1] == 2 if not left_is_boundary else True),
+            top_is_boundary or (grid[y-1][x] == 2 if not top_is_boundary else True),
+            bottom_is_boundary or (grid[y+1][x] == 2 if not bottom_is_boundary else True)
+        ])
 
+    return surroundings
 
-if n.all():
-    print("hi")
+grid = np.zeros((4,4))
+locations = [(1,2),(2,3),(0,3)]
+for i in locations:
+    grid[i] = 1
+
+grid[1,3] = 2
+
+print(grid)
+
+cells = check_surrounding_cells(grid, locations)
+
+print(cells)
