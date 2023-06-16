@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 8
+WIDTH = 8
 
 # DENSITY = 30 # percentage
 
@@ -33,7 +33,9 @@ Point = namedtuple('Point', 'x, y')
 
 class Environment:
     
-    def __init__(self, nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, total_episodes):
+    def __init__(self, nr, \
+                reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
+                training_type, encoding, lidar, curriculum_learning, total_episodes):
         self.nr = nr
 
         # Set robot(s) position
@@ -43,7 +45,7 @@ class Environment:
 
         self.curriculum_learning = curriculum_learning
         self.total_episodes = total_episodes
-        self.stage = 0
+        self.stage = 1
         
         # Generates grid (Grid[y,x])
         self.generate_grid()
@@ -66,7 +68,8 @@ class Environment:
         self.collision_state = False
 
         self.training_type = training_type
-        self.encoding = encoding  
+        self.encoding = encoding
+        self.lidar = lidar
 
         # print("\nGrid size: ", self.grid.shape)
 
@@ -87,6 +90,10 @@ class Environment:
 
         # Random goal location spawning
         if self.curriculum_learning['sparse reward']:
+            self.clear_rows = np.where(np.any(self.grid == States.UNEXP.value, axis=1))[0]
+            if self.clear_rows.shape[0]:
+                np.random.shuffle(self.clear_rows)
+                self.clear_rows = self.clear_rows[:5]
             self.goal = [0]*self.clear_rows.shape[0]
             for i, row in enumerate(self.clear_rows):
                 indices = np.argwhere(self.grid == States.UNEXP.value)
@@ -132,6 +139,10 @@ class Environment:
 
         # Random goal location spawning
         if self.curriculum_learning['sparse reward']:
+            self.clear_rows = np.where(np.any(self.grid == States.UNEXP.value, axis=1))[0]
+            if self.clear_rows.shape[0]:
+                np.random.shuffle(self.clear_rows)
+                self.clear_rows = self.clear_rows[:5]
             self.goal = [0]*self.clear_rows.shape[0]
             for i, row in enumerate(self.clear_rows):
                 indices = np.argwhere(self.grid == States.UNEXP.value)
@@ -206,11 +217,17 @@ class Environment:
 
         if self.reward_system["find goal"]:
             if self.curriculum_learning['sparse reward']:
-                if self._found_all_goals():
+                # if self._found_all_goals():
+                #     self.score += self.positive_reward
+                #     reward = self.score
+                #     game_over = True
+                #     return image_state, non_image_state, reward, game_over, 1
+                if self._found_a_goal():
                     self.score += self.positive_reward
-                    reward = self.score
-                    game_over = True
-                    return image_state, non_image_state, reward, game_over, 1
+                    if len(self.goal) == 0:
+                        reward = self.score
+                        game_over = True
+                        return image_state, non_image_state, reward, game_over, 1
             else:
                 if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
                     self.score += self.positive_reward
@@ -342,9 +359,12 @@ class Environment:
                     
         # Image state
         elif self.encoding == "image":
-            percentage_explored = [np.mean(self.exploration_grid)]
-            surroundings_state = self.check_surrounding_cells()
-            non_image_state = [percentage_explored + sublist for sublist in surroundings_state]
+            non_image_state = [None]*self.nr
+            if self.lidar:
+                # percentage_explored = [np.mean(self.exploration_grid)]
+                surroundings_state = self.check_surrounding_cells()
+                # non_image_state = [percentage_explored + sublist for sublist in surroundings_state]
+                non_image_state = surroundings_state.copy()
 
             # Generates exploration map. All explored cells are equal to 1
             exploration_map = np.zeros(self.grid.shape)
@@ -580,6 +600,13 @@ class Environment:
             return True
         else:
             return False
+    
+    def _found_a_goal(self):
+        for i, goal_i in enumerate(self.goal):
+            for r_i in range(self.nr):
+                if self.pos[r_i] == goal_i:
+                    del self.goal[i]
+                    return True
         
     def draw_bounds(self, episode, percentage=0.0):
         # if episode < self.total_episodes//10:

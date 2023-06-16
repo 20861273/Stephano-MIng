@@ -7,7 +7,7 @@ import numpy as np
 
 class DeepQNetwork(nn.Module):
     def __init__(self, encoding, nr, lr,
-                 n_actions, input_dims, c_dims, k_size, s_size,
+                 n_actions, input_dims, lidar, c_dims, k_size, s_size,
                     fc_dims, device_num, name, chkpt_dir):
         super(DeepQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
@@ -18,6 +18,8 @@ class DeepQNetwork(nn.Module):
         self.encoding = encoding
 
         self.input_dims = input_dims
+
+        self.lidar = lidar
 
         self.fc_dims = fc_dims.copy()
         self.n_actions = n_actions
@@ -53,7 +55,10 @@ class DeepQNetwork(nn.Module):
         dims = self.conv1(state)
         dims = self.conv2(dims)
         # dims = self.conv3(dims)
-        return int(np.prod(dims.size())) + 4*self.nr + 1 # image size + surrounding states + percentage explored
+        if self.lidar:
+            return int(np.prod(dims.size())) + 4*self.nr #+ 1 # image size + surrounding states + percentage explored
+        else:
+            return int(np.prod(dims.size())) # image size
 
     def forward(self, image_state, non_image_state=None):
         if self.encoding == "image":
@@ -67,10 +72,13 @@ class DeepQNetwork(nn.Module):
             # conv_state = conv3.view(conv3.size()[0], -1)
             # conv_state shape is BS x (n_filters * H * W)
 
-            # consentrate output of convolutional layers and non-image state
-            concatenated_state = T.cat((conv_state, non_image_state), dim=1)
+            if self.lidar:
+                # consentrate output of convolutional layers and non-image state
+                concatenated_state = T.cat((conv_state, non_image_state), dim=1)
 
-            flat1 = F.relu(self.fc1(concatenated_state))
+                flat1 = F.relu(self.fc1(concatenated_state))
+            else:
+                flat1 = F.relu(self.fc1(conv_state))
             actions = self.fc2(flat1)
         else:
             x = F.relu(self.fc1(image_state))

@@ -5,7 +5,6 @@ import json
 import os
 from matplotlib.pyplot import cm
 import math
-import pandas as pd
 
 def save_hp(save_path, hp):
     file_name = "hyperparameters.json"

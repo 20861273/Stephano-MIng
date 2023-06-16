@@ -33,17 +33,18 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
 
         model_name = str(policy) + "_" + hp["env size"]
         # model_name = hp["env size"]
-        agent = DQNAgent(hp["encoding"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
+        agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
                         hp["n actions"], hp["starting beta"], hp["input dims"],
                         hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                         hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
                         algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=load_models_path)
         
+        hp["curriculum_learning"] = {"sparse reward": False, "collisions": True}
         checkpoint = agent.load_models()
         agent.q_eval.eval()
         agent.q_next.eval()
                         #nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, episodes
-        env = Environment(hp["number of drones"], hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], {"collisions": False, "sparse reward": False}, 50000)
+        env = Environment(hp["number of drones"], hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], hp["curriculum_learning"], 50000)
 
         PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
 
@@ -55,7 +56,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         for i in range(0, testing_iterations):
             if i % 100 == 0 and i != 0:
                 print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
-            observation = env.reset(0)
+            image_observation, non_image_observation = env.reset(10000, 99)
 
             trajectory = []
 
@@ -72,13 +73,14 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
                 actions = []
                 action = [0]*hp["number of drones"]
                 for i_r in range(0,hp["number of drones"]):
-                    action[i_r] = agent.choose_action(observation[i_r])
+                    action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r])
                 actions.append(action)
                 trajectory.append((env.pos[i_r], action, i_r))
-                observation_, reward, done, info = env.step_centralized(action)
+                image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)
                 cnt += info
 
-                observation = observation_
+                image_observation = image_observation_
+                non_image_observation = non_image_observation_
 
                 if done:
                     if save_plot:

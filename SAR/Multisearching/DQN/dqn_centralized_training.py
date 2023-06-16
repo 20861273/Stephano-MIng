@@ -9,11 +9,11 @@ import time
 import matplotlib.pyplot as plt
 
 def centralized_dqn(nr, training_sessions, episodes, print_interval, training_type, encoding,
-                    curriculum_learning, reward_system,
+                    curriculum_learning, reward_system, allow_windowed_revisiting,
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
                     max_steps, i_exp,
-                    n_actions, starting_beta, input_dims, 
+                    n_actions, starting_beta, input_dims, lidar,
                     c_dims, k_size, s_size, fc_dims,
                     batch_size, mem_size, replace,
                     prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num):
@@ -29,14 +29,15 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
         rewards, steps = [], []
         cntr = 0
         percentage = 0.0
+        info = 0
 
         # initialize environment
-        env = Environment(nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, episodes)
+        env = Environment(nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, lidar, curriculum_learning, episodes)
         
         # initialize agents
         model_name = str(i_exp) + "_" + env_size
         agent = DQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
-                        n_actions, starting_beta, input_dims,
+                        n_actions, starting_beta, input_dims, lidar,
                         c_dims, k_size, s_size, fc_dims,
                         mem_size, batch_size, replace, prioritized,
                         algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
@@ -93,12 +94,18 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
             # reset environment
             percentage = float(cntr)/float(print_interval)*100.0
             image_observation, non_image_observation = env.reset(i_episode, percentage)
+            # for debugging
+            if show_plot:
+                plt.cla()
+                PR.print_trajectories(ax, save_path, i_ts, env)
             
             # episode loop
             for step in range(max_steps):
                 # action selection
                 for i_r in range(0,nr):
-                    action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r])
+                    if step == 0: action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting)
+                    else: action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, previous_action[i_r])
+                    previous_action = action.copy()
                 
                 # execute step
                 image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)
@@ -126,6 +133,10 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
 
                 # checks if termination condition was met
                 if done:
+                    # for debugging
+                    if show_plot:
+                        plt.cla()
+                        PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info)
                     break
 
             # add episode rewards/steps to rewards/steps lists
@@ -158,7 +169,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
                         'average_steps= %.2f,' % avg_steps,
-                        'loss=%.2f' % loss,
+                        'loss=%f' % loss,
                         'success= %.4f' % (percentage))
                 cntr = 0
             

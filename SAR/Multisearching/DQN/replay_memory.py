@@ -1,11 +1,11 @@
 import numpy as np
-from tree import SumTree
 import torch as T
 
 # last at sample buffer
 
 class ReplayBuffer(object):
-    def __init__(self, max_size, input_shape, n_actions):
+    def __init__(self, lidar, max_size, input_shape, n_actions):
+        self.lidar = lidar # TODO
         self.mem_size = max_size
         self.mem_cntr = 0 # mem_cntr of the last stored memory
         self.state_memory = np.zeros((self.mem_size, *input_shape),

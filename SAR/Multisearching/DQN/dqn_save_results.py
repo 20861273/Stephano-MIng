@@ -110,13 +110,20 @@ class print_results:
         ax.tick_params(axis='both', labelsize=10, pad=2, width=0.5*scale, length=2)
         ax.grid(True, color='black', linewidth=1)
 
-        for i in range(self.rows):
-            for j in range(self.cols):
-                if env.grid[i][j] == States.OBS.value:
+        temp_grid = env.grid.copy()
+        grid = temp_grid[::-1]
+
+        drone_locations = []
+        for i_r in range(env.nr):
+            drone_locations.append((grid.shape[0] - env.pos[i_r].y - 1, env.pos[i_r].x))            
+
+        for j in range(self.cols):
+            for i in range(self.rows):
+                if grid[i][j] == States.OBS.value:
                     ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
                             [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
                                 facecolor="k", alpha=0.5*scale)
-                elif env.grid[i][j] == States.EXP.value:
+                elif grid[i][j] == States.EXP.value:
                     if done:
                         ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
                                 [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
@@ -125,19 +132,22 @@ class print_results:
                         ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
                                 [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
                                     facecolor="green", alpha=0.5*scale)
-                elif env.grid[i][j] == States.GOAL.value:
+                elif grid[i][j] == States.GOAL.value:
                     ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
                             [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
                                 facecolor="red", alpha=0.5*scale)
-                elif env.grid[i][j] == States.ROBOT.value:
+                    # ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
+                    #         [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
+                    #             facecolor="white", alpha=0.5*scale)
+                elif grid[i][j] == States.ROBOT.value:
                     blues = np.linspace(0.3, 1, env.nr)
                     for r_i in range(env.nr):
                         color = (0,0,blues[r_i])
-                        if (env.pos[r_i].x,env.pos[r_i].y) == (j,i):
+                        if (drone_locations[r_i]) == (i,j):
                             ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale],\
                                     [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
                                         facecolor=color, alpha=0.5*scale)
-                elif env.grid[i][j] == States.UNEXP.value:
+                elif grid[i][j] == States.UNEXP.value:
                     ax.fill([j + 0.5*scale, j + 1.5*scale, j + 1.5*scale, j + 0.5*scale], \
                             [i + 0.5*scale, i + 0.5*scale, i + 1.5*scale, i + 1.5*scale], \
                                 facecolor="white", alpha=0.5*scale)
@@ -162,9 +172,9 @@ class print_results:
                 elif actions[i] == Direction.RIGHT.value:
                     action = "Right [>]"
                 elif actions[i] == Direction.UP.value:
-                    action = "Down [v]"
-                elif actions[i] == Direction.DOWN.value:
                     action = "Up [^]"
+                elif actions[i] == Direction.DOWN.value:
+                    action = "Down [v]"
                 text.set_text(f"Drone {i}:\nAction: {action}\nReward: {reward}")
         else:
             legend = ax.legend([0]*env.nr, loc='center left', bbox_to_anchor=(1, 0.5))

@@ -18,10 +18,10 @@ if __name__ == '__main__':
     testing_parameters = {
                         "training": True,
                         "load checkpoint": False,
-                        "show rewards interval": 100,
-                        "show plot": False,
+                        "show rewards interval": 1000,
+                        "show plot": True,
                         "save plot": False,
-                        "policy number": [12,13,14],
+                        "policy number": [0],
                         "testing iterations": 10000
     }
 
@@ -29,7 +29,7 @@ if __name__ == '__main__':
                     "number of drones": 1,
                     "training type": "centralized",
                     "learning rate": [0.0001],
-                    "discount rate": [0.99],
+                    "discount rate": [0.5,0.7,0.9,0.99],
                     "epsilon": [[0.01,0.01,0.01]],
 
                     "training sessions": 1,
@@ -44,6 +44,7 @@ if __name__ == '__main__':
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
                     "encoding": "image",
                     "input dims": (2,HEIGHT, WIDTH),
+                    "lidar": True,
 
                     "batch size": 64,
                     "mem size": 100000,
@@ -58,8 +59,9 @@ if __name__ == '__main__':
 
                     "device": 0,
 
-                    "curriculum_learning": {"sparse reward": False, "collisions": False},
-                    "reward system": {"find goal": False, "coverage": True}
+                    "allow windowed revisiting": True,
+                    "curriculum learning": {"sparse reward": True, "collisions": False},
+                    "reward system": {"find goal": True, "coverage": False}
     }
     
     if hp["number of drones"] < 2 and hp["training type"] == "decentralized":
@@ -131,10 +133,10 @@ if __name__ == '__main__':
                                             if hp["training type"] == "centralized":
                                                 load_checkpoint = centralized_dqn(
                                                             hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
-                                                            hp["curriculum_learning"], hp["reward system"],
+                                                            hp["curriculum learning"], hp["reward system"], hp["allow windowed revisiting"],
                                                             dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                             pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
-                                                            hp["n actions"], hp["starting beta"], hp["input dims"],
+                                                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["lidar"],
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"],
                                                             hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"])
