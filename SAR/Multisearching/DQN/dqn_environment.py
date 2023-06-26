@@ -3,12 +3,13 @@ from collections import namedtuple
 import numpy as np
 import random
 import math
+from Grassfire import Grassfire
 
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 8
-WIDTH = 8
+HEIGHT = 12
+WIDTH = 12
 
 # DENSITY = 30 # percentage
 
@@ -73,9 +74,13 @@ class Environment:
 
         # print("\nGrid size: ", self.grid.shape)
 
-    def generate_grid(self):        
-        # Ggenerate grid of zeros 
-        self.grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
+    def generate_grid(self):
+        # self.grid = self.random_grid(HEIGHT, WIDTH, 0.4)
+        # Generate grid of zeros 
+        # self.grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
+        self.grid = self.generate_map()
+
+        
         self.draw_edges()
 
         if self.curriculum_learning['collisions']:
@@ -242,6 +247,7 @@ class Environment:
                 return image_state, non_image_state, reward, game_over, 1
 
         # 6. return game over and score
+        # reward = self.score
         return image_state, non_image_state, reward, game_over, 0
     
     def step_decentralized(self, actions):
@@ -322,8 +328,14 @@ class Environment:
         return score
 
     def get_state(self):
+        non_image_state = [None]*self.nr
         # Position state: flattened array of environment where position is equal to 1
-        if self.encoding == "position" or self.encoding == "position_exploration":
+        if self.encoding == "position" or self.encoding == "position_exploration" or self.encoding == "position_occupancy":
+            if self.lidar:
+                # percentage_explored = [np.mean(self.exploration_grid)]
+                surroundings_state = self.check_surrounding_cells()
+                # non_image_state = [percentage_explored + sublist for sublist in surroundings_state]
+                non_image_state = surroundings_state.copy()
             location_map = np.zeros((self.nr,) + self.grid.shape)
             for r_i in range(self.nr):
                 location_map[r_i][self.pos[r_i].y, self.pos[r_i].x] = 1
@@ -336,6 +348,12 @@ class Environment:
                 state = np.zeros(((self.nr,) + (self.grid.shape[0]*self.grid.shape[1],)))
                 for r_i in range(self.nr):
                     state[r_i] = position_array.flatten()
+
+                if self.lidar:
+                    temp_state = state.copy()
+                    state = np.zeros(((self.nr,) + (len(non_image_state[0])+self.grid.shape[0]*self.grid.shape[1],)))
+                    for r_i in range(self.nr):
+                        state[r_i] = np.concatenate((non_image_state[r_i], temp_state[r_i]), axis=0)
 
             # NB!!!!!!!!!!!!! other drone locations not included
             # should be included
@@ -355,11 +373,39 @@ class Environment:
                 for r_i in range(self.nr):
                     state[r_i] = np.concatenate((position_array[r_i], exploration_grid), axis=0)
 
-            return state
+                if self.lidar:
+                    temp_state = state.copy()
+                    state = np.zeros(((self.nr,) + (len(non_image_state[0])+self.grid.shape[0]*self.grid.shape[1]*2,)))
+                    for r_i in range(self.nr):
+                        state[r_i] = np.concatenate((non_image_state[r_i], temp_state[r_i]), axis=0)
+
+            if self.encoding == "position_occupancy":
+                occupancy_grid = np.zeros(self.grid.shape)
+                explored = np.argwhere(self.exploration_grid == True)
+                for y,x in explored:
+                    occupancy_grid[y, x] = 0.2
+
+                obstacles = np.argwhere(self.grid == States.OBS.value)
+                for y,x in obstacles:
+                    occupancy_grid[y, x] = 1.0
+
+                occupancy_grid = occupancy_grid.flatten()
+
+                state = np.zeros(((self.nr,) + (self.grid.shape[0]*self.grid.shape[1]*2,)))
+
+                for r_i in range(self.nr):
+                    state[r_i] = np.concatenate((position_array[r_i], occupancy_grid), axis=0)
+
+                if self.lidar:
+                    temp_state = state.copy()
+                    state = np.zeros(((self.nr,) + (len(non_image_state[0])+self.grid.shape[0]*self.grid.shape[1]*2,)))
+                    for r_i in range(self.nr):
+                        state[r_i] = np.concatenate((non_image_state[r_i], temp_state[r_i]), axis=0)
+
+            return state, non_image_state
                     
         # Image state
         elif self.encoding == "image":
-            non_image_state = [None]*self.nr
             if self.lidar:
                 # percentage_explored = [np.mean(self.exploration_grid)]
                 surroundings_state = self.check_surrounding_cells()
@@ -663,3 +709,113 @@ class Environment:
         # Set top and bottom edges to 2
         self.grid[0] = [States.OBS.value] * HEIGHT
         self.grid[WIDTH - 1] = [States.OBS.value] * HEIGHT
+
+    def random_maze(self, width, height, complexity=.75, density=.75):
+        r"""Generate a random maze array. 
+        
+        It only contains two kind of objects, obstacle and free space. The numerical value for obstacle
+        is ``1`` and for free space is ``0``. 
+        
+        Code from https://en.wikipedia.org/wiki/Maze_generation_algorithm
+        """
+        # Only odd shapes
+        shape = ((height // 2) * 2 + 1, (width // 2) * 2 + 1)
+        # Adjust complexity and density relative to maze size
+        complexity = int(complexity * (5 * (shape[0] + shape[1])))
+        density    = int(density * ((shape[0] // 2) * (shape[1] // 2)))
+        # Build actual maze
+        Z = np.zeros(shape, dtype=bool)
+        # Fill borders
+        Z[0, :] = Z[-1, :] = 1
+        Z[:, 0] = Z[:, -1] = 1
+        # Make aisles
+        for i in range(density):
+            x, y = np.random.randint(0, shape[1]//2 + 1) * 2, np.random.randint(0, shape[0]//2 + 1) * 2
+            Z[y, x] = 1
+            for j in range(complexity):
+                neighbours = []
+                if x > 1:             neighbours.append((y, x - 2))
+                if x < shape[1] - 2:  neighbours.append((y, x + 2))
+                if y > 1:             neighbours.append((y - 2, x))
+                if y < shape[0] - 2:  neighbours.append((y + 2, x))
+                if len(neighbours):
+                    y_,x_ = neighbours[np.random.randint(0, len(neighbours))]
+                    if Z[y_, x_] == 0:
+                        Z[y_, x_] = 1
+                        Z[y_ + (y - y_) // 2, x_ + (x - x_) // 2] = 1
+                        x, y = x_, y_
+                        
+        return Z.astype(int)
+
+    # random grid generator (not that good, leaves long lines of obstacles in environment)
+    def random_grid(self, rows=16, cols=16, obstacleProb=0.3):
+        '''Return a 2D numpy array representing a grid of randomly placed
+        obstacles (where the likelihood of any cell being an obstacle
+        is given by obstacleProb) and randomized start/destination cells.
+        '''
+        obstacleGrid = np.random.random_sample((rows, cols))
+        grid = States.UNEXP.value * np.zeros((rows, cols), dtype=np.int8)
+        grid[obstacleGrid <= obstacleProb] = States.OBS.value
+
+        return grid
+
+    # random grid generator, based on game of life
+    def do_simulation_step(self, old_map, death_limit=2, birth_limit=3):
+        new_map = np.zeros((WIDTH, HEIGHT), dtype=bool)
+        
+        for x in range(WIDTH):
+            for y in range(HEIGHT):
+                nbs = self.count_alive_neighbours(old_map, x, y)
+                
+                if old_map[x, y]:
+                    if nbs < death_limit:
+                        new_map[x, y] = False
+                    else:
+                        new_map[x, y] = True
+                else:
+                    if nbs > birth_limit:
+                        new_map[x, y] = True
+                    else:
+                        new_map[x, y] = False
+        
+        return new_map
+
+    def initialise_map(self, map, chance_to_start_alive=0.2):        
+        for x in range(WIDTH):
+            for y in range(HEIGHT):
+                if random.random() < chance_to_start_alive:
+                    map[x, y] = True
+        
+        return map
+
+    def count_alive_neighbours(self, map, x, y):
+        count = 0
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+                neighbour_x = x + i
+                neighbour_y = y + j
+                
+                if i == 0 and j == 0:
+                    continue
+                elif neighbour_x < 0 or neighbour_y < 0 or neighbour_x >= map.shape[0] or neighbour_y >= map.shape[1]:
+                    count += 1
+                elif map[neighbour_x, neighbour_y]:
+                    count += 1
+        
+        return count
+
+    def generate_map(self, number_of_steps=1):
+        cell_map = np.zeros((WIDTH, HEIGHT), dtype=bool)
+        cell_map = self.initialise_map(cell_map)
+        
+        for i in range(number_of_steps):
+            cell_map = self.do_simulation_step(cell_map)
+
+        grid = np.zeros((WIDTH, HEIGHT))
+
+        for x in range(WIDTH):
+            for y in range(HEIGHT):
+                if cell_map[x,y]: grid[x,y] = States.OBS.value
+                elif not cell_map[x,y]: grid[x,y] = States.UNEXP.value
+        
+        return grid

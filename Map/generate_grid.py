@@ -34,6 +34,8 @@ GSD_H = (height * sensor_h) / (focal_length * pixel_h) # m
 FOV_W = GSD_W * pixel_w
 FOV_H = GSD_H * pixel_h
 
+print(FOV_W, FOV_H)
+
 src_file = r"E:\Stephano\Downloads\search_area.geojson"
 dst_file = r"E:\Stephano\Documents\Stephano-MIng\search_area.geojson"
 os.rename(src_file, dst_file)
@@ -78,6 +80,7 @@ long_dist = haversine(coordinates[max_long_index], coordinates[min_long_index], 
 # Get size of grid based on FOV of drones
 grid_width = round(lat_dist / FOV_W)
 grid_height = round(long_dist / FOV_H)
+print(grid_width, grid_height)
 
 grid = np.zeros((grid_height, grid_width))
 
@@ -88,6 +91,7 @@ diff_long = coordinates[max_long_index][1] - coordinates[min_long_index][1]
 # Get cell size
 cell_h = diff_lat / grid_height
 cell_w = diff_long / grid_width
+print(cell_w, cell_h)
 
 # Starting coordinates (top left) of grid
 coordinate0 = [coordinates[max_lat_index][0], coordinates[min_long_index][1]]

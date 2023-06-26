@@ -16,6 +16,17 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         file_name = os.path.join(load_path, file_name)
         hp = read_json(file_name)
 
+        # set input dimensions to encoding type
+        if hp["encoding"] == "position":
+            hp["input dims"] = [HEIGHT*WIDTH]
+        elif hp["encoding"] == "position_exploration":
+            hp["input dims"] = [HEIGHT*WIDTH*2]
+        elif hp["encoding"] == "position_occupancy":
+            hp["input dims"] = [HEIGHT*WIDTH*2]
+
+        if hp["lidar"] and not hp["encoding"] == "image":
+            hp["input dims"][0] += 4
+
         load_models_path = os.path.join(load_path, 'models')
 
         # fills hps but doesn't work yet
@@ -33,18 +44,26 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
 
         model_name = str(policy) + "_" + hp["env size"]
         # model_name = hp["env size"]
-        agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
-                        hp["n actions"], hp["starting beta"], hp["input dims"],
-                        hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
-                        hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
-                        algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=load_models_path)
+        if hp["agent type"] == "DQN":
+            agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
+                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["lidar"],
+                            hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
+                            hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
+                            algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=load_models_path)
+        elif hp["agent type"] == "DDQN":
+            agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
+                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["lidar"],
+                            hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
+                            hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
+                            algo='DDQNAgent_distributed', env_name=model_name, chkpt_dir=load_models_path)
+
         
-        hp["curriculum_learning"] = {"sparse reward": False, "collisions": True}
+        hp["curriculum learning"] = {"sparse reward": False, "collisions": False}
         checkpoint = agent.load_models()
         agent.q_eval.eval()
         agent.q_next.eval()
-                        #nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, curriculum_learning, episodes
-        env = Environment(hp["number of drones"], hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], hp["curriculum_learning"], 50000)
+                        #nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, lidar, curriculum_learning, episodes)
+        env = Environment(hp["number of drones"], hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], hp["lidar"], hp["curriculum learning"], 50000)
 
         PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
 
@@ -73,7 +92,9 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
                 actions = []
                 action = [0]*hp["number of drones"]
                 for i_r in range(0,hp["number of drones"]):
-                    action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r])
+                    if step == 0: action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"])
+                    else: action[i_r] = agent.choose_action(image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], previous_action[i_r])
+                    previous_action = action.copy()
                 actions.append(action)
                 trajectory.append((env.pos[i_r], action, i_r))
                 image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)

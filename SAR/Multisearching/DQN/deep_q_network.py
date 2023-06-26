@@ -6,6 +6,9 @@ import torch.optim as optim
 import numpy as np
 
 class DeepQNetwork(nn.Module):
+    # def __init__(self, encoding, nr, lr,
+    #              n_actions, input_dims, lidar, lstm, c_dims, k_size, s_size,
+    #                 fc_dims, lstm_h, device_num, name, chkpt_dir):
     def __init__(self, encoding, nr, lr,
                  n_actions, input_dims, lidar, c_dims, k_size, s_size,
                     fc_dims, device_num, name, chkpt_dir):
@@ -20,6 +23,10 @@ class DeepQNetwork(nn.Module):
         self.input_dims = input_dims
 
         self.lidar = lidar
+
+        # self.lstm = lstm
+
+        # self.lstm_h = lstm_h
 
         self.fc_dims = fc_dims.copy()
         self.n_actions = n_actions
@@ -36,15 +43,23 @@ class DeepQNetwork(nn.Module):
             fc_input_dims = self.calculate_conv_output_dims()
 
             self.fc1 = nn.Linear(fc_input_dims, fc_dims[0])
-            self.fc2 = nn.Linear(fc_dims[0], n_actions)
+            self.fc2 = nn.Linear(fc_dims[0], self.n_actions)
         else:
             self.fc1 = nn.Linear(*self.input_dims, self.fc_dims[0]) # * unpacking the input list
             self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
             self.fc3 = nn.Linear(self.fc_dims[1], self.fc_dims[2])
             self.fc4 = nn.Linear(self.fc_dims[2], self.n_actions)
+        
+        # if self.lstm:
+            
+        #     self.lstm = nn.LSTM(self.n_actions, self.lstm_h)
+        #     self.fc3 = nn.Linear(fc_dims[0], self.n_actions)
 
+        
+        
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()
+
         self.device_num = device_num
         cuda_string = 'cuda:' + str(self.device_num)
         self.device = T.device(cuda_string if T.cuda.is_available() else 'cpu')
@@ -61,6 +76,7 @@ class DeepQNetwork(nn.Module):
             return int(np.prod(dims.size())) # image size
 
     def forward(self, image_state, non_image_state=None):
+        # print(image_state.device)
         if self.encoding == "image":
             conv1 = F.relu(self.conv1(image_state))
             conv2 = F.relu(self.conv2(conv1))
@@ -81,6 +97,7 @@ class DeepQNetwork(nn.Module):
                 flat1 = F.relu(self.fc1(conv_state))
             actions = self.fc2(flat1)
         else:
+            # image_state = image_state.to(self.device)
             x = F.relu(self.fc1(image_state))
             x = F.relu(self.fc2(x))
             x = F.relu(self.fc3(x))

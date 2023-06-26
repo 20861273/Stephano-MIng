@@ -1,6 +1,7 @@
 from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from dqn_utils import plot_learning_curve, write_json, read_json
 from dqn_agent import DQNAgent
+from ddqn_agent import DDQNAgent
 from dqn_save_results import print_results
 import numpy as np
 import os
@@ -8,7 +9,7 @@ import torch as T
 import time
 import matplotlib.pyplot as plt
 
-def centralized_dqn(nr, training_sessions, episodes, print_interval, training_type, encoding,
+def centralized_dqn(nr, training_sessions, episodes, print_interval, training_type, agent_type, encoding,
                     curriculum_learning, reward_system, allow_windowed_revisiting,
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
@@ -36,11 +37,18 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
         
         # initialize agents
         model_name = str(i_exp) + "_" + env_size
-        agent = DQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
-                        n_actions, starting_beta, input_dims, lidar,
-                        c_dims, k_size, s_size, fc_dims,
-                        mem_size, batch_size, replace, prioritized,
-                        algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+        if agent_type == "DQN":
+            agent = DQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+                            n_actions, starting_beta, input_dims, lidar,
+                            c_dims, k_size, s_size, fc_dims,
+                            mem_size, batch_size, replace, prioritized,
+                            algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+        elif agent_type == "DDQN":
+            agent = DDQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+                            n_actions, starting_beta, input_dims, lidar,
+                            c_dims, k_size, s_size, fc_dims,
+                            mem_size, batch_size, replace, prioritized,
+                            algo='DDQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
         
         # for debugging
         fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
@@ -48,7 +56,8 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
         
         # load agent experiences and rewards
         if load_checkpoint:
-            checkpoint = agent.load_models() 
+            if int(os.listdir(models_path)[-1][0]) == i_exp:
+                checkpoint = agent.load_models() 
 
             if i_ts < checkpoint['epoch']:
                 continue           

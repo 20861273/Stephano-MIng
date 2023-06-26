@@ -19,21 +19,24 @@ if __name__ == '__main__':
                         "training": True,
                         "load checkpoint": False,
                         "show rewards interval": 1000,
-                        "show plot": True,
+                        "show plot": False,
                         "save plot": False,
                         "policy number": [0],
-                        "testing iterations": 10000
+                        "testing iterations": 1000
     }
 
+    # encodings: image (n_images, H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
+    # agent types: DQN, DDQN
     hp = {
                     "number of drones": 1,
                     "training type": "centralized",
+                    "agent type": "DQN",
                     "learning rate": [0.0001],
-                    "discount rate": [0.5,0.7,0.9,0.99],
+                    "discount rate": [0.8,0.9,0.99],
                     "epsilon": [[0.01,0.01,0.01]],
 
                     "training sessions": 1,
-                    "episodes": 50000,
+                    "episodes": 10000,
                     "positive rewards": [1],
                     "positive exploration rewards": [0],
                     "negative rewards": [1],
@@ -48,18 +51,18 @@ if __name__ == '__main__':
 
                     "batch size": 64,
                     "mem size": 100000,
-                    "replace": 100,
+                    "replace": 1000,
                     "channels": [16, 32],
                     "kernel": [2, 2],
                     "stride": [1, 1],
-                    "fc dims": [32],
+                    "fc dims": [32, 64, 32],
 
                     "prioritized": True,
                     "starting beta": 0.5,
 
                     "device": 0,
 
-                    "allow windowed revisiting": True,
+                    "allow windowed revisiting": False,
                     "curriculum learning": {"sparse reward": True, "collisions": False},
                     "reward system": {"find goal": True, "coverage": False}
     }
@@ -78,7 +81,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "13-06-2023 11h58m33s")
+    load_checkpoint_path = os.path.join(PATH, "24-06-2023 16h27m53s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -112,10 +115,16 @@ if __name__ == '__main__':
                         * len(hp["max steps"]) \
                         * hp["training sessions"]
     
+    # set input dimensions to encoding type
     if hp["encoding"] == "position":
         hp["input dims"] = [HEIGHT*WIDTH]
-    elif hp["encoding"] == "position_exploration":
+    elif hp["encoding"] == "position_exploration" or hp["encoding"] == "position_occupancy":
         hp["input dims"] = [HEIGHT*WIDTH*2]
+    elif hp["encoding"] == "image":
+        hp["input dims"] = (2,HEIGHT, WIDTH)
+
+    if hp["lidar"] and not hp["encoding"] == "image":
+        hp["input dims"][0] += 4
 
     if testing_parameters["training"]:
         print("Number of training sessoins: ", num_experiences)
@@ -132,7 +141,7 @@ if __name__ == '__main__':
                                         if i_exp >= int(checkpoint['session']):
                                             if hp["training type"] == "centralized":
                                                 load_checkpoint = centralized_dqn(
-                                                            hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
+                                                            hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["agent type"], hp["encoding"],
                                                             hp["curriculum learning"], hp["reward system"], hp["allow windowed revisiting"],
                                                             dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                             pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,

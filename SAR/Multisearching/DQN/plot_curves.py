@@ -32,9 +32,9 @@ def plot_learning_curves(scores, filename, policy, c, step, ts, pr, nr, per, nsr
     
     mov_avg_rewards = np.empty(mean_rewards.shape)
 
-    mov_avg_rewards[0] = moving_avarage_smoothing(mov_avg_rewards, 100)
+    # mov_avg_rewards[0] = moving_avarage_smoothing(mov_avg_rewards, 10)
 
-    # mov_avg_rewards = mean_rewards
+    mov_avg_rewards = mean_rewards
     
     fig=plt.figure()
     ax=fig.add_subplot(111)
@@ -63,6 +63,7 @@ def plot_learning_curves(scores, filename, policy, c, step, ts, pr, nr, per, nsr
     ax.tick_params(axis='y', colors="C0")
     np_scores = np.array(scores)
     # np_scores.min()-1
+    # ax.set_ylim(np_scores.min()-1, np_scores.max()+0.5)
     ax.set_ylim(-1.5, np_scores.max()+0.5)
     ax.set_title("Learning curve:")
     # plt.xlabel("Training Steps")
@@ -100,7 +101,7 @@ PATH = os.path.join(PATH, 'DQN')
 load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
-step = 100#len(scores[0][0])/10000
+step = 10#len(scores[0][0])/10000
 policies = [0,1,2]
 
 
