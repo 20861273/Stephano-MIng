@@ -3,13 +3,12 @@ from collections import namedtuple
 import numpy as np
 import random
 import math
-from Grassfire import Grassfire
 
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 12
-WIDTH = 12
+HEIGHT = 8
+WIDTH = 8
 
 # DENSITY = 30 # percentage
 
@@ -34,7 +33,7 @@ Point = namedtuple('Point', 'x, y')
 
 class Environment:
     
-    def __init__(self, nr, \
+    def __init__(self, nr, obstacles, obstacle_density,\
                 reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
                 training_type, encoding, lidar, curriculum_learning, total_episodes):
         self.nr = nr
@@ -49,7 +48,13 @@ class Environment:
         self.stage = 1
         
         # Generates grid (Grid[y,x])
-        self.generate_grid()
+        self.obstacles = obstacles
+        self.obstacle_density = obstacle_density
+        if self.obstacles:
+            self.grid = self.generate_maze(HEIGHT, WIDTH)
+            self.draw_edges()
+        else:
+            self.generate_grid()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
         self.goal_state = np.ones((HEIGHT, WIDTH), dtype=np.bool_)
 
@@ -77,8 +82,8 @@ class Environment:
     def generate_grid(self):
         # self.grid = self.random_grid(HEIGHT, WIDTH, 0.4)
         # Generate grid of zeros 
-        # self.grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
-        self.grid = self.generate_map()
+        self.grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
+        # self.grid = self.generate_map()
 
         
         self.draw_edges()
@@ -127,7 +132,12 @@ class Environment:
                             'drone'    :   [False]*self.nr}
         self.collision_state = False
         # Clear all visited blocks
-        self.grid.fill(0)
+        if self.obstacles:
+            self.grid = self.generate_maze(HEIGHT, WIDTH)
+        else:
+            self.grid.fill(0)
+        # self.grid = self.generate_map()
+        # self.grid = self.generate_maze(HEIGHT, WIDTH)
         self.draw_edges()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
 
@@ -218,7 +228,7 @@ class Environment:
         if self.collision_state:
             reward = self.score
             game_over = True
-            return image_state, non_image_state, reward, game_over, 0
+            return image_state, non_image_state, reward, game_over, (0, self.collision)
 
         if self.reward_system["find goal"]:
             if self.curriculum_learning['sparse reward']:
@@ -228,27 +238,28 @@ class Environment:
                 #     game_over = True
                 #     return image_state, non_image_state, reward, game_over, 1
                 if self._found_a_goal():
-                    self.score += self.positive_reward
                     if len(self.goal) == 0:
+                        self.score += self.positive_reward
                         reward = self.score
                         game_over = True
-                        return image_state, non_image_state, reward, game_over, 1
+                        return image_state, non_image_state, reward, game_over, (1, self.collision)
+                    self.score += self.positive_exploration_reward
             else:
                 if np.array([True for i in range(0, self.nr) if self.pos[i] == self.goal]).any() == True:
                     self.score += self.positive_reward
                     reward = self.score
                     game_over = True
-                    return image_state, non_image_state, reward, game_over, 1
+                    return image_state, non_image_state, reward, game_over, (1, self.collision)
         elif self.reward_system["coverage"]:
             if self.exploration_grid.all():
                 self.score += self.positive_reward
                 reward = self.score
                 game_over = True
-                return image_state, non_image_state, reward, game_over, 1
+                return image_state, non_image_state, reward, game_over, (1, self.collision)
 
         # 6. return game over and score
-        # reward = self.score
-        return image_state, non_image_state, reward, game_over, 0
+        reward = self.score
+        return image_state, non_image_state, reward, game_over, (0, self.collision)
     
     def step_decentralized(self, actions):
         # action = self.decode_action(action)
@@ -405,23 +416,47 @@ class Environment:
             return state, non_image_state
                     
         # Image state
-        elif self.encoding == "image":
+        elif "image" in self.encoding:
+            location_map = np.zeros(((self.nr,) + self.grid.shape), dtype=np.float32)
             if self.lidar:
                 # percentage_explored = [np.mean(self.exploration_grid)]
                 surroundings_state = self.check_surrounding_cells()
                 # non_image_state = [percentage_explored + sublist for sublist in surroundings_state]
                 non_image_state = surroundings_state.copy()
 
-            # Generates exploration map. All explored cells are equal to 1
-            exploration_map = np.zeros(self.grid.shape)
-            explored = np.argwhere(self.exploration_grid == True)
-            for y,x in explored:
-                exploration_map[y, x] = 1
+            if self.encoding == "image_occupancy":
+                # Generates occupancy map. All explored cells are equal to 0.2 and obstacles as 1.0
+                exploration_map = np.zeros(self.grid.shape)
+                explored = np.argwhere(self.exploration_grid == True)
+                for y,x in explored:
+                    exploration_map[y, x] = 0.2
+
+                obstacles = np.argwhere(self.grid == States.OBS.value)
+                for y,x in obstacles:
+                    exploration_map[y, x] = 1.0
+            
+            elif self.encoding == "image":
+                # Generates exploration map. All explored cells are equal to 1
+                # shows exploration and obstacles as explored
+                exploration_map = np.zeros(self.grid.shape)
+                explored = np.argwhere(self.exploration_grid == True)
+                for y,x in explored:
+                    exploration_map[y, x] = 1
+
+            elif self.encoding == "full_image":
+                for r_i in range(self.nr):
+                    explored = np.argwhere(self.exploration_grid == True)
+                    for y,x in explored:
+                        location_map[r_i][y, x] = 0.5
+                    obstacles = np.argwhere(self.grid == States.OBS.value)
+                    for y,x in obstacles:
+                        location_map[r_i][y, x] = 0.01
+
 
             # Generates location map. Position cell is equal to 1
-            location_map = np.zeros((self.nr,) + self.grid.shape)
+            
             for r_i in range(self.nr):
-                location_map[r_i][self.pos[r_i].y, self.pos[r_i].x] = 1
+                location_map[r_i][self.pos[r_i].y, self.pos[r_i].x] = 1.0
 
             # Generates other locations map. Other positions cells are equal to 1
             # other_locations_map = np.zeros((self.nr,) + self.grid.shape)
@@ -443,11 +478,16 @@ class Environment:
             #     image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
 
             # Non-padded
-            image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
-            for r_i in range(self.nr):
+            if not self.encoding == "full_image":
+                image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
+                for r_i in range(self.nr):
+                    image_map[r_i][0] = location_map[r_i]
+                    # image_map[r_i][1] = other_locations_map[r_i]
+                    
+                    image_map[r_i][1] = exploration_map
+            elif self.encoding == "full_image":
+                image_map = np.zeros((self.nr,) + (1,) + self.grid.shape)
                 image_map[r_i][0] = location_map[r_i]
-                # image_map[r_i][1] = other_locations_map[r_i]
-                image_map[r_i][1] = exploration_map
 
             image_state = np.copy(image_map)
 
@@ -710,6 +750,18 @@ class Environment:
         self.grid[0] = [States.OBS.value] * HEIGHT
         self.grid[WIDTH - 1] = [States.OBS.value] * HEIGHT
 
+    def remove_edges(self, grid):
+        # Set left and right edges to 2
+        for row in grid:
+            row[0] = States.UNEXP.value
+            row[HEIGHT - 1] = States.UNEXP.value
+
+        # Set top and bottom edges to 2
+        grid[0] = [States.UNEXP.value] * HEIGHT
+        grid[WIDTH - 1] = [States.UNEXP.value] * HEIGHT
+
+        return grid
+
     def random_maze(self, width, height, complexity=.75, density=.75):
         r"""Generate a random maze array. 
         
@@ -804,7 +856,7 @@ class Environment:
         
         return count
 
-    def generate_map(self, number_of_steps=1):
+    def generate_map(self, number_of_steps=0):
         cell_map = np.zeros((WIDTH, HEIGHT), dtype=bool)
         cell_map = self.initialise_map(cell_map)
         
@@ -819,3 +871,238 @@ class Environment:
                 elif not cell_map[x,y]: grid[x,y] = States.UNEXP.value
         
         return grid
+    
+    # Find number of surrounding cells
+    def surroundingCells(self, rand_wall, grid):
+        s_cells = 0
+        if (grid[rand_wall[0]-1][rand_wall[1]] == States.UNEXP.value):
+            s_cells += 1
+        if (grid[rand_wall[0]+1][rand_wall[1]] == States.UNEXP.value):
+            s_cells += 1
+        if (grid[rand_wall[0]][rand_wall[1]-1] == States.UNEXP.value):
+            s_cells +=1
+        if (grid[rand_wall[0]][rand_wall[1]+1] == States.UNEXP.value):
+            s_cells += 1
+
+        return s_cells
+
+    def generate_maze(self, height, width):
+        # Init variables
+        grid = []
+
+        # Denote all cells as unvisited
+        for i in range(0, height):
+            line = []
+            for j in range(0, width):
+                line.append(States.EXP.value)
+            grid.append(line)
+
+        # Randomize starting point and set it a cell
+        starting_height = int(random.random()*height)
+        starting_width = int(random.random()*width)
+        if (starting_height == 0):
+            starting_height += 1
+        if (starting_height == height-1):
+            starting_height -= 1
+        if (starting_width == 0):
+            starting_width += 1
+        if (starting_width == width-1):
+            starting_width -= 1
+
+        # Mark it as cell and add surrounding walls to the list
+        grid[starting_height][starting_width] = States.UNEXP.value
+        walls = []
+        walls.append([starting_height - 1, starting_width])
+        walls.append([starting_height, starting_width - 1])
+        walls.append([starting_height, starting_width + 1])
+        walls.append([starting_height + 1, starting_width])
+
+        # Denote walls in maze
+        grid[starting_height-1][starting_width] = States.OBS.value
+        grid[starting_height][starting_width - 1] = States.OBS.value
+        grid[starting_height][starting_width + 1] = States.OBS.value
+        grid[starting_height + 1][starting_width] = States.OBS.value
+
+        while (walls):
+            # Pick a random wall
+            rand_wall = walls[int(random.random()*len(walls))-1]
+
+            # Check if it is a left wall
+            if (rand_wall[1] != 0):
+                if (grid[rand_wall[0]][rand_wall[1]-1] == States.EXP.value and grid[rand_wall[0]][rand_wall[1]+1] == States.UNEXP.value):
+                    # Find the number of surrounding cells
+                    s_cells = self.surroundingCells(rand_wall, grid)
+
+                    if (s_cells < 2):
+                        # Denote the new path
+                        grid[rand_wall[0]][rand_wall[1]] = States.UNEXP.value
+
+                        # Mark the new walls
+                        # Upper cell
+                        if (rand_wall[0] != 0):
+                            if (grid[rand_wall[0]-1][rand_wall[1]] != States.UNEXP.value):
+                                grid[rand_wall[0]-1][rand_wall[1]] = States.OBS.value
+                            if ([rand_wall[0]-1, rand_wall[1]] not in walls):
+                                walls.append([rand_wall[0]-1, rand_wall[1]])
+
+
+                        # Bottom cell
+                        if (rand_wall[0] != height-1):
+                            if (grid[rand_wall[0]+1][rand_wall[1]] != States.UNEXP.value):
+                                grid[rand_wall[0]+1][rand_wall[1]] = States.OBS.value
+                            if ([rand_wall[0]+1, rand_wall[1]] not in walls):
+                                walls.append([rand_wall[0]+1, rand_wall[1]])
+
+                        # Leftmost cell
+                        if (rand_wall[1] != 0):	
+                            if (grid[rand_wall[0]][rand_wall[1]-1] != States.UNEXP.value):
+                                grid[rand_wall[0]][rand_wall[1]-1] = States.OBS.value
+                            if ([rand_wall[0], rand_wall[1]-1] not in walls):
+                                walls.append([rand_wall[0], rand_wall[1]-1])
+                    
+
+                    # Delete wall
+                    for wall in walls:
+                        if (wall[0] == rand_wall[0] and wall[1] == rand_wall[1]):
+                            walls.remove(wall)
+
+                    continue
+
+            # Check if it is an upper wall
+            if (rand_wall[0] != 0):
+                if (grid[rand_wall[0]-1][rand_wall[1]] == States.EXP.value and grid[rand_wall[0]+1][rand_wall[1]] == States.UNEXP.value):
+
+                    s_cells = self.surroundingCells(rand_wall, grid)
+                    if (s_cells < 2):
+                        # Denote the new path
+                        grid[rand_wall[0]][rand_wall[1]] = States.UNEXP.value
+
+                        # Mark the new walls
+                        # Upper cell
+                        if (rand_wall[0] != 0):
+                            if (grid[rand_wall[0]-1][rand_wall[1]] != States.UNEXP.value):
+                                grid[rand_wall[0]-1][rand_wall[1]] = States.OBS.value
+                            if ([rand_wall[0]-1, rand_wall[1]] not in walls):
+                                walls.append([rand_wall[0]-1, rand_wall[1]])
+
+                        # Leftmost cell
+                        if (rand_wall[1] != 0):
+                            if (grid[rand_wall[0]][rand_wall[1]-1] != States.UNEXP.value):
+                                grid[rand_wall[0]][rand_wall[1]-1] = States.OBS.value
+                            if ([rand_wall[0], rand_wall[1]-1] not in walls):
+                                walls.append([rand_wall[0], rand_wall[1]-1])
+
+                        # Rightmost cell
+                        if (rand_wall[1] != width-1):
+                            if (grid[rand_wall[0]][rand_wall[1]+1] != States.UNEXP.value):
+                                grid[rand_wall[0]][rand_wall[1]+1] = States.OBS.value
+                            if ([rand_wall[0], rand_wall[1]+1] not in walls):
+                                walls.append([rand_wall[0], rand_wall[1]+1])
+
+                    # Delete wall
+                    for wall in walls:
+                        if (wall[0] == rand_wall[0] and wall[1] == rand_wall[1]):
+                            walls.remove(wall)
+
+                    continue
+
+            # Check the bottom wall
+            if (rand_wall[0] != height-1):
+                if (grid[rand_wall[0]+1][rand_wall[1]] == States.EXP.value and grid[rand_wall[0]-1][rand_wall[1]] == States.UNEXP.value):
+
+                    s_cells = self.surroundingCells(rand_wall, grid)
+                    if (s_cells < 2):
+                        # Denote the new path
+                        grid[rand_wall[0]][rand_wall[1]] = States.UNEXP.value
+
+                        # Mark the new walls
+                        if (rand_wall[0] != height-1):
+                            if (grid[rand_wall[0]+1][rand_wall[1]] != States.UNEXP.value):
+                                grid[rand_wall[0]+1][rand_wall[1]] = States.OBS.value
+                            if ([rand_wall[0]+1, rand_wall[1]] not in walls):
+                                walls.append([rand_wall[0]+1, rand_wall[1]])
+                        if (rand_wall[1] != 0):
+                            if (grid[rand_wall[0]][rand_wall[1]-1] != States.UNEXP.value):
+                                grid[rand_wall[0]][rand_wall[1]-1] = States.OBS.value
+                            if ([rand_wall[0], rand_wall[1]-1] not in walls):
+                                walls.append([rand_wall[0], rand_wall[1]-1])
+                        if (rand_wall[1] != width-1):
+                            if (grid[rand_wall[0]][rand_wall[1]+1] != States.UNEXP.value):
+                                grid[rand_wall[0]][rand_wall[1]+1] = States.OBS.value
+                            if ([rand_wall[0], rand_wall[1]+1] not in walls):
+                                walls.append([rand_wall[0], rand_wall[1]+1])
+
+                    # Delete wall
+                    for wall in walls:
+                        if (wall[0] == rand_wall[0] and wall[1] == rand_wall[1]):
+                            walls.remove(wall)
+
+
+                    continue
+
+            # Check the right wall
+            if (rand_wall[1] != width-1):
+                if (grid[rand_wall[0]][rand_wall[1]+1] == States.EXP.value and grid[rand_wall[0]][rand_wall[1]-1] == States.UNEXP.value):
+
+                    s_cells = self.surroundingCells(rand_wall, grid)
+                    if (s_cells < 2):
+                        # Denote the new path
+                        grid[rand_wall[0]][rand_wall[1]] = States.UNEXP.value
+
+                        # Mark the new walls
+                        if (rand_wall[1] != width-1):
+                            if (grid[rand_wall[0]][rand_wall[1]+1] != States.UNEXP.value):
+                                grid[rand_wall[0]][rand_wall[1]+1] = States.OBS.value
+                            if ([rand_wall[0], rand_wall[1]+1] not in walls):
+                                walls.append([rand_wall[0], rand_wall[1]+1])
+                        if (rand_wall[0] != height-1):
+                            if (grid[rand_wall[0]+1][rand_wall[1]] != States.UNEXP.value):
+                                grid[rand_wall[0]+1][rand_wall[1]] = States.OBS.value
+                            if ([rand_wall[0]+1, rand_wall[1]] not in walls):
+                                walls.append([rand_wall[0]+1, rand_wall[1]])
+                        if (rand_wall[0] != 0):	
+                            if (grid[rand_wall[0]-1][rand_wall[1]] != States.UNEXP.value):
+                                grid[rand_wall[0]-1][rand_wall[1]] = States.OBS.value
+                            if ([rand_wall[0]-1, rand_wall[1]] not in walls):
+                                walls.append([rand_wall[0]-1, rand_wall[1]])
+
+                    # Delete wall
+                    for wall in walls:
+                        if (wall[0] == rand_wall[0] and wall[1] == rand_wall[1]):
+                            walls.remove(wall)
+
+                    continue
+
+            # Delete the wall from the list anyway
+            for wall in walls:
+                if (wall[0] == rand_wall[0] and wall[1] == rand_wall[1]):
+                    walls.remove(wall)
+            
+
+
+        # Mark the remaining unvisited cells as walls
+        for i in range(0, height):
+            for j in range(0, width):
+                if (grid[i][j] == States.EXP.value):
+                    grid[i][j] = States.OBS.value
+
+        # # Set entrance and exit
+        # for i in range(0, width):
+        #     if (grid[1][i] == States.UNEXP.value):
+        #         grid[0][i] = States.ROBOT.value
+        #         break
+
+        # for i in range(width-1, 0, -1):
+        #     if (grid[height-2][i] == States.UNEXP.value):
+        #         grid[height-1][i] = States.EXIT.value
+        #         break
+
+        # Remove 50% of walls
+        grid = self.remove_edges(grid)
+        possible_indexes = np.argwhere(np.array(grid) == States.OBS.value)
+        np.random.shuffle(possible_indexes)
+        indices = possible_indexes[0:int(len(possible_indexes)*self.obstacle_density)]
+        for index in indices:
+            grid[index[0]][index[1]] = States.UNEXP.value
+
+        return np.array(grid)

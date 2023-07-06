@@ -9,7 +9,7 @@ import torch as T
 import time
 import matplotlib.pyplot as plt
 
-def centralized_dqn(nr, training_sessions, episodes, print_interval, training_type, agent_type, encoding,
+def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes, print_interval, training_type, agent_type, encoding,
                     curriculum_learning, reward_system, allow_windowed_revisiting,
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
@@ -21,20 +21,22 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
     
     # initialize training session variables
     start_time = time.time()
-    ts_rewards = []
+    ts_rewards, ts_steps, ts_losses = [], [], []
     show_plot = False
 
     # training sessions loop
     for i_ts in range(training_sessions):
         # initialized in epoch variables
-        rewards, steps = [], []
-        cntr = 0
+        rewards, steps, episode_loss = [], [], []
+        cntr, timeout_cntr = 0, 0
         percentage = 0.0
-        info = 0
 
         # initialize environment
-        env = Environment(nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, lidar, curriculum_learning, episodes)
+        env = Environment(nr, obstacles, obstacle_density, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, lidar, curriculum_learning, episodes)
         
+        collisions_grid = np.zeros(env.grid.shape)
+        previous_avg_collisions = 0
+
         # initialize agents
         model_name = str(i_exp) + "_" + env_size
         if agent_type == "DQN":
@@ -97,6 +99,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
             
             # initialize episodic variables
             episode_reward = 0
+            average_loss = 0
             action = [0]*nr
             loss = 0
 
@@ -123,7 +126,7 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
                 episode_reward += reward
                 
                 # update success counter
-                cntr += info
+                cntr += info[0]
 
                 # store transitions and execute learn function
                 if not load_checkpoint:
@@ -131,30 +134,42 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
                         agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
                                             reward, image_observation_[i_r], non_image_observation_[i_r], done)
                         loss = agent.learn()
+                        if not loss == None: average_loss += float(loss)
 
                 image_observation = image_observation_
                 non_image_observation = non_image_observation_
 
+                collision_state = any(any(collision_tpye) for collision_tpye in info[1].values())
+                if collision_state: # collisions counter
+                    for collision_type, collision_states in info[1].items():
+                        for i_r, collision_state in enumerate(collision_states):
+                            if collision_state:
+                                collisions_grid[env.pos[i_r].y, env.pos[i_r].x] += 1
+                elif info[0] == 0 and step == max_steps-1: # timeout counter
+                    timeout_cntr += 1
+
                 # for debugging
                 if show_plot:
                     plt.cla()
-                    PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info)
+                    PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info[0])
 
                 # checks if termination condition was met
                 if done:
                     # for debugging
                     if show_plot:
                         plt.cla()
-                        PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info)
+                        PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info[0])
                     break
 
             # add episode rewards/steps to rewards/steps lists
             rewards.append(episode_reward)
             steps.append(step)
+            episode_loss.append(tuple((i_episode, round(average_loss, 5))))
 
             # calculate average rewards over last 100 episodes (only for display purposes)
             avg_reward = np.mean(rewards[-100:])
             avg_steps = np.mean(steps[-100:])
+            avg_collisions = np.mean(collisions_grid)
 
             # save checkpoint
             if i_episode % 10000 == 0 and i_episode != 0:
@@ -178,12 +193,16 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
                         'average_steps= %.2f,' % avg_steps,
+                        'collisions= %.2f,' % (avg_collisions-previous_avg_collisions),
                         'loss=%f' % loss,
                         'success= %.4f' % (percentage))
                 cntr = 0
+                previous_avg_collisions = avg_collisions
             
         # save rewards in training session rewards
         ts_rewards.append(rewards)
+        ts_steps.append(steps)
+        ts_losses.append(episode_loss)
 
         # save model and rewards
         if not load_checkpoint:
@@ -195,7 +214,19 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
 
             file_name = "rewards%s.json" %(str(i_exp))
             file_name = os.path.join(save_path, file_name)
-            write_json(rewards, file_name)            
+            write_json(rewards, file_name)
+
+            file_name = "ts_steps%s.json" %(str(i_exp))
+            file_name = os.path.join(save_path, file_name)
+            write_json(ts_steps, file_name)
+
+            file_name = "ts_loss%s.json" %(str(i_exp))
+            file_name = os.path.join(save_path, file_name)
+            write_json(ts_losses, file_name)
+
+            file_name = "collisions%s.json" %(str(i_exp))
+            file_name = os.path.join(save_path, file_name)
+            write_json(collisions_grid.tolist(), file_name)
     
     # if loaded from wrong training session and all epochs have been trained to final episode,
     # this makes sure the load_checkpoint variable is false for the next training session
@@ -222,5 +253,17 @@ def centralized_dqn(nr, training_sessions, episodes, print_interval, training_ty
     file_name = "rewards%s.json" %(str(i_exp))
     file_name = os.path.join(save_path, file_name)
     write_json(rewards, file_name)
+
+    file_name = "ts_steps%s.json" %(str(i_exp))
+    file_name = os.path.join(save_path, file_name)
+    write_json(ts_steps, file_name)
+
+    file_name = "ts_loss%s.json" %(str(i_exp))
+    file_name = os.path.join(save_path, file_name)
+    write_json(ts_losses, file_name)
+
+    file_name = "collisions%s.json" %(str(i_exp))
+    file_name = os.path.join(save_path, file_name)
+    write_json(collisions_grid.tolist(), file_name)
 
     return load_checkpoint

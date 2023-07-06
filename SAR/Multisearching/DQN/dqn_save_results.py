@@ -83,7 +83,7 @@ class print_results:
                 actions.append((r, act))
         return actions
     
-    def print_trajectories(self, ax, dir_traj, p, env, actions=None, reward=0, done=False):
+    def print_trajectories(self, ax, dir_traj, p, env, actions=None, reward=0, done=None):
         """
         Prints the grid environment
         """
@@ -195,8 +195,9 @@ class print_results:
 
         # file_name = "p%dtrajectory%d.png" %(policy, cnt)
         # plt.savefig(os.path.join(dir_traj, file_name))
-        plt.pause(0.05)
-        if done: plt.pause(0.5)
+        plt.pause(0.005)
+        if done:
+            plt.pause(0.5)
 
     def plot(self, rewards, steps, learning_rate, discount_rate, exploration_rate, save_path, env, t_time, postive_reward):
         f = open(os.path.join(save_path,"saved_data.txt"), "w", encoding="utf-8")

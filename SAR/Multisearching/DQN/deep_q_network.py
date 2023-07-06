@@ -31,13 +31,15 @@ class DeepQNetwork(nn.Module):
         self.fc_dims = fc_dims.copy()
         self.n_actions = n_actions
 
-        if self.encoding == "image":
+        if "image" in self.encoding:
             self.c_dims = c_dims.copy()
             self.k_size = k_size.copy()
             self.s_size = s_size.copy()
 
             self.conv1 = nn.Conv2d(input_dims[0], c_dims[0], k_size[0], stride=s_size[0])
+            # nn.MaxPool2d(kernel_size=2)
             self.conv2 = nn.Conv2d(c_dims[0], c_dims[1], k_size[1], stride=s_size[1])
+            # nn.MaxPool2d(kernel_size=2)
             # self.conv3 = nn.Conv2d(c_dims[1], c_dims[2], k_size[2], stride=s_size[2])
 
             fc_input_dims = self.calculate_conv_output_dims()
@@ -77,7 +79,7 @@ class DeepQNetwork(nn.Module):
 
     def forward(self, image_state, non_image_state=None):
         # print(image_state.device)
-        if self.encoding == "image":
+        if "image" in self.encoding:
             conv1 = F.relu(self.conv1(image_state))
             conv2 = F.relu(self.conv2(conv1))
             # conv3 = F.relu(self.conv3(conv2))
