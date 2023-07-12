@@ -5,11 +5,8 @@ import os
 import torch as T
 from dqn_save_results import print_results
 import matplotlib.pyplot as plt
-from dqn_decentralized_testing import test_dqn
-from dqn_distributed_training import distributed_dqn
 from dqn_centralized_training import centralized_dqn
 from dqn_centralized_testing import test_centralized_dqn
-from dqn_test_training import test_dqn
 from dqn_agent import DQNAgent
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -18,11 +15,11 @@ if __name__ == '__main__':
     testing_parameters = {
                         "training": False,
                         "load checkpoint": False,
-                        "show rewards interval": 1000,
+                        "show rewards interval": 100,
                         "show plot": True,
                         "save plot": False,
                         "policy number": [2],
-                        "testing iterations": 1000
+                        "testing iterations": 200
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
@@ -37,11 +34,11 @@ if __name__ == '__main__':
 
                     "training sessions": 1,
                     "episodes": 10000,
-                    "positive rewards": [1],
+                    "positive rewards": [10],
                     "positive exploration rewards": [0],
                     "negative rewards": [1],
                     "negative step rewards": [0.01],
-                    "max steps": [36],
+                    "max steps": [200],
 
                     "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
@@ -49,15 +46,15 @@ if __name__ == '__main__':
                     "obstacle density": 0.7,
                     "encoding": "full_image",
                     "input dims": (2,HEIGHT, WIDTH),
-                    "lidar": True,
+                    "lidar": False,
 
                     "batch size": 64,
                     "mem size": 100000,
                     "replace": 100,
-                    "channels": [16, 32],
-                    "kernel": [2, 2],
-                    "stride": [1, 1],
-                    "fc dims": [32,64,32],
+                    "channels": [16, 32, 64],
+                    "kernel": [2, 2,2],
+                    "stride": [1, 1,1],
+                    "fc dims": [32],
 
                     "prioritized": True,
                     "starting beta": 0.5,
@@ -153,24 +150,6 @@ if __name__ == '__main__':
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"],
                                                             hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"])
-                                            elif hp["training type"] == "decentralized":
-                                                load_checkpoint = distributed_dqn(
-                                                            hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
-                                                            dr_i, lr_i, er_i[0], er_i[1], er_i[2],
-                                                            pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
-                                                            hp["n actions"], hp["starting beta"], hp["input dims"],
-                                                            hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
-                                                            hp["batch size"], hp["mem size"], hp["replace"],
-                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"])
-                                            elif hp["training type"] == "test":
-                                                load_checkpoint = test_dqn(
-                                                            hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
-                                                            dr_i, lr_i, er_i[0], er_i[1], er_i[2],
-                                                            pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
-                                                            hp["n actions"], hp["starting beta"], hp["input dims"],
-                                                            hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
-                                                            hp["batch size"], hp["mem size"], hp["replace"],
-                                                            hp["prioritized"], models_path, load_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"])
                                         i_exp += 1
     else:
         if hp["training type"] == "centralized":

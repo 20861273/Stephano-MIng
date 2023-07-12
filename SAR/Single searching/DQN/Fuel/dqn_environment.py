@@ -43,7 +43,8 @@ class Environment:
         self.prev_pos = [Point(0,0)]*self.nr
         self.starting_pos = [Point(0,0)]*self.nr
 
-        self.fuel = WIDTH*HEIGHT/2
+        self.starting_fuel = WIDTH*HEIGHT/2
+        self.fuel = self.starting_fuel
 
         self.curriculum_learning = curriculum_learning
         self.total_episodes = total_episodes
@@ -150,7 +151,8 @@ class Environment:
         for cell in explored:
             self.exploration_grid[cell[0], cell[1]] = True
 
-        self.fuel = WIDTH*HEIGHT/2
+        self.fuel = self.starting_fuel
+        self.explored_from_last = 0
 
         # Static goal location spawning
         # self.goal = Point(0,0)
@@ -198,6 +200,9 @@ class Environment:
                 np.random.shuffle(indices)
                 self.starting_pos[i] = Point(indices[i,1], indices[i,0])
                 self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
+
+        for i in range(self.nr):
+            self.exploration_grid[self.starting_pos[i].y, self.starting_pos[i].x] = True
             
         self.pos = self.starting_pos.copy()
         self.prev_pos = self.starting_pos.copy()
@@ -205,6 +210,7 @@ class Environment:
         self.direction = [(Direction.RIGHT).value for i in range(self.nr)]
                 
         self.score = 0
+        self.starting_unexplored = HEIGHT*WIDTH - np.count_nonzero(self.exploration_grid)
         
         image_state, non_image_state = self.get_state()
 
@@ -212,6 +218,7 @@ class Environment:
 
     def step_centralized(self, actions):
         self.score = 0
+        self.fuel -= 1
 
         # 2. Do action
         self._move_centralized(actions) # update the robot
@@ -234,8 +241,14 @@ class Environment:
             game_over = True
             return image_state, non_image_state, reward, game_over, (0, self.collision)
         
+        if np.array([True for i in range(0, self.nr) if self.pos[i] == self.starting_pos[i]]).any() == True:
+            self.score += (1-(self.fuel / self.starting_fuel))*0.5 + (self.explored_from_last / self.starting_fuel)
+            breakpoint
+            self.fuel = self.starting_fuel
+            self.explored_from_last = 0
+        
         if self.fuel == 0:
-            self.score -= self.negative_reward
+            self.score = self.negative_reward
             reward = self.score
             game_over = True
             return image_state, non_image_state, reward, game_over, (0, self.collision)
@@ -336,7 +349,8 @@ class Environment:
                 temp_arr[i] = True
             if temp_arr[i] == True:
                 # score += self.positive_exploration_reward
-                score += np.count_nonzero(self.exploration_grid) / self.exploration_grid.size
+                score += round((self.starting_unexplored - (HEIGHT*WIDTH - np.count_nonzero(self.exploration_grid))) / self.starting_unexplored, 5)
+                self.explored_from_last += 1
 
         return score
     
@@ -348,11 +362,11 @@ class Environment:
                 temp_arr[i] = True
             if temp_arr[i] == True:
                 # score[i] += self.positive_exploration_reward
-                score[i] += np.count_nonzero(self.exploration_grid) / self.exploration_grid.size
+                score[i] += round(np.count_nonzero(self.exploration_grid) / self.exploration_grid.size, 5)
         return score
 
     def get_state(self):
-        non_image_state = [None]*self.nr
+        non_image_state = [[self.fuel, self.explored_from_last]*self.nr]
         # Position state: flattened array of environment where position is equal to 1
         if self.encoding == "position" or self.encoding == "position_exploration" or self.encoding == "position_occupancy":
             if self.lidar:
@@ -463,7 +477,8 @@ class Environment:
                         location_map[r_i][y, x] = 0.5
                     obstacles = np.argwhere(self.grid == States.OBS.value)
                     for y,x in obstacles:
-                        location_map[r_i][y, x] = 0.01
+                        location_map[r_i][y, x] = 0.1
+                    location_map[r_i][self.starting_pos[r_i].y, self.starting_pos[r_i].x] = 0.7
 
 
             # Generates location map. Position cell is equal to 1

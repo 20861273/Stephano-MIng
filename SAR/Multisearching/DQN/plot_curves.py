@@ -14,7 +14,7 @@ def moving_avarage_smoothing(X,k):
 			S[t] = np.sum(X[t-k:t])/k
 	return S
 
-def plot_learning_curves(scores, filename, policy, c, step, ts, pr, nr, per, nsr, ms, lr, dr, er):
+def plot_learning_curves(scores, filename, policy, c, step, moving_step, ts, pr, nr, per, nsr, ms, lr, dr, er):
     mean_rewards = np.zeros((len(scores), len(scores[0][0])))
     std_rewards = np.zeros((len(scores), len(scores[0][0])))
 
@@ -34,7 +34,11 @@ def plot_learning_curves(scores, filename, policy, c, step, ts, pr, nr, per, nsr
 
     # mov_avg_rewards[0] = moving_avarage_smoothing(mov_avg_rewards, 10)
 
-    mov_avg_rewards = mean_rewards
+    if moving_step > 1:
+        mov_avg_rewards = mean_rewards
+        mov_avg_rewards[0] = moving_avarage_smoothing(np.array(scores[0][0]), moving_step)
+    else:
+         mov_avg_rewards = scores[0]
     
     fig=plt.figure()
     ax=fig.add_subplot(111)
@@ -53,7 +57,6 @@ def plot_learning_curves(scores, filename, policy, c, step, ts, pr, nr, per, nsr
             str(er[policy])
             ))
 
-    mov_avg_rewards[0] = moving_avarage_smoothing(np.array(scores[0][0]), 10)
     ax.plot(np.arange(0, len(mov_avg_rewards[0]), int(step)), mov_avg_rewards[0][::int(step)], color=c[policy], label=l[0])
     
     lgd = ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
@@ -102,6 +105,7 @@ load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
 step = 10#len(scores[0][0])/10000
+moving_step = 100
 policies = [0,1,2]
 
 
@@ -157,10 +161,10 @@ for pr_i in hp["positive rewards"]:
 c = cm.rainbow(np.linspace(0, 1, num_policies))
 
 for policy in policies:
-    filename = 'drone_0_learning_cruves%s, step=%s.png' %(str(policy), str(step))
+    filename = 'drone_0_learning_cruves%s, step=%s, moving=%s.png' %(str(policy), str(step), moving_step)
     filename = os.path.join(load_path, filename)
 
-    plot_learning_curves([rewards[policy]], filename, policy, c, step, hp["training sessions"], pr, nr, per, nsr, ms, lr, dr, er)
+    plot_learning_curves([rewards[policy]], filename, policy, c, step, moving_step, hp["training sessions"], pr, nr, per, nsr, ms, lr, dr, er)
 
 # string = ""
 # string = [string+","+str(i) for i in policies]

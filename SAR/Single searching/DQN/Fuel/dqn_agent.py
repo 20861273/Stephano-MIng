@@ -30,9 +30,9 @@ class DQNAgent(object):
 
         global Transition_dtype
         global blank_trans
-        if self.lidar and "image" in self.encoding:
-            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (4*nr)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (4*nr)), ('done', np.bool_)])
-            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((4*nr), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((4*nr), dtype=np.float32), False)
+        if True:
+            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (2)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (2)), ('done', np.bool_)])
+            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((1,2), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((1,2), dtype=np.float32), False)
         else:
             Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('done', np.bool_)])
             blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), False)
@@ -72,11 +72,9 @@ class DQNAgent(object):
                                     chkpt_dir=self.chkpt_dir)
 
     def choose_action(self, env, i_r, image_observation, non_image_observation, allow_windowed_revisiting, previous_action=None):
-        chose_max_action = False
         if np.random.random() > self.epsilon or not self.q_eval.training:
-            chose_max_action = True
             image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-            if self.lidar and "image" in self.encoding:
+            if True:
                 non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
                 actions = self.q_eval.forward(image_state, non_image_state)
             else:
@@ -87,48 +85,6 @@ class DQNAgent(object):
             actions = self.check_obstacles(env, i_r, [self.action_space])
             exclude = [i for i,e in enumerate(actions.tolist()[0]) if e == float("-inf")]
             action = np.random.choice([i for i in range(len(self.action_space)) if i not in exclude])
-        
-        if not previous_action == None and not allow_windowed_revisiting:
-            if action == Direction.UP.value and previous_action == Direction.DOWN.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
-            if action == Direction.DOWN.value and previous_action == Direction.UP.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
-            if action == Direction.RIGHT.value and previous_action == Direction.LEFT.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
-            if action == Direction.LEFT.value and previous_action == Direction.RIGHT.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
 
         
         return action
@@ -153,7 +109,7 @@ class DQNAgent(object):
         return T.tensor([temp_actions])
     
     def store_transition(self, image_state, non_image_state, action, reward, image_state_, non_image_state_, done):
-        if self.lidar and "image" in self.encoding:
+        if True:
             self.memory.store_transition(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
             # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
         else:
@@ -173,7 +129,7 @@ class DQNAgent(object):
             image_states_ = T.tensor(new_image_state).to(self.q_eval.device)
             
 
-            if self.lidar and "image" in self.encoding:
+            if True:
                 non_image_states = T.tensor(non_image_state).to(self.q_eval.device)
                 non_image_states_ = T.tensor(new_non_image_state).to(self.q_eval.device)
 
@@ -233,9 +189,11 @@ class DQNAgent(object):
             actions=T.tensor(np.copy(data[:]['action'])).to(self.q_eval.device)
             image_states_=T.tensor(np.copy(data[:]['next_image_state'])).to(self.q_eval.device)
 
-            if self.lidar and "image" in self.encoding:
+            if True:
                 non_image_states=T.tensor(np.copy(data[:]['non_image_state'])).to(self.q_eval.device)
+                # non_image_states = non_image_states.reshape((-1, 1))
                 non_image_states_=T.tensor(np.copy(data[:]['next_non_image_state'])).to(self.q_eval.device)
+                # non_image_states_ = non_image_states_.reshape((-1, 1))
 
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
@@ -256,7 +214,7 @@ class DQNAgent(object):
 
             
             indices = np.arange(self.batch_size)
-            if self.lidar and "image" in self.encoding:
+            if True:
                 image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones = self.sample_memory(self.beta)
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
@@ -367,7 +325,7 @@ class ReplayMemory:
         self.t = 0
 
     def store_transition(self, image_state, action, reward, next_image_state, done, non_image_state=None, next_non_image_state=None):
-        if self.lidar and "image" in self.encoding:
+        if True:
             self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         else:
             self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority

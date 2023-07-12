@@ -67,6 +67,14 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
 
         PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
 
+        fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
+
+        if show_plot:
+                PR.print_trajectories(ax, save_path, policy, env)
+                if save_plot:
+                    file_name = "p%dtrajectory%d%d.png" %(policy, i, 0)
+                    plt.savefig(os.path.join(save_path, file_name))
+
         trajs = []
         steps = []
         cnt = 0
@@ -74,7 +82,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         timeout_cntr = 0
         collisions_grid = np.zeros(env.grid.shape)
 
-        fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
+        
         for i in range(0, testing_iterations):
             if i % 100 == 0 and i != 0:
                 print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
@@ -83,13 +91,6 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
             trajectory = []
 
             done = False
-            
-
-            if show_plot:
-                PR.print_trajectories(ax, save_path, policy, env)
-                if save_plot:
-                    file_name = "p%dtrajectory%d%d.png" %(policy, i, 0)
-                    plt.savefig(os.path.join(save_path, file_name))
         
             for step in range(int(hp["max steps"][0])):
                 actions = []
@@ -127,7 +128,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
                     break
                 if show_plot:
                     plt.cla()
-                    PR.print_trajectories(ax, save_path, policy, env, actions[0])
+                    PR.print_trajectories(ax, save_path, policy, env, actions[0], reward)
                     if save_plot:
                         file_name = "p%dtrajectory%d%d.png" %(policy, i, step)
                         plt.savefig(os.path.join(save_path, file_name))

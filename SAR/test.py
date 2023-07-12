@@ -13,8 +13,13 @@ from datetime import datetime
 
 from collections import namedtuple
 
-collision = {  'obstacle' :   [False]*2,
-                'boundary' :   [True]*2,
-                'drone'    :   [False]*2}
+point =  namedtuple('Point', 'x, y')
 
-if any(any(collision_tpye) for collision_tpye in collision.values()): print("hi")
+a = [1,1,1,1]
+
+b = a.copy()
+
+b.append(5)
+
+print(b)
+print(a)

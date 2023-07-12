@@ -112,7 +112,11 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                 PR.print_trajectories(ax, save_path, i_ts, env)
             
             # episode loop
-            for step in range(max_steps):
+            step = 0
+            done = False
+            while not done and step < max_steps:
+                if len(non_image_observation) > 1:
+                    breakpoint
                 # action selection
                 for i_r in range(0,nr):
                     if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting)
@@ -160,6 +164,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                         plt.cla()
                         PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info[0])
                     break
+                step += 1
 
             # add episode rewards/steps to rewards/steps lists
             rewards.append(episode_reward)
