@@ -1,7 +1,8 @@
 import numpy as np
 from dqn_agent import DQNAgent
+from drqn_agent import DRQNAgent
 from dqn_utils import read_json, write_json
-from dqn_environment import Environment, HEIGHT, WIDTH
+from dqn_environment import Environment, HEIGHT, WIDTH, Point, States
 import os
 import torch as T
 from dqn_save_results import print_results
@@ -69,6 +70,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
 
         fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
 
+        i = 0
         if show_plot:
                 PR.print_trajectories(ax, save_path, policy, env)
                 if save_plot:
@@ -81,60 +83,93 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         trajectories = []
         timeout_cntr = 0
         collisions_grid = np.zeros(env.grid.shape)
-
+        paths = []
+        path = []
+        starting_positions = []
         
-        for i in range(0, testing_iterations):
-            if i % 100 == 0 and i != 0:
-                print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
-            image_observation, non_image_observation = env.reset(10000, 99)
-
-            trajectory = []
-
-            done = False
         
-            for step in range(int(hp["max steps"][0])):
-                actions = []
-                action = [0]*hp["number of drones"]
-                for i_r in range(0,hp["number of drones"]):
-                    if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"])
-                    else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], previous_action[i_r])
-                    previous_action = action.copy()
-                actions.append(action)
-                trajectory.append((env.pos[i_r], action, i_r))
-                image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)
-                cnt += info[0]
+        # for i in range(0, testing_iterations):
+        for x in range(WIDTH):
+            for y in range(HEIGHT):
+                if x == 0 or x == WIDTH-1:
+                    continue
+                if y == 0 or y == HEIGHT-1:
+                    continue
+                # if i % 100 == 0 and i != 0:
+                #     print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
+                image_observation, non_image_observation = env.reset(10000, 99)
 
-                image_observation = image_observation_
-                non_image_observation = non_image_observation_
+                env.grid[env.pos[0].y, env.pos[0].x] = States.UNEXP.value
+                env.exploration_grid[env.pos[0].y, env.pos[0].x] = False
 
-                collision_state = any(any(collision_tpye) for collision_tpye in info[1].values())
-                if collision_state:
-                    for collision_type, collision_states in info[1].items():
-                        for i_r, collision_state in enumerate(collision_states):
-                            if collision_state:
-                                collisions_grid[env.pos[i_r].y, env.pos[i_r].x] += 1
+                env.starting_pos[0] = Point(x,y)
+                env.pos[0] = Point(x,y)
 
-                elif info[0] == 0 and step == int(hp["max steps"][0])-1:
-                    timeout_cntr += 1
+                trajectory = []
 
-                if done:
+                done = False
+
+                starting_positions.append(env.starting_pos[0])
+                path.append(env.pos[0])
+            
+                for step in range(int(hp["max steps"][0])):
+                    actions = []
+                    action = [0]*hp["number of drones"]
+                    for i_r in range(0,hp["number of drones"]):
+                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"])
+                        else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], previous_action[i_r])
+                        previous_action = action.copy()
+                    actions.append(action)
+                    trajectory.append((env.pos[0], action, 0))
+                    image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)
+                    cnt += info[0]
+                    for i_r in range(0,hp["number of drones"]):
+                        path.append(env.pos[i_r])
+
+                    image_observation = image_observation_
+                    non_image_observation = non_image_observation_
+
+                    collision_state = any(any(collision_tpye) for collision_tpye in info[1].values())
+                    if collision_state:
+                        for collision_type, collision_states in info[1].items():
+                            for i_r, collision_state in enumerate(collision_states):
+                                if collision_state:
+                                    collisions_grid[env.pos[i_r].y, env.pos[i_r].x] += 1
+
+                    elif info[0] == 0 and step == int(hp["max steps"][0])-1:
+                        timeout_cntr += 1
+
+                    if done:
+                        path.append(info[0])
+                        paths.append(path)
+                        path= []
+                        if show_plot:
+                            plt.cla()
+                            PR.print_trajectories(ax, save_path, policy, env, actions[0], reward, done)
+                            if save_path:
+                                file_name = "p%dtrajectory%d%d.png" %(policy, i, step)
+                                plt.savefig(os.path.join(save_path, file_name))
+                        trajectories.append(trajectory)
+                        break
                     if show_plot:
                         plt.cla()
-                        PR.print_trajectories(ax, save_path, policy, env, actions[0], reward, done)
-                        if save_path:
+                        PR.print_trajectories(ax, save_path, policy, env, actions[0], reward)
+                        if save_plot:
                             file_name = "p%dtrajectory%d%d.png" %(policy, i, step)
                             plt.savefig(os.path.join(save_path, file_name))
-                    trajectories.append(trajectory)
-                    break
-                if show_plot:
-                    plt.cla()
-                    PR.print_trajectories(ax, save_path, policy, env, actions[0], reward)
-                    if save_plot:
-                        file_name = "p%dtrajectory%d%d.png" %(policy, i, step)
-                        plt.savefig(os.path.join(save_path, file_name))
-            steps.append(step)
+                steps.append(step)
+                i += 1
             # if step == int(ms)-1 and not done:
             #     trajectories.append(trajectory)
+
+        if save_plot:
+            for cntr, path in enumerate(paths):
+                if path[-1] == 0:
+                    del path[-1]
+                    PR.print_graph(False, policy, path, starting_positions[cntr], load_path, cntr, env)
+                # else:
+                #     del path[-1]
+                #     PR.print_graph(True, policy, path, starting_positions[cntr], load_path, cntr, env)
 
         p = cnt/(testing_iterations)*100
         print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, testing_iterations, p))

@@ -31,8 +31,12 @@ class DQNAgent(object):
         global Transition_dtype
         global blank_trans
         if True:
-            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (2)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (2)), ('done', np.bool_)])
-            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((1,2), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((1,2), dtype=np.float32), False)
+            # Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (2)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (2)), ('done', np.bool_)])
+            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (1,1)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (1,1)), ('done', np.bool_)])
+
+            # blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((1,2), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((1,2), dtype=np.float32), False)
+            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((1,1), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((1,1), dtype=np.float32), False)
+
         else:
             Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('done', np.bool_)])
             blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), False)
@@ -191,9 +195,9 @@ class DQNAgent(object):
 
             if True:
                 non_image_states=T.tensor(np.copy(data[:]['non_image_state'])).to(self.q_eval.device)
-                # non_image_states = non_image_states.reshape((-1, 1))
+                non_image_states = non_image_states.reshape((-1, 1))
                 non_image_states_=T.tensor(np.copy(data[:]['next_non_image_state'])).to(self.q_eval.device)
-                # non_image_states_ = non_image_states_.reshape((-1, 1))
+                non_image_states_ = non_image_states_.reshape((-1, 1))
 
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
@@ -331,12 +335,15 @@ class ReplayMemory:
             self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
     
-    def sample(self, replay_beta):
+    def sample(self, replay_beta, epsilon=0.001):
         capacity = self.capacity if self.transitions.full else self.transitions.index
         while True:
             p_total=self.transitions.total()
             samples = np.random.uniform(0, p_total, self.batch_size)
             probs, data_idxs, tree_idxs = self.transitions.find(samples)
+
+            probs = probs + epsilon
+
             if np.all(data_idxs<=capacity):
                 break
         

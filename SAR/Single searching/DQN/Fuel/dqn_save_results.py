@@ -5,7 +5,7 @@ import matplotlib.lines as mlines
 
 import os
 
-from dqn_environment import States, Direction
+from dqn_environment import States, Direction, Point
 
 class print_results:
     """
@@ -278,4 +278,101 @@ class print_results:
             plt.close()
 
     
-        
+    def print_graph(self, success, policy, path, starting_pos, dir_path, cntr, env):
+        """
+        Prints the grid environment
+        """
+
+        plt.rc('font', size=20)
+        plt.rc('axes', titlesize=10)
+
+        visited = []
+        # Prints graph
+        fig,ax = plt.subplots(figsize=(env.grid.shape[1], env.grid.shape[0]))
+
+        ax.set_aspect("equal")
+        ax.set_xlim(0.5, self.cols + 0.5)
+        ax.set_ylim(0.5, self.rows + 0.5)
+        # Set tick positions to be centered between grid lines
+        ax.set_xticks(np.arange(self.cols) + 0.5)
+        ax.set_yticks(np.arange(self.rows) + 0.5)
+
+        # Set tick labels to be the x or y coordinate of the grid cell
+        ax.set_xticklabels(np.arange(self.cols))
+        ax.set_yticklabels(np.arange(self.rows))
+
+        # Adjust tick label position and font size
+        ax.tick_params(axis='both', labelsize=10, pad=2, width=0.5, length=2)
+        ax.grid(True, color='black', linewidth=1)
+
+        for i in range(env.grid.shape[0]): # y
+            for j in range(env.grid.shape[1]): # x
+                ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="white", alpha=0.5)
+                if env.grid[i][j] == 1: ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="k", alpha=0.5)
+                elif Point(j,i) == starting_pos:
+                    ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5],\
+                            [i + 0.5, i + 0.5, i + 1.5, i + 1.5], \
+                                facecolor="red", alpha=0.5)
+
+        # Add path to plot
+        temp_grid_ = np.zeros(env.grid.shape)
+        for i in visited:
+            x, y = i.x, i.y
+            if temp_grid_[y][x] < 1:
+                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
+                    [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
+                    facecolor="y",
+                    alpha=0.5)
+                temp_grid_[y][x] += 1
+
+        clabel = ""
+        grid = np.zeros((env.grid.shape[0], env.grid.shape[1]))
+        row_visit = []
+        for i, point in enumerate(path):
+            if i == len(path)-1: break
+            x, y = point.x, point.y
+            label = []
+            for j, p in enumerate(path):
+                if p == point and p not in row_visit:
+                    if j == len(path)-1: break
+                    if path[j+1].x == x+1:
+                        clabel = ">"
+                        grid[p.y][p.x] += 1
+                    elif path[j+1].x == x-1:
+                        clabel = "<"
+                        grid[p.y][p.x] += 1
+                    elif path[j+1].y == y+1:
+                        clabel = "^"
+                        grid[p.y][p.x] += 1
+                    elif path[j+1].y == y-1:
+                        clabel = "v"
+                        grid[p.y][p.x] += 1
+                    elif path[j+1].x == x and path[j+1].y == y:
+                        clabel = "-"
+                        grid[p.y][p.x] += 1
+
+                    if grid[p.y, p.x] % 3 == 0 and grid[p.y, p.x] != 0:
+                        temp = clabel + "\n"
+                        label.append(temp)
+                    else:
+                        label.append(clabel)
+
+            label = " | ".join(label)
+            visited.append(point)
+            row_visit.append(point)
+
+            if temp_grid_[y][x] < 2 and not Point(x,y) == starting_pos:
+                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
+                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
+                        facecolor="green", 
+                        alpha=0.5)
+                temp_grid_[y][x] += 1
+            if not i == len(path)-2:
+                ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
+            
+        plt_title = "DQN algorithm:\nSuccess: " + str(success)
+        plt.title(plt_title)
+
+        file_name = "traj%s_%s.png"%(str(policy), str(cntr))
+        plt.savefig(os.path.join(dir_path, file_name))
+        plt.close()     

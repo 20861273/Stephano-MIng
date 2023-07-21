@@ -5,14 +5,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 
-class DeepQNetwork(nn.Module):
+class DeepRQNetwork(nn.Module):
     # def __init__(self, encoding, nr, lr,
     #              n_actions, input_dims, lidar, lstm, c_dims, k_size, s_size,
     #                 fc_dims, lstm_h, device_num, name, chkpt_dir):
     def __init__(self, encoding, nr, lr,
                  n_actions, input_dims, lidar, c_dims, k_size, s_size,
                     fc_dims, device_num, name, chkpt_dir):
-        super(DeepQNetwork, self).__init__()
+        super(DeepRQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
 
@@ -36,16 +36,16 @@ class DeepQNetwork(nn.Module):
             self.k_size = k_size.copy()
             self.s_size = s_size.copy()
 
-            self.conv1 = nn.Conv2d(input_dims[0], c_dims[0], k_size[0], stride=s_size[0])
+            self.conv1 = nn.Conv2d(self.input_dims[0], self.c_dims[0], self.k_size[0], stride=self.s_size[0])
             # nn.MaxPool2d(kernel_size=2)
-            self.conv2 = nn.Conv2d(c_dims[0], c_dims[1], k_size[1], stride=s_size[1])
+            self.conv2 = nn.Conv2d(self.c_dims[0], self.c_dims[1], self.k_size[1], stride=self.s_size[1])
             # nn.MaxPool2d(kernel_size=2)
-            # self.conv3 = nn.Conv2d(c_dims[1], c_dims[2], k_size[2], stride=s_size[2])
+            # self.conv3 = nn.Conv2d(self.c_dims[1], self.c_dims[2], self.k_size[2], stride=self.s_size[2])
 
             fc_input_dims = self.calculate_conv_output_dims()
 
-            self.fc1 = nn.Linear(fc_input_dims, fc_dims[0])
-            self.fc2 = nn.Linear(fc_dims[0], self.n_actions)
+            self.lstm = nn.LSTM(fc_input_dims, self.fc_dims[0])
+            self.fc1 = nn.Linear(fc_dims[0], self.n_actions)
         else:
             self.fc1 = nn.Linear(*self.input_dims, self.fc_dims[0]) # * unpacking the input list
             self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
@@ -91,7 +91,12 @@ class DeepQNetwork(nn.Module):
             # conv_state = conv3.view(conv3.size()[0], -1)
             # conv_state shape is BS x (n_filters * H * W)
             concatenated_state = T.cat((conv_state, non_image_state), dim=1)
-            flat1 = F.relu(self.fc1(concatenated_state))
+            concatenated_state = concatenated_state.unsqueeze(0)
+            # concatenated_state = concatenated_state.transpose(0, 1)
+
+            lstm_out, self.hidden = self.lstm(concatenated_state, self.hidden)
+            actions = F.relu(self.fc1(lstm_out.view(-1, self.fc_dims[0])))
+            # flat1 = flat1.squeeze(0)
 
             # if self.lidar:
             #     # consentrate output of convolutional layers and non-image state
@@ -100,7 +105,9 @@ class DeepQNetwork(nn.Module):
             #     flat1 = F.relu(self.fc1(concatenated_state))
             # else:
             #     flat1 = F.relu(self.fc1(conv_state))
-            actions = self.fc2(flat1)
+            # actions = self.fc1(flat1)
+
+            return actions
         else:
             # image_state = image_state.to(self.device)
             x = F.relu(self.fc1(image_state))
@@ -109,6 +116,11 @@ class DeepQNetwork(nn.Module):
             actions = self.fc4(x)
 
         return actions
+    
+    def init_hidden(self, batch_size):
+        self.hidden = (T.zeros(1, batch_size, self.fc_dims[0]).to(self.device),
+                       T.zeros(1, batch_size, self.fc_dims[0]).to(self.device))
+        breakpoint
 
     def save_checkpoint(self, session, epoch, episode, time, loss):
         T.save({

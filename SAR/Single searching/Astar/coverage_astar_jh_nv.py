@@ -19,7 +19,7 @@ import time
 import shutil
 
 # termination_time = (WIDTH+HEIGHT)*2
-termination_time = 6
+termination_time = 4
 HH = False
 draw = True
 

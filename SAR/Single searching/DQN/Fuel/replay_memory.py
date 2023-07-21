@@ -11,18 +11,29 @@ class ReplayBuffer(object):
         self.mem_cntr = 0 # mem_cntr of the last stored memory
         self.state_memory = np.zeros((self.mem_size, *input_shape),
                                      dtype=np.float32)
+        # self.non_image_state_memory = np.zeros((self.mem_size, 2),
+        #                              dtype=np.float32)
+        self.non_image_state_memory = np.zeros((self.mem_size, 1),
+                                     dtype=np.float32)
         self.new_state_memory = np.zeros((self.mem_size, *input_shape),
                                          dtype=np.float32)
+        # self.new_non_image_state_memory = np.zeros((self.mem_size, 2),
+        #                              dtype=np.float32)
+        self.new_non_image_state_memory = np.zeros((self.mem_size, 1),
+                                     dtype=np.float32)
+        
 
         self.action_memory = np.zeros(self.mem_size, dtype=np.int64)
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
 
-    def store_transition(self, state, action, reward, state_, done):
+    def store_transition(self, state, action, reward, state_, done, non_image_state, non_image_state_):#image_state, action, reward, image_state_, done, non_image_state, non_image_state_
         index = self.mem_cntr % self.mem_size
 
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
+        self.non_image_state_memory[index] = non_image_state
+        self.new_non_image_state_memory[index] = non_image_state_
         self.action_memory[index] = action
         self.reward_memory[index] = reward
         self.terminal_memory[index] = done
@@ -33,12 +44,14 @@ class ReplayBuffer(object):
         batch = np.random.choice(max_mem, batch_size, replace=False)
 
         states = self.state_memory[batch]
+        non_image_states = self.non_image_state_memory[batch]
         actions = self.action_memory[batch]
         rewards = self.reward_memory[batch]
         states_ = self.new_state_memory[batch]
+        new_non_image_state_memory = self.new_non_image_state_memory[batch]
         terminal = self.terminal_memory[batch]
 
-        return states, actions, rewards, states_, terminal
+        return states, non_image_states, actions, rewards, states_, new_non_image_state_memory, terminal 
 
 class PrioritizedReplayMemory(object):
     def __init__(self, lidar, obs_shape, capacity, alpha):

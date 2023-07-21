@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 8
-WIDTH = 8
+HEIGHT = 6
+WIDTH = 6
 
 # DENSITY = 30 # percentage
 
@@ -242,13 +242,15 @@ class Environment:
             return image_state, non_image_state, reward, game_over, (0, self.collision)
         
         if np.array([True for i in range(0, self.nr) if self.pos[i] == self.starting_pos[i]]).any() == True:
-            self.score += (1-(self.fuel / self.starting_fuel))*0.5 + (self.explored_from_last / self.starting_fuel)
-            breakpoint
+            # if self.explored_from_last == 0: self.score = 0
+            # else: self.score += 1+(1-(self.fuel / self.starting_fuel))*(self.explored_from_last / self.starting_fuel) # (1-(self.fuel / self.starting_fuel))*0.5 + (self.explored_from_last / self.starting_fuel)
+            # if self.explored_from_last == 0: self.score = 0
+            # else: self.score += self.positive_reward
             self.fuel = self.starting_fuel
             self.explored_from_last = 0
         
         if self.fuel == 0:
-            self.score = self.negative_reward
+            self.score = self.negative_reward*-1
             reward = self.score
             game_over = True
             return image_state, non_image_state, reward, game_over, (0, self.collision)
@@ -348,8 +350,8 @@ class Environment:
             if self.exploration_grid[self.pos[i].y, self.pos[i].x] == False:
                 temp_arr[i] = True
             if temp_arr[i] == True:
-                # score += self.positive_exploration_reward
-                score += round((self.starting_unexplored - (HEIGHT*WIDTH - np.count_nonzero(self.exploration_grid))) / self.starting_unexplored, 5)
+                score += self.positive_exploration_reward
+                # score += round((self.starting_unexplored - (HEIGHT*WIDTH - np.count_nonzero(self.exploration_grid))) / self.starting_unexplored, 5)
                 self.explored_from_last += 1
 
         return score
@@ -366,7 +368,8 @@ class Environment:
         return score
 
     def get_state(self):
-        non_image_state = [[self.fuel, self.explored_from_last]*self.nr]
+        # non_image_state = [[self.fuel, self.explored_from_last]*self.nr]
+        non_image_state = [[self.fuel]*self.nr]
         # Position state: flattened array of environment where position is equal to 1
         if self.encoding == "position" or self.encoding == "position_exploration" or self.encoding == "position_occupancy":
             if self.lidar:
@@ -518,6 +521,7 @@ class Environment:
                 image_map[r_i][0] = location_map[r_i]
 
             image_state = np.copy(image_map)
+            image_state = np.kron(image_state, np.ones((4, 4)))
 
             return image_state, non_image_state
 

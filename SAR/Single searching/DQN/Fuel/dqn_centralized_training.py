@@ -1,6 +1,7 @@
 from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from dqn_utils import plot_learning_curve, write_json, read_json
 from dqn_agent import DQNAgent
+from drqn_agent import DRQNAgent
 from ddqn_agent import DDQNAgent
 from dqn_save_results import print_results
 import numpy as np
@@ -22,7 +23,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
     # initialize training session variables
     start_time = time.time()
     ts_rewards, ts_steps, ts_losses = [], [], []
-    show_plot = False
+    show_plot, skip = False, False
 
     # training sessions loop
     for i_ts in range(training_sessions):
@@ -59,7 +60,8 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         # load agent experiences and rewards
         if load_checkpoint:
             if int(os.listdir(models_path)[-1][0]) == i_exp:
-                checkpoint = agent.load_models() 
+                checkpoint = agent.load_models()
+                if checkpoint["episode"] == episodes-1: skip = True
 
             if i_ts < checkpoint['epoch']:
                 continue           
@@ -177,7 +179,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             avg_collisions = np.mean(collisions_grid)
 
             # save checkpoint
-            if i_episode % 10000 == 0 and i_episode != 0:
+            if i_episode % 1000 == 0 and i_episode != 0:
                 if not load_checkpoint:
                     print('... saving checkpoint ...')
                     agent.save_models(i_exp, i_ts, i_episode, time.time()-start_time, loss)
@@ -237,38 +239,40 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
     # this makes sure the load_checkpoint variable is false for the next training session
     if load_checkpoint:
         load_checkpoint = False
+
+    if not skip:
     
-    # calculate total time of training session
-    end_time = time.time()
-    total_time = end_time - start_time
-    print(total_time)
+        # calculate total time of training session
+        end_time = time.time()
+        total_time = end_time - start_time
+        print(total_time)
 
-    # save reward lists and plot learning curve
-    filename = 'learning_cruve%s.png' %(str(i_exp))
-    filename = os.path.join(save_path, filename)
-    plot_learning_curve(nr, training_type, ts_rewards, filename, \
-        learning_rate, discount_rate, epsilon, \
-            positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
-                max_steps, total_time)
-    
-    file_name = "ts_rewards%s.json" %(str(i_exp))
-    file_name = os.path.join(save_path, file_name)
-    write_json(ts_rewards, file_name)
+        # save reward lists and plot learning curve
+        filename = 'learning_cruve%s.png' %(str(i_exp))
+        filename = os.path.join(save_path, filename)
+        plot_learning_curve(nr, training_type, ts_rewards, filename, \
+            learning_rate, discount_rate, epsilon, \
+                positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
+                    max_steps, total_time)
+        
+        file_name = "ts_rewards%s.json" %(str(i_exp))
+        file_name = os.path.join(save_path, file_name)
+        write_json(ts_rewards, file_name)
 
-    file_name = "rewards%s.json" %(str(i_exp))
-    file_name = os.path.join(save_path, file_name)
-    write_json(rewards, file_name)
+        file_name = "rewards%s.json" %(str(i_exp))
+        file_name = os.path.join(save_path, file_name)
+        write_json(rewards, file_name)
 
-    file_name = "ts_steps%s.json" %(str(i_exp))
-    file_name = os.path.join(save_path, file_name)
-    write_json(ts_steps, file_name)
+        file_name = "ts_steps%s.json" %(str(i_exp))
+        file_name = os.path.join(save_path, file_name)
+        write_json(ts_steps, file_name)
 
-    file_name = "ts_loss%s.json" %(str(i_exp))
-    file_name = os.path.join(save_path, file_name)
-    write_json(ts_losses, file_name)
+        file_name = "ts_loss%s.json" %(str(i_exp))
+        file_name = os.path.join(save_path, file_name)
+        write_json(ts_losses, file_name)
 
-    file_name = "collisions%s.json" %(str(i_exp))
-    file_name = os.path.join(save_path, file_name)
-    write_json(collisions_grid.tolist(), file_name)
+        file_name = "collisions%s.json" %(str(i_exp))
+        file_name = os.path.join(save_path, file_name)
+        write_json(collisions_grid.tolist(), file_name)
 
     return load_checkpoint

@@ -15,11 +15,11 @@ if __name__ == '__main__':
     testing_parameters = {
                         "training": False,
                         "load checkpoint": False,
-                        "show rewards interval": 100,
-                        "show plot": True,
+                        "show rewards interval": 1000,
+                        "show plot": False,
                         "save plot": False,
-                        "policy number": [2],
-                        "testing iterations": 200
+                        "policy number": [0,1,2],
+                        "testing iterations": 16
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
@@ -27,15 +27,15 @@ if __name__ == '__main__':
     hp = {
                     "number of drones": 1,
                     "training type": "centralized",
-                    "agent type": "DQN",
+                    "agent type": "DDQN",
                     "learning rate": [0.0001],
                     "discount rate": [0.7,0.8,0.9],
                     "epsilon": [[0.01,0.01,0.01]],
 
                     "training sessions": 1,
                     "episodes": 10000,
-                    "positive rewards": [10],
-                    "positive exploration rewards": [0],
+                    "positive rewards": [0],
+                    "positive exploration rewards": [0.1],
                     "negative rewards": [1],
                     "negative step rewards": [0.01],
                     "max steps": [200],
@@ -50,13 +50,13 @@ if __name__ == '__main__':
 
                     "batch size": 64,
                     "mem size": 100000,
-                    "replace": 100,
-                    "channels": [16, 32, 64],
+                    "replace": 10000,
+                    "channels": [32, 64],
                     "kernel": [2, 2,2],
-                    "stride": [1, 1,1],
-                    "fc dims": [32],
+                    "stride": [2, 1,1],
+                    "fc dims": [128],
 
-                    "prioritized": True,
+                    "prioritized": False,
                     "starting beta": 0.5,
 
                     "device": 0,
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "10-07-2023 01h21m48s")
+    load_checkpoint_path = os.path.join(PATH, "15-07-2023 09h33m57s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -119,13 +119,16 @@ if __name__ == '__main__':
     elif hp["encoding"] == "image" or hp["encoding"] == "image_occupancy":
         hp["input dims"] = (2,HEIGHT, WIDTH)
     elif hp["encoding"] == "full_image":
-        hp["input dims"] = (1,HEIGHT, WIDTH)
+        # hp["input dims"] = (1,HEIGHT, WIDTH)
+        hp["input dims"] = (1,HEIGHT*4, WIDTH*4)
 
     if hp["lidar"] and "image" not in hp["encoding"]:
         hp["input dims"][0] += 4
 
     if not testing_parameters["load checkpoint"]:
         save_hp(save_path, hp)
+
+    load_checkpoint = testing_parameters["load checkpoint"]
 
     if testing_parameters["training"]:
         print("Number of training sessoins: ", num_experiences)
@@ -149,7 +152,7 @@ if __name__ == '__main__':
                                                             hp["n actions"], hp["starting beta"], hp["input dims"], hp["lidar"],
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"],
-                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"])
+                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], load_checkpoint, hp["device"])
                                         i_exp += 1
     else:
         if hp["training type"] == "centralized":
