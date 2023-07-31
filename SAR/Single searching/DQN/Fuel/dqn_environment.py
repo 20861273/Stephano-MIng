@@ -43,7 +43,8 @@ class Environment:
         self.prev_pos = [Point(0,0)]*self.nr
         self.starting_pos = [Point(0,0)]*self.nr
 
-        self.starting_fuel = WIDTH*HEIGHT/2
+        # self.starting_fuel = WIDTH*HEIGHT/2
+        self.starting_fuel = 20
         self.fuel = self.starting_fuel
 
         self.curriculum_learning = curriculum_learning
@@ -123,7 +124,7 @@ class Environment:
         for i in range(0, self.nr):
             indices = np.argwhere(self.grid == States.UNEXP.value)
             np.random.shuffle(indices)
-            self.starting_pos[i] = Point(indices[i,0], indices[i,1])
+            self.starting_pos[i] = Point(indices[i,1], indices[i,0])
             self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos.copy()
@@ -281,6 +282,13 @@ class Environment:
                 reward = self.score
                 game_over = True
                 return image_state, non_image_state, reward, game_over, (1, self.collision)
+        # elif self.reward_system["coverage"] and np.array([True for i in range(0, self.nr) if self.pos[i] == self.starting_pos[i]]).any() == True:
+        #     if self.exploration_grid.all():
+        #         self.score += self.positive_reward
+        #         reward = self.score
+        #         self.fuel = self.starting_fuel
+        #         game_over = True
+        #         return image_state, non_image_state, reward, game_over, (1, self.collision)
 
         # 6. return game over and score
         reward = self.score
@@ -468,10 +476,12 @@ class Environment:
             elif self.encoding == "image":
                 # Generates exploration map. All explored cells are equal to 1
                 # shows exploration and obstacles as explored
-                exploration_map = np.zeros(self.grid.shape)
-                explored = np.argwhere(self.exploration_grid == True)
-                for y,x in explored:
-                    exploration_map[y, x] = 1
+                obstacles = np.argwhere(self.grid == States.OBS.value)
+                for r_i in range(self.nr):
+
+                    for y,x in obstacles:
+                        location_map[r_i][y, x] = 0.1
+                    location_map[r_i][self.starting_pos[r_i].y, self.starting_pos[r_i].x] = 0.7
 
             elif self.encoding == "full_image":
                 for r_i in range(self.nr):
@@ -509,7 +519,7 @@ class Environment:
             #     image_map[r_i][2][1:shape[0]-1,1:shape[1]-1] = exploration_map
 
             # Non-padded
-            if not self.encoding == "full_image":
+            if self.encoding == "image_occupancy":
                 image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
                 for r_i in range(self.nr):
                     image_map[r_i][0] = location_map[r_i]
@@ -519,9 +529,13 @@ class Environment:
             elif self.encoding == "full_image":
                 image_map = np.zeros((self.nr,) + (1,) + self.grid.shape)
                 image_map[r_i][0] = location_map[r_i]
+            
+            elif self.encoding == "image":
+                image_map = np.zeros((self.nr,) + (1,) + self.grid.shape)
+                image_map[r_i][0] = location_map[r_i]
 
             image_state = np.copy(image_map)
-            image_state = np.kron(image_state, np.ones((4, 4)))
+            image_state = np.kron(image_state, np.ones((2, 2)))
 
             return image_state, non_image_state
 
@@ -776,21 +790,21 @@ class Environment:
         # Set left and right edges to 2
         for row in self.grid:
             row[0] = States.OBS.value
-            row[HEIGHT - 1] = States.OBS.value
+            row[WIDTH - 1] = States.OBS.value
 
         # Set top and bottom edges to 2
-        self.grid[0] = [States.OBS.value] * HEIGHT
-        self.grid[WIDTH - 1] = [States.OBS.value] * HEIGHT
+        self.grid[0] = [States.OBS.value] * WIDTH
+        self.grid[HEIGHT - 1] = [States.OBS.value] * WIDTH
 
     def remove_edges(self, grid):
         # Set left and right edges to 2
         for row in grid:
             row[0] = States.UNEXP.value
-            row[HEIGHT - 1] = States.UNEXP.value
+            row[WIDTH - 1] = States.UNEXP.value
 
         # Set top and bottom edges to 2
-        grid[0] = [States.UNEXP.value] * HEIGHT
-        grid[WIDTH - 1] = [States.UNEXP.value] * HEIGHT
+        grid[0] = [States.UNEXP.value] * WIDTH
+        grid[WIDTH - 1] = [States.UNEXP.value] * WIDTH
 
         return grid
 
@@ -1133,7 +1147,7 @@ class Environment:
         grid = self.remove_edges(grid)
         possible_indexes = np.argwhere(np.array(grid) == States.OBS.value)
         np.random.shuffle(possible_indexes)
-        indices = possible_indexes[0:int(len(possible_indexes)*self.obstacle_density)]
+        indices = possible_indexes[0:int(len(possible_indexes)*(1-self.obstacle_density))]
         for index in indices:
             grid[index[0]][index[1]] = States.UNEXP.value
 

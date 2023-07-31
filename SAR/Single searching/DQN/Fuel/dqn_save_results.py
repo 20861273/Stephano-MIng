@@ -5,6 +5,7 @@ import matplotlib.lines as mlines
 
 import os
 
+
 from dqn_environment import States, Direction, Point
 
 class print_results:
@@ -278,7 +279,7 @@ class print_results:
             plt.close()
 
     
-    def print_graph(self, success, policy, path, starting_pos, dir_path, cntr, env):
+    def print_graph(self, success, policy, path, actions, starting_pos, dir_path, cntr, env):
         """
         Prints the grid environment
         """
@@ -286,7 +287,6 @@ class print_results:
         plt.rc('font', size=20)
         plt.rc('axes', titlesize=10)
 
-        visited = []
         # Prints graph
         fig,ax = plt.subplots(figsize=(env.grid.shape[1], env.grid.shape[0]))
 
@@ -313,62 +313,119 @@ class print_results:
                     ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5],\
                             [i + 0.5, i + 0.5, i + 1.5, i + 1.5], \
                                 facecolor="red", alpha=0.5)
-
-        # Add path to plot
-        temp_grid_ = np.zeros(env.grid.shape)
-        for i in visited:
-            x, y = i.x, i.y
-            if temp_grid_[y][x] < 1:
-                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
-                    [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
-                    facecolor="y",
+                    
+        # fill explored cells green
+        for pos in path:
+            x = pos.x
+            y = pos.y
+            ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
+                    [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
+                    facecolor="green", 
                     alpha=0.5)
-                temp_grid_[y][x] += 1
-
+            
+        ax.fill([starting_pos.x + 0.5, starting_pos.x + 1.5, starting_pos.x + 1.5, starting_pos.x + 0.5],\
+                            [starting_pos.y + 0.5, starting_pos.y + 0.5, starting_pos.y + 1.5, starting_pos.y + 1.5], \
+                                facecolor="red", alpha=0.5)
+        
+        ax.fill([path[-1].x + 0.5, path[-1].x + 1.5, path[-1].x + 1.5, path[-1].x + 0.5],\
+                            [path[-1].y + 0.5, path[-1].y + 0.5, path[-1].y + 1.5, path[-1].y + 1.5], \
+                                facecolor="blue", alpha=0.5)
+            
+        # adds all indices of actions on cell
+        indices = {}
+        for x in range(env.grid.shape[0]): # y
+            for y in range(env.grid.shape[1]): # x
+                for i, pos in enumerate(path):
+                    if pos == Point(x,y): # if cell in path then add index to dict
+                        if pos in indices: # checks if dict already has key named "pos"
+                            indices[pos].append(i)
+                        else:
+                            indices[pos] = [i]
+        
+        cell_count = 0
         clabel = ""
-        grid = np.zeros((env.grid.shape[0], env.grid.shape[1]))
-        row_visit = []
-        for i, point in enumerate(path):
-            if i == len(path)-1: break
-            x, y = point.x, point.y
-            label = []
-            for j, p in enumerate(path):
-                if p == point and p not in row_visit:
-                    if j == len(path)-1: break
-                    if path[j+1].x == x+1:
-                        clabel = ">"
-                        grid[p.y][p.x] += 1
-                    elif path[j+1].x == x-1:
-                        clabel = "<"
-                        grid[p.y][p.x] += 1
-                    elif path[j+1].y == y+1:
-                        clabel = "^"
-                        grid[p.y][p.x] += 1
-                    elif path[j+1].y == y-1:
-                        clabel = "v"
-                        grid[p.y][p.x] += 1
-                    elif path[j+1].x == x and path[j+1].y == y:
-                        clabel = "-"
-                        grid[p.y][p.x] += 1
+        for x in range(env.grid.shape[0]): # y
+            for y in range(env.grid.shape[1]): # x
+                if Point(x,y) in path:
+                    for i in indices[Point(x,y)]:
+                        if actions[i] == Direction.RIGHT.value: 
+                            clabel += "\u2192"
+                            breakpoint
+                        elif actions[i] == Direction.LEFT.value: 
+                            clabel += "\u2190"
+                            breakpoint
+                        elif actions[i] == Direction.UP.value: 
+                            clabel += "\u2193"
+                            breakpoint
+                        elif actions[i] == Direction.DOWN.value: 
+                            clabel += "\u2191"
+                            breakpoint
 
-                    if grid[p.y, p.x] % 3 == 0 and grid[p.y, p.x] != 0:
-                        temp = clabel + "\n"
-                        label.append(temp)
-                    else:
-                        label.append(clabel)
+                temp_label = ""
+                if len(clabel) > 3:
+                    for j, c in enumerate(clabel):
+                        temp_label += clabel[j:j+8] + "\n"
+                    clabel = temp_label
+                ax.text(x+1, y+1, clabel, ha="center", va="center", color="black", fontsize=8)
+                clabel = ""
+                # plt.pause(0.005)
+                
 
-            label = " | ".join(label)
-            visited.append(point)
-            row_visit.append(point)
+        # # Add path to plot
+        # temp_grid_ = np.zeros(env.grid.shape)
+        # for i in visited:
+        #     x, y = i.x, i.y
+        #     if temp_grid_[y][x] < 1:
+        #         ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5],
+        #             [y + 0.5, y + 0.5, y + 1.5, y + 1.5],
+        #             facecolor="y",
+        #             alpha=0.5)
+        #         temp_grid_[y][x] += 1
 
-            if temp_grid_[y][x] < 2 and not Point(x,y) == starting_pos:
-                ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
-                        [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
-                        facecolor="green", 
-                        alpha=0.5)
-                temp_grid_[y][x] += 1
-            if not i == len(path)-2:
-                ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
+        # clabel = ""
+        # grid = np.zeros((env.grid.shape[0], env.grid.shape[1]))
+        # row_visit = []
+        # for i, point in enumerate(path):
+        #     if i == len(path)-1: break
+        #     x, y = point.x, point.y
+        #     label = []
+        #     for j, p in enumerate(path):
+        #         if p == point and p not in row_visit:
+        #             if j == len(path)-1: break
+        #             if path[j+1].x == x+1:
+        #                 clabel = ">"
+        #                 grid[p.y][p.x] += 1
+        #             elif path[j+1].x == x-1:
+        #                 clabel = "<"
+        #                 grid[p.y][p.x] += 1
+        #             elif path[j+1].y == y+1:
+        #                 clabel = "^"
+        #                 grid[p.y][p.x] += 1
+        #             elif path[j+1].y == y-1:
+        #                 clabel = "v"
+        #                 grid[p.y][p.x] += 1
+        #             elif path[j+1].x == x and path[j+1].y == y:
+        #                 clabel = "-"
+        #                 grid[p.y][p.x] += 1
+
+        #             if grid[p.y, p.x] % 3 == 0 and grid[p.y, p.x] != 0:
+        #                 temp = clabel + "\n"
+        #                 label.append(temp)
+        #             else:
+        #                 label.append(clabel)
+
+        #     label = " | ".join(label)
+        #     visited.append(point)
+        #     row_visit.append(point)
+
+        #     if temp_grid_[y][x] < 2 and not Point(x,y) == starting_pos:
+        #         ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
+        #                 [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
+        #                 facecolor="green", 
+        #                 alpha=0.5)
+        #         temp_grid_[y][x] += 1
+        #     if not i == len(path)-2:
+        #         ax.text(x+1, y+1, label, ha="center", va="center", color="black", fontsize=8)
             
         plt_title = "DQN algorithm:\nSuccess: " + str(success)
         plt.title(plt_title)

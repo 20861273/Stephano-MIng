@@ -16,10 +16,10 @@ if __name__ == '__main__':
                         "training": False,
                         "load checkpoint": False,
                         "show rewards interval": 1000,
-                        "show plot": False,
-                        "save plot": False,
-                        "policy number": [0,1,2],
-                        "testing iterations": 16
+                        "show plot": True,
+                        "save plot": True,
+                        "policy number": [0],
+                        "testing iterations": 1000
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
@@ -29,12 +29,12 @@ if __name__ == '__main__':
                     "training type": "centralized",
                     "agent type": "DDQN",
                     "learning rate": [0.0001],
-                    "discount rate": [0.7,0.8,0.9],
+                    "discount rate": [0.65,0.7,0.75,0.8,0.85],
                     "epsilon": [[0.01,0.01,0.01]],
 
                     "training sessions": 1,
                     "episodes": 10000,
-                    "positive rewards": [0],
+                    "positive rewards": [1],
                     "positive exploration rewards": [0.1],
                     "negative rewards": [1],
                     "negative step rewards": [0.01],
@@ -42,8 +42,8 @@ if __name__ == '__main__':
 
                     "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
-                    "obstacles": False,
-                    "obstacle density": 0.7,
+                    "obstacles": True,
+                    "obstacle density": 0.6,
                     "encoding": "full_image",
                     "input dims": (2,HEIGHT, WIDTH),
                     "lidar": False,
@@ -52,11 +52,11 @@ if __name__ == '__main__':
                     "mem size": 100000,
                     "replace": 10000,
                     "channels": [32, 64],
-                    "kernel": [2, 2,2],
-                    "stride": [2, 1,1],
+                    "kernel": [2, 2, 2],
+                    "stride": [2, 1, 1],
                     "fc dims": [128],
 
-                    "prioritized": False,
+                    "prioritized": True,
                     "starting beta": 0.5,
 
                     "device": 0,
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "15-07-2023 09h33m57s")
+    load_checkpoint_path = os.path.join(PATH, "25-07-2023 20h12m18s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -116,11 +116,11 @@ if __name__ == '__main__':
         hp["input dims"] = [HEIGHT*WIDTH]
     elif hp["encoding"] == "position_exploration" or hp["encoding"] == "position_occupancy":
         hp["input dims"] = [HEIGHT*WIDTH*2]
-    elif hp["encoding"] == "image" or hp["encoding"] == "image_occupancy":
+    elif hp["encoding"] == "image_occupancy":
         hp["input dims"] = (2,HEIGHT, WIDTH)
-    elif hp["encoding"] == "full_image":
+    elif hp["encoding"] == "full_image" or hp["encoding"] == "image":
         # hp["input dims"] = (1,HEIGHT, WIDTH)
-        hp["input dims"] = (1,HEIGHT*4, WIDTH*4)
+        hp["input dims"] = (1,HEIGHT*2, WIDTH*2)
 
     if hp["lidar"] and "image" not in hp["encoding"]:
         hp["input dims"][0] += 4
