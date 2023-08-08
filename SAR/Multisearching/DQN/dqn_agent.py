@@ -7,13 +7,14 @@ import copy
 
 class DQNAgent(object):
     def __init__(self, encoding, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
-                 input_dims, lidar, c_dims, k_size, s_size, fc_dims,
+                 input_dims, guide, lidar, c_dims, k_size, s_size, fc_dims,
                  mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
         self.gamma = gamma
         self.epsilon = epsilon
         self.lr = lr
         self.n_actions = n_actions
         self.input_dims = input_dims
+        self.guide = guide
         self.lidar = lidar
         self.batch_size = batch_size
         self.eps_min = eps_min
@@ -30,9 +31,9 @@ class DQNAgent(object):
 
         global Transition_dtype
         global blank_trans
-        if self.lidar and "image" in self.encoding:
-            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (4*nr)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (4*nr)), ('done', np.bool_)])
-            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((4*nr), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((4*nr), dtype=np.float32), False)
+        if (self.lidar or self.guide) and "image" in self.encoding:
+            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (6*nr)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (6*nr)), ('done', np.bool_)])
+            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((6*nr), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((6*nr), dtype=np.float32), False)
         else:
             Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('done', np.bool_)])
             blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), False)
@@ -43,7 +44,7 @@ class DQNAgent(object):
         
         if self.prioritized:
             # self.memory = ReplayMemory(mem_size, input_dims, n_actions, eps=0.0001, prob_alpha=0.5)
-            self.memory = ReplayMemory(self.encoding, self.lidar, max_size=mem_size, batch_size=self.batch_size, replay_alpha=0.5)
+            self.memory = ReplayMemory(self.encoding, self.lidar, self.guide, max_size=mem_size, batch_size=self.batch_size, replay_alpha=0.5)
             
             # Other implementation of PER in replay_memory.py
             # if self.lidar and self.encoding == "image":
@@ -54,10 +55,10 @@ class DQNAgent(object):
             # self.memory = PrioritizedReplayMemory(lidar, self.input_dims, mem_size, alpha=0.5)
 
         else:
-            self.memory = ReplayBuffer(self.lidar, mem_size, input_dims, n_actions)
+            self.memory = ReplayBuffer(self.guide, mem_size, input_dims, n_actions)
         
         self.q_eval = DeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
-                                    self.input_dims, self.lidar,
+                                    self.input_dims, self.guide, self.lidar,
                                     c_dims, k_size, s_size,
                                     fc_dims,
                                     device_num,
@@ -65,7 +66,7 @@ class DQNAgent(object):
                                     chkpt_dir=self.chkpt_dir)
 
         self.q_next = DeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
-                                    self.input_dims, self.lidar,
+                                    self.input_dims, self.guide, self.lidar,
                                     c_dims, k_size, s_size, fc_dims,
                                     device_num,
                                     name=self.env_name+'_'+self.algo+'_q_next',
@@ -76,7 +77,8 @@ class DQNAgent(object):
         if np.random.random() > self.epsilon or not self.q_eval.training:
             chose_max_action = True
             image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-            if self.lidar and "image" in self.encoding:
+            if (self.lidar or self.guide) and "image" in self.encoding:
+                # non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device).reshape((1,1))
                 non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
                 actions = self.q_eval.forward(image_state, non_image_state)
             else:
@@ -153,7 +155,7 @@ class DQNAgent(object):
         return T.tensor([temp_actions])
     
     def store_transition(self, image_state, non_image_state, action, reward, image_state_, non_image_state_, done):
-        if self.lidar and "image" in self.encoding:
+        if (self.lidar or self.guide) and "image" in self.encoding:
             self.memory.store_transition(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
             # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
         else:
@@ -162,8 +164,12 @@ class DQNAgent(object):
 
     def sample_memory(self, beta, prioritized=False):
         if not prioritized:
-            image_state, non_image_state, action, reward, new_image_state, new_non_image_state, done = \
-                                    self.memory.sample_buffer(self.batch_size)
+            if (self.lidar or self.guide) and "image" in self.encoding:
+                image_state, non_image_state, action, reward, new_image_state, new_non_image_state, done = \
+                                        self.memory.sample_buffer(self.batch_size)
+            else:
+                image_state, action, reward, new_image_state, done = \
+                                        self.memory.sample_buffer(self.batch_size)
             
             image_states = T.tensor(image_state).to(self.q_eval.device)
             
@@ -173,7 +179,7 @@ class DQNAgent(object):
             image_states_ = T.tensor(new_image_state).to(self.q_eval.device)
             
 
-            if self.lidar and "image" in self.encoding:
+            if (self.lidar or self.guide) and "image" in self.encoding:
                 non_image_states = T.tensor(non_image_state).to(self.q_eval.device)
                 non_image_states_ = T.tensor(new_non_image_state).to(self.q_eval.device)
 
@@ -233,7 +239,7 @@ class DQNAgent(object):
             actions=T.tensor(np.copy(data[:]['action'])).to(self.q_eval.device)
             image_states_=T.tensor(np.copy(data[:]['next_image_state'])).to(self.q_eval.device)
 
-            if self.lidar and "image" in self.encoding:
+            if (self.lidar or self.guide) and "image" in self.encoding:
                 non_image_states=T.tensor(np.copy(data[:]['non_image_state'])).to(self.q_eval.device)
                 non_image_states_=T.tensor(np.copy(data[:]['next_non_image_state'])).to(self.q_eval.device)
 
@@ -251,12 +257,12 @@ class DQNAgent(object):
         else:
             # add zero grad before adding trasition
             self.q_eval.optimizer.zero_grad()
+            
             # replace target here
             self.replace_target_network()
-
             
             indices = np.arange(self.batch_size)
-            if self.lidar and "image" in self.encoding:
+            if (self.lidar or self.guide) and "image" in self.encoding:
                 image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones = self.sample_memory(self.beta)
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
@@ -268,7 +274,6 @@ class DQNAgent(object):
             q_next[dones] = 0.0
             q_target = rewards + self.gamma*q_next
             loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
-
 
         loss.backward()
         self.q_eval.optimizer.step()
@@ -357,9 +362,10 @@ class SegmentTree():
     
 
 class ReplayMemory:
-    def __init__(self, encoding, lidar, max_size, batch_size, replay_alpha):
+    def __init__(self, encoding, lidar, guide, max_size, batch_size, replay_alpha):
         self.encoding = encoding
         self.lidar = lidar
+        self.guide = guide
         self.batch_size=batch_size
         self.capacity = max_size
         self.replay_alpha = replay_alpha
@@ -367,7 +373,7 @@ class ReplayMemory:
         self.t = 0
 
     def store_transition(self, image_state, action, reward, next_image_state, done, non_image_state=None, next_non_image_state=None):
-        if self.lidar and "image" in self.encoding:
+        if (self.lidar or self.guide) and "image" in self.encoding:
             self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         else:
             self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority

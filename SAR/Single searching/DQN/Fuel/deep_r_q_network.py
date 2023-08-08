@@ -37,6 +37,7 @@ class DeepRQNetwork(nn.Module):
             self.s_size = s_size.copy()
 
             self.conv1 = nn.Conv2d(self.input_dims[0], self.c_dims[0], self.k_size[0], stride=self.s_size[0])
+
             # nn.MaxPool2d(kernel_size=2)
             self.conv2 = nn.Conv2d(self.c_dims[0], self.c_dims[1], self.k_size[1], stride=self.s_size[1])
             # nn.MaxPool2d(kernel_size=2)
@@ -69,6 +70,7 @@ class DeepRQNetwork(nn.Module):
 
     def calculate_conv_output_dims(self):
         state = T.zeros(1, *self.input_dims)
+
         dims = self.conv1(state)
         dims = self.conv2(dims)
         # dims = self.conv3(dims)
@@ -118,9 +120,12 @@ class DeepRQNetwork(nn.Module):
         return actions
     
     def init_hidden(self, batch_size):
-        self.hidden = (T.zeros(1, batch_size, self.fc_dims[0]).to(self.device),
-                       T.zeros(1, batch_size, self.fc_dims[0]).to(self.device))
-        breakpoint
+        if self.training:
+            self.hidden = (T.zeros(1, batch_size, self.fc_dims[0]).to(self.device),
+                        T.zeros(1, batch_size, self.fc_dims[0]).to(self.device))
+        else:
+            self.hidden = (T.zeros(1, 1, self.fc_dims[0]).to(self.device),
+                        T.zeros(1, 1, self.fc_dims[0]).to(self.device))
 
     def save_checkpoint(self, session, epoch, episode, time, loss):
         T.save({

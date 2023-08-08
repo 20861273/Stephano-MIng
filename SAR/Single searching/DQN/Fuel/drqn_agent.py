@@ -1,7 +1,7 @@
 import numpy as np
 import torch as T
 from deep_r_q_network import DeepRQNetwork
-from replay_memory import ReplayBuffer, PrioritizedReplayMemory
+from recurrent_replay_memory import ReplayBuffer
 from dqn_environment import Direction, WIDTH, HEIGHT, States
 import copy
 
@@ -27,6 +27,7 @@ class DRQNAgent(object):
         self.prioritized = prioritized
         self.beta = starting_beta
         self.encoding = encoding
+        self.sequence_len = 20
 
         global Transition_dtype
         global blank_trans
@@ -75,7 +76,7 @@ class DRQNAgent(object):
                                     chkpt_dir=self.chkpt_dir)
 
     def choose_action(self, env, i_r, image_observation, non_image_observation, allow_windowed_revisiting, previous_action=None):
-        if np.random.random() > self.epsilon or not self.q_eval.training:
+        if self.memory.mem_cntr > 20 and (np.random.random() > self.epsilon or not self.q_eval.training):
             image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
             if True:
                 non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
@@ -123,19 +124,30 @@ class DRQNAgent(object):
     def sample_memory(self, beta, prioritized=False):
         if not prioritized:
             image_state, non_image_state, action, reward, new_image_state, new_non_image_state, done = \
-                                    self.memory.sample_buffer(self.batch_size)
+                                    self.memory.sample_buffer(self.batch_size, self.sequence_len)
             
-            image_states = T.tensor(image_state).to(self.q_eval.device)
+            # reshape input data to move the sequence length to a separate dimension
+            # from (batch_size, sequence_length, channels, height, width)
+            # to (batch_size*sequence_length, channels, height, width)
+            reshaped_image_state = image_state.reshape(-1, self.input_dims[0], self.input_dims[1], self.input_dims[2])
+            reshaped_non_image_states = non_image_state.reshape(-1, self.input_dims[0])
+            reshaped_actions = action.reshape(-1)
+            reshaped_rewards = reward.reshape(-1)
+            reshaped_image_states_ = new_image_state.reshape(-1, self.input_dims[0], self.input_dims[1], self.input_dims[2])
+            reshaped_non_image_states_ = new_non_image_state.reshape(-1, self.input_dims[0])
+            reshaped_dones = done.reshape(-1)
             
-            rewards = T.tensor(reward).to(self.q_eval.device)
-            dones = T.tensor(done).to(self.q_eval.device)
-            actions = T.tensor(action).to(self.q_eval.device)
-            image_states_ = T.tensor(new_image_state).to(self.q_eval.device)
+            image_states = T.tensor(reshaped_image_state).to(self.q_eval.device)
+            
+            rewards = T.tensor(reshaped_rewards).to(self.q_eval.device)
+            dones = T.tensor(reshaped_dones).to(self.q_eval.device)
+            actions = T.tensor(reshaped_actions).to(self.q_eval.device)
+            image_states_ = T.tensor(reshaped_image_states_).to(self.q_eval.device)
             
 
             if True:
-                non_image_states = T.tensor(non_image_state).to(self.q_eval.device)
-                non_image_states_ = T.tensor(new_non_image_state).to(self.q_eval.device)
+                non_image_states = T.tensor(reshaped_non_image_states).to(self.q_eval.device)
+                non_image_states_ = T.tensor(reshaped_non_image_states_).to(self.q_eval.device)
 
                 return image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones
             else:
@@ -173,7 +185,7 @@ class DRQNAgent(object):
             if self.memory.transitions.index<self.batch_size and self.memory.transitions.full==False:
                 return
         else:
-            if self.memory.mem_cntr < self.batch_size:
+            if self.memory.mem_cntr-self.sequence_len < self.batch_size:
                 return
 
         if self.prioritized:
@@ -219,12 +231,13 @@ class DRQNAgent(object):
             self.replace_target_network()
 
             
-            indices = np.arange(self.batch_size)
+            indices = np.arange(self.batch_size*self.sequence_len)
             if True:
                 image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones = self.sample_memory(self.beta)
-                self.q_eval.init_hidden(self.batch_size)
+
+                self.q_eval.init_hidden(self.batch_size*self.sequence_len)
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
-                self.q_next.init_hidden(self.batch_size)
+                self.q_next.init_hidden(self.batch_size*self.sequence_len)
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
             else:
                 image_states, actions, rewards, image_states_, dones = self.sample_memory(self.beta)
@@ -339,12 +352,15 @@ class ReplayMemory:
             self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
     
-    def sample(self, replay_beta):
+    def sample(self, replay_beta, epsilon=0.001):
         capacity = self.capacity if self.transitions.full else self.transitions.index
         while True:
             p_total=self.transitions.total()
             samples = np.random.uniform(0, p_total, self.batch_size)
             probs, data_idxs, tree_idxs = self.transitions.find(samples)
+
+            probs = probs + epsilon
+
             if np.all(data_idxs<=capacity):
                 break
         

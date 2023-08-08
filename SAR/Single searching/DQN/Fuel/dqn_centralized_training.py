@@ -41,7 +41,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         # initialize agents
         model_name = str(i_exp) + "_" + env_size
         if agent_type == "DQN":
-            agent = DQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+            agent = DRQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
                             n_actions, starting_beta, input_dims, lidar,
                             c_dims, k_size, s_size, fc_dims,
                             mem_size, batch_size, replace, prioritized,

@@ -80,9 +80,8 @@ from collections import namedtuple
 #         first = False
 
 
-list = [0,0,0,1,5,6]
-dicts = {}
-dicts["hi"] = list
+l = [[1,2,3],[4,5,6],[7,8,9]]
 
-for i in dicts["hi"]:
-    print(i)
+l.append([1])
+
+print(l)

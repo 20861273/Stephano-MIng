@@ -5,24 +5,42 @@ import random
 # last at sample buffer
 
 class ReplayBuffer(object):
-    def __init__(self, lidar, max_size, input_shape, n_actions):
-        self.lidar = lidar # TODO
+    def __init__(self, guide, max_size, input_shape, n_actions):
+        self.guide = guide
         self.mem_size = max_size
+        self.stack_size = 4
+        self.non_image_size = 5
         self.mem_cntr = 0 # mem_cntr of the last stored memory
+        self.image_observations = np.zeros((input_shape),
+                                     dtype=np.float32)
+        self.image_observations_ = np.zeros((input_shape),
+                                     dtype=np.float32)
+        self.non_image_observations = np.zeros((self.non_image_size),
+                                     dtype=np.float32)
+        self.non_image_observations_ = np.zeros((self.non_image_size),
+                                     dtype=np.float32)
         self.state_memory = np.zeros((self.mem_size, *input_shape),
                                      dtype=np.float32)
         self.new_state_memory = np.zeros((self.mem_size, *input_shape),
                                          dtype=np.float32)
+        if self.guide:
+            self.other_state_memory = np.zeros((self.mem_size, self.non_image_size),
+                                        dtype=np.float32)
+            self.new_other_state_memory = np.zeros((self.mem_size, self.non_image_size),
+                                            dtype=np.float32)
 
         self.action_memory = np.zeros(self.mem_size, dtype=np.int64)
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
 
-    def store_transition(self, state, action, reward, state_, done):
+    def store_transition(self, state, action, reward, state_, done, other_state, other_state_):
         index = self.mem_cntr % self.mem_size
 
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
+        if self.guide:
+            self.other_state_memory[index] = other_state
+            self.new_other_state_memory[index] = other_state_
         self.action_memory[index] = action
         self.reward_memory[index] = reward
         self.terminal_memory[index] = done
@@ -36,9 +54,38 @@ class ReplayBuffer(object):
         actions = self.action_memory[batch]
         rewards = self.reward_memory[batch]
         states_ = self.new_state_memory[batch]
-        terminal = self.terminal_memory[batch]
+        terminals = self.terminal_memory[batch]
 
-        return states, actions, rewards, states_, terminal
+        if self.guide:
+            other_states = self.other_state_memory[batch]
+            other_states_ = self.new_other_state_memory[batch]
+
+            return states, other_states, actions, rewards, states_, other_states_, terminals
+
+        return states, actions, rewards, states_, terminals
+    
+    def preprocess_observation(self, step, image_observation):
+        if not np.all(self.state_memory):
+            if step == 0:
+                for i in range(self.stack_size): # number of stacked images
+                    self.image_observations[i] = image_observation[0][0]
+            else:
+                self.image_observations = self.image_observations[1:]
+                self.image_observations = np.concatenate((self.image_observations, [image_observation[0][0]]))
+
+        return self.image_observations
+    
+    def preprocess_observation_(self, step, image_observation_):
+        if not np.all(self.state_memory):
+            if step == 0:
+                for i in range(self.stack_size): # number of stacked images
+                    self.image_observations_[i] = image_observation_[0][0]
+            else:
+                self.image_observations_ = self.image_observations_[1:]
+                self.image_observations_ = np.concatenate((self.image_observations_, [image_observation_[0][0]]))
+
+        return self.image_observations_
+
 
 class PrioritizedReplayMemory(object):
     def __init__(self, lidar, obs_shape, capacity, alpha):

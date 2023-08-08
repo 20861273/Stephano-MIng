@@ -15,34 +15,35 @@ if __name__ == '__main__':
     testing_parameters = {
                         "training": False,
                         "load checkpoint": False,
-                        "show rewards interval": 1000,
-                        "show plot": True,
+                        "show rewards interval": 100,
+                        "show plot": False,
                         "save plot": True,
-                        "policy number": [0],
-                        "testing iterations": 1000
+                        "policy number": [2],
+                        "test type": "grid", # test types: grid and iterative
+                        "testing iterations": 300
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
-    # agent types: DQN, DDQN
+    # agent types: DQN, DDQN, DRQN
     hp = {
                     "number of drones": 1,
                     "training type": "centralized",
-                    "agent type": "DDQN",
+                    "agent type": "DQN",
                     "learning rate": [0.0001],
-                    "discount rate": [0.65,0.7,0.75,0.8,0.85],
-                    "epsilon": [[0.01,0.01,0.01]],
+                    "discount rate": [0.7,0.8,0.9],
+                    "epsilon": [[1,0.01,0.0001]],
 
                     "training sessions": 1,
                     "episodes": 10000,
-                    "positive rewards": [1],
+                    "positive rewards": [10],
                     "positive exploration rewards": [0.1],
-                    "negative rewards": [1],
+                    "negative rewards": [10],
                     "negative step rewards": [0.01],
                     "max steps": [200],
 
                     "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
-                    "obstacles": True,
+                    "obstacles": False,
                     "obstacle density": 0.6,
                     "encoding": "full_image",
                     "input dims": (2,HEIGHT, WIDTH),
@@ -56,7 +57,7 @@ if __name__ == '__main__':
                     "stride": [2, 1, 1],
                     "fc dims": [128],
 
-                    "prioritized": True,
+                    "prioritized": False,
                     "starting beta": 0.5,
 
                     "device": 0,
@@ -80,7 +81,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "25-07-2023 20h12m18s")
+    load_checkpoint_path = os.path.join(PATH, "31-07-2023 21h09m56s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -156,5 +157,5 @@ if __name__ == '__main__':
                                         i_exp += 1
     else:
         if hp["training type"] == "centralized":
-            test_centralized_dqn(testing_parameters["policy number"], load_path, save_path, models_path, testing_parameters["testing iterations"], testing_parameters["show plot"], testing_parameters["save plot"])
+            test_centralized_dqn(testing_parameters["policy number"], load_path, save_path, models_path, testing_parameters["testing iterations"], testing_parameters["show plot"], testing_parameters["save plot"], testing_parameters["test type"])
 

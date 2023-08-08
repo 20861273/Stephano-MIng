@@ -10,7 +10,7 @@ class DeepQNetwork(nn.Module):
     #              n_actions, input_dims, lidar, lstm, c_dims, k_size, s_size,
     #                 fc_dims, lstm_h, device_num, name, chkpt_dir):
     def __init__(self, encoding, nr, lr,
-                 n_actions, input_dims, lidar, c_dims, k_size, s_size,
+                 n_actions, input_dims, guide, lidar, c_dims, k_size, s_size,
                     fc_dims, device_num, name, chkpt_dir):
         super(DeepQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
@@ -23,6 +23,7 @@ class DeepQNetwork(nn.Module):
         self.input_dims = input_dims
 
         self.lidar = lidar
+        self.guide = guide
 
         # self.lstm = lstm
 
@@ -74,6 +75,8 @@ class DeepQNetwork(nn.Module):
         # dims = self.conv3(dims)
         if self.lidar:
             return int(np.prod(dims.size())) + 4*self.nr #+ 1 # image size + surrounding states + percentage explored
+        elif self.guide:
+            return int(np.prod(dims.size())) + 5*self.nr
         else:
             return int(np.prod(dims.size())) # image size
 
@@ -90,7 +93,7 @@ class DeepQNetwork(nn.Module):
             # conv_state = conv3.view(conv3.size()[0], -1)
             # conv_state shape is BS x (n_filters * H * W)
 
-            if self.lidar:
+            if self.lidar or self.guide:
                 # consentrate output of convolutional layers and non-image state
                 concatenated_state = T.cat((conv_state, non_image_state), dim=1)
 

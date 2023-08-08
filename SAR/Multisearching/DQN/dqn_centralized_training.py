@@ -3,6 +3,7 @@ from dqn_utils import plot_learning_curve, write_json, read_json
 from dqn_agent import DQNAgent
 from ddqn_agent import DDQNAgent
 from dqn_save_results import print_results
+# from replay_memory import ReplayBuffer
 import numpy as np
 import os
 import torch as T
@@ -14,7 +15,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
                     max_steps, i_exp,
-                    n_actions, starting_beta, input_dims, lidar,
+                    n_actions, starting_beta, input_dims, stacked, guide, lidar, fuel,
                     c_dims, k_size, s_size, fc_dims,
                     batch_size, mem_size, replace,
                     prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num):
@@ -32,16 +33,17 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         percentage = 0.0
 
         # initialize environment
-        env = Environment(nr, obstacles, obstacle_density, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, lidar, curriculum_learning, episodes)
+        env = Environment(nr, obstacles, obstacle_density, reward_system,
+                          positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
+                          training_type, encoding, guide, lidar, fuel, curriculum_learning, episodes)
         
         collisions_grid = np.zeros(env.grid.shape)
-        previous_avg_collisions = 0
 
         # initialize agents
         model_name = str(i_exp) + "_" + env_size
         if agent_type == "DQN":
             agent = DQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
-                            n_actions, starting_beta, input_dims, lidar,
+                            n_actions, starting_beta, input_dims, guide, lidar,
                             c_dims, k_size, s_size, fc_dims,
                             mem_size, batch_size, replace, prioritized,
                             algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
@@ -106,6 +108,17 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             # reset environment
             percentage = float(cntr)/float(print_interval)*100.0
             image_observation, non_image_observation = env.reset(i_episode, percentage)
+
+            if stacked:
+                # adds dimension for previous time steps
+                image_observations = np.expand_dims(image_observation, axis=1)
+                image_observations = np.repeat(image_observations, 4, axis=1)
+                image_observations = image_observations[:, :, 0, :]
+
+                image_observations_ = np.expand_dims(image_observation, axis=1)
+                image_observations_ = np.repeat(image_observations_, 4, axis=1)
+                image_observations_ = image_observations_[:, :, 0, :]
+
             # for debugging
             if show_plot:
                 plt.cla()
@@ -115,8 +128,13 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             for step in range(max_steps):
                 # action selection
                 for i_r in range(0,nr):
-                    if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting)
-                    else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, previous_action[i_r])
+                    if stacked:
+                        image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation)
+                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], allow_windowed_revisiting)
+                        else: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], allow_windowed_revisiting, previous_action[i_r])
+                    else:
+                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting)
+                        else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, previous_action[i_r])
                     previous_action = action.copy()
                 
                 # execute step
@@ -131,8 +149,14 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                 # store transitions and execute learn function
                 if not load_checkpoint:
                     for i_r in range(0,nr):
-                        agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
-                                            reward, image_observation_[i_r], non_image_observation_[i_r], done)
+                        if stacked:
+                            image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation)
+                            image_observations_[i_r] = agent.memory.preprocess_observation_(step, image_observation_)
+                            agent.store_transition(image_observations[i_r], non_image_observation[i_r], action[i_r],
+                                                reward, image_observations_[i_r], non_image_observation_[i_r], done)
+                        else:
+                            agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
+                                                reward, image_observation_[i_r], non_image_observation_[i_r], done)
                         loss = agent.learn()
                         if not loss == None: average_loss += float(loss)
 
@@ -193,7 +217,8 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
                         'average_steps= %.2f,' % avg_steps,
-                        'collisions= %.2f,' % (avg_collisions-previous_avg_collisions),
+                        # 'collisions= %.2f,' % (avg_collisions-previous_avg_collisions),
+                        'epsilon= %.2f' %(agent.epsilon), 
                         'loss=%f' % loss,
                         'success= %.4f' % (percentage))
                 cntr = 0

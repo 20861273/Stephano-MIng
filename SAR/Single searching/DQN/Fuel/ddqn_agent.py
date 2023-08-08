@@ -87,6 +87,8 @@ class DDQNAgent(object):
         else:
             actions = self.check_obstacles(env, i_r, [self.action_space])
             exclude = [i for i,e in enumerate(actions.tolist()[0]) if e == float("-inf")]
+            if len(exclude) == len(self.action_space):
+                print(env.grid)
             action = np.random.choice([i for i in range(len(self.action_space)) if i not in exclude])
         
         if not previous_action == None and not allow_windowed_revisiting:
@@ -383,12 +385,15 @@ class ReplayMemory:
             self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
     
-    def sample(self, replay_beta):
+    def sample(self, replay_beta, epsilon=0.001):
         capacity = self.capacity if self.transitions.full else self.transitions.index
         while True:
             p_total=self.transitions.total()
             samples = np.random.uniform(0, p_total, self.batch_size)
             probs, data_idxs, tree_idxs = self.transitions.find(samples)
+
+            probs = probs + epsilon
+
             if np.all(data_idxs<=capacity):
                 break
         

@@ -4,6 +4,9 @@ import numpy as np
 import random
 import math
 
+from astar_class import Astar
+from enclosed_space_checker import Enclosed_space_check
+
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
@@ -35,7 +38,8 @@ class Environment:
     
     def __init__(self, nr, obstacles, obstacle_density,\
                 reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
-                training_type, encoding, lidar, curriculum_learning, total_episodes):
+                training_type, encoding, guide, lidar, refuel, curriculum_learning, total_episodes):
+        
         self.nr = nr
 
         # Set robot(s) position
@@ -43,7 +47,12 @@ class Environment:
         self.prev_pos = [Point(0,0)]*self.nr
         self.starting_pos = [Point(0,0)]*self.nr
 
-        self.fuel = WIDTH*HEIGHT/2
+        self.refuel = refuel
+
+        if self.refuel: self.starting_fuel = (WIDTH-2)*2+(HEIGHT-2)*2-4
+        else: self.starting_fuel = 200
+        self.fuel = self.starting_fuel
+        self.guide = guide
 
         self.curriculum_learning = curriculum_learning
         self.total_episodes = total_episodes
@@ -52,9 +61,14 @@ class Environment:
         # Generates grid (Grid[y,x])
         self.obstacles = obstacles
         self.obstacle_density = obstacle_density
+        
         if self.obstacles:
             self.grid = self.generate_maze(HEIGHT, WIDTH)
             self.draw_edges()
+            # self.set_obstacles()
+            
+            ES = Enclosed_space_check(HEIGHT, WIDTH, self.grid, States)
+            self.grid = ES.enclosed_space_handler()
         else:
             self.generate_grid()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
@@ -62,6 +76,12 @@ class Environment:
 
         # Set robot(s) position
         self.pos = self.starting_pos
+
+        for i in range(self.nr):
+            self.exploration_grid[self.pos[i].y, self.pos[i].x] = True
+        explored = np.argwhere(self.grid == States.OBS.value)
+        for cell in explored:
+            self.exploration_grid[cell[0], cell[1]] = True
 
         self.reward_system = reward_system
         self.positive_reward = positive_reward
@@ -78,6 +98,7 @@ class Environment:
         self.training_type = training_type
         self.encoding = encoding
         self.lidar = lidar
+        self.astar = Astar(HEIGHT, WIDTH, self.grid, States)
 
         # print("\nGrid size: ", self.grid.shape)
 
@@ -136,6 +157,11 @@ class Environment:
         # Clear all visited blocks
         if self.obstacles:
             self.grid = self.generate_maze(HEIGHT, WIDTH)
+            self.draw_edges()
+            # self.set_obstacles()
+            
+            ES = Enclosed_space_check(HEIGHT, WIDTH, self.grid, States)
+            self.grid = ES.enclosed_space_handler()
         else:
             self.grid.fill(0)
         # self.grid = self.generate_map()
@@ -150,7 +176,7 @@ class Environment:
         for cell in explored:
             self.exploration_grid[cell[0], cell[1]] = True
 
-        self.fuel = WIDTH*HEIGHT/2
+        self.fuel = self.starting_fuel
 
         # Static goal location spawning
         # self.goal = Point(0,0)
@@ -202,9 +228,14 @@ class Environment:
         self.pos = self.starting_pos.copy()
         self.prev_pos = self.starting_pos.copy()
 
+        for i in range(self.nr):
+            self.exploration_grid[self.pos[i].y, self.pos[i].x] = True
+
         self.direction = [(Direction.RIGHT).value for i in range(self.nr)]
                 
         self.score = 0
+
+        self.astar = Astar(HEIGHT, WIDTH, self.grid, States)
         
         image_state, non_image_state = self.get_state()
 
@@ -226,6 +257,9 @@ class Environment:
 
         self.score += self.calc_reward_centralized()
         self.score -= self.negative_step_reward
+
+        if np.array([True for i in range(0, self.nr) if self.pos[i] == self.starting_pos[i]]).any() == True:
+            self.fuel = self.starting_fuel
 
         # 5. Check exit condition
         if self.collision_state:
@@ -266,7 +300,8 @@ class Environment:
                 reward = self.score
                 game_over = True
                 return image_state, non_image_state, reward, game_over, (1, self.collision)
-
+        
+        self.fuel -= 1
         # 6. return game over and score
         reward = self.score
         return image_state, non_image_state, reward, game_over, (0, self.collision)
@@ -335,8 +370,8 @@ class Environment:
             if self.exploration_grid[self.pos[i].y, self.pos[i].x] == False:
                 temp_arr[i] = True
             if temp_arr[i] == True:
-                # score += self.positive_exploration_reward
-                score += np.count_nonzero(self.exploration_grid) / self.exploration_grid.size
+                score += self.positive_exploration_reward
+                # score += np.count_nonzero(self.exploration_grid) / self.exploration_grid.size
 
         return score
     
@@ -347,12 +382,120 @@ class Environment:
             if self.exploration_grid[self.pos[i].y, self.pos[i].x] == False:
                 temp_arr[i] = True
             if temp_arr[i] == True:
-                # score[i] += self.positive_exploration_reward
-                score[i] += np.count_nonzero(self.exploration_grid) / self.exploration_grid.size
+                score[i] += self.positive_exploration_reward
+                # score[i] += np.count_nonzero(self.exploration_grid) / self.exploration_grid.size
         return score
+    
+    def get_distance(self, end, start):
+        return abs(start.x - end.x) + abs(start.y - end.y)
+    
+    def get_direction(self, goal):
+        if goal.x == self.pos[0].x+1:
+            # direction = Direction.RIGHT.value
+            direction = [1,0,0,0]
+        elif goal.x == self.pos[0].x-1:
+            # direction = Direction.LEFT.value
+            direction = [0,1,0,0]
+        elif goal.y == self.pos[0].y+1:
+            # direction = Direction.DOWN.value
+            direction = [0,0,1,0]
+        elif goal.y == self.pos[0].y-1:
+            # direction = Direction.UP.value
+            direction = [0,0,0,1]
 
-    def get_state(self):
+        return direction
+    
+    def get_closest_unexplored(self, action):
+        distances = {}
+        temp_exploration_grid = self.exploration_grid.copy()
+        temp_exploration_grid[self.pos[0].y, self.pos[0].x] = True
+
+        
+        # if not action == None:
+        #     direction = self.direction.copy()
+        #     # Get directions
+        #     for i in range(0, self.nr):
+        #         if action[i] == (Direction.LEFT).value:
+        #             direction[i] = action[i]
+        #         elif action[i] == (Direction.RIGHT).value:
+        #             direction[i] = action[i]
+        #         elif action[i] == (Direction.UP).value:
+        #             direction[i] = action[i]
+        #         elif action[i] == (Direction.DOWN).value:
+        #             direction[i] = action[i]
+
+        #     # Set temp x and y variables
+        #     x = [None]*self.nr
+        #     y = [None]*self.nr
+
+        #     # Calculate new location
+        #     for i in range(0, self.nr):
+        #         x[i] = self.pos[i].x
+        #         y[i] = self.pos[i].y
+        #         if self.direction[i] == (Direction.RIGHT).value:
+        #             x[i] += 1
+        #         elif self.direction[i] == (Direction.LEFT).value:
+        #             x[i] -= 1
+        #         elif self.direction[i] == (Direction.DOWN).value:
+        #             y[i] -= 1
+        #         elif self.direction[i] == (Direction.UP).value:
+        #             y[i] += 1
+
+        #     # if block in direction of same direction is unexplored return that block
+        #     if self.grid[y[0],x[0]] == States.UNEXP.value:
+        #         return Point(x[0],y[0])
+        
+        # gets the distance to all unvisited blocks
+        for y in range(self.grid.shape[0]):
+            for x in range(self.grid.shape[1]):
+                if self.grid[y,x] == States.UNEXP.value:
+                    distance = self.get_distance(Point(x,y), self.pos[0])
+
+                    if distance <= self.fuel:
+                        distances[Point(x,y)] = distance
+        
+        # checks if cell reachable
+        if not distances:
+            return None
+        else:
+            return min(distances, key=distances.get) # returns position
+            # return distances[min(distances, key=distances.get)] #returns distance
+
+    def get_state(self, action=None):
         non_image_state = [None]*self.nr
+        if self.guide:
+            if self.fuel == self.get_distance(self.pos[0], self.starting_pos[0]) and self.pos[0]!= self.starting_pos[0]:
+                closest_unexplored = self.starting_pos[0]
+            else: closest_unexplored = self.get_closest_unexplored(action)
+
+            if closest_unexplored == None:
+                if self.refuel:
+                    # non_image_state = [[self.fuel, 0]]
+                    # non_image_state = [[self.fuel, 0, 4]]
+                    non_image_state = [[self.fuel, 0, 0,0,0,0]]
+                else:
+                    # non_image_state = [[0]]
+                    # non_image_state = [[0, 4]]
+                    non_image_state = [[0, 0,0,0,0]]
+            else:
+                path = self.astar.a_star(self.pos[0], closest_unexplored)
+                if len(path) == 1:
+                    breakpoint
+                del path[0]
+
+                if self.refuel:
+                    # non_image_state = [self.fuel, len(path)]
+                    # non_image_state = [[self.fuel, len(path), self.get_direction(path[0])]]
+                    if len(path) == 0:
+                        breakpoint
+                    non_image_state = [[self.fuel, len(path)] + self.get_direction(path[0])]
+                    # non_image_state = [self.fuel, closest_unexplored]
+                else:
+                    # non_image_state = [len(path)]
+                    # non_image_state = [[len(path), self.get_direction(path[0])]]
+                    non_image_state = [[len(path)] + self.get_direction(path[0])]
+                    # non_image_state = [closest_unexplored]
+
         # Position state: flattened array of environment where position is equal to 1
         if self.encoding == "position" or self.encoding == "position_exploration" or self.encoding == "position_occupancy":
             if self.lidar:
@@ -464,6 +607,7 @@ class Environment:
                     obstacles = np.argwhere(self.grid == States.OBS.value)
                     for y,x in obstacles:
                         location_map[r_i][y, x] = 0.01
+                    if self.refuel: location_map[r_i][self.starting_pos[r_i].y, self.starting_pos[r_i].x] = 0.7
 
 
             # Generates location map. Position cell is equal to 1
@@ -503,6 +647,7 @@ class Environment:
                 image_map[r_i][0] = location_map[r_i]
 
             image_state = np.copy(image_map)
+            # image_state = np.kron(image_state, np.ones((2, 2)))
 
             return image_state, non_image_state
 
@@ -631,7 +776,6 @@ class Environment:
                 self.prev_pos[i] = self.pos[i]
                 self.pos[i] = Point(x[i],y[i])
                 self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
-                breakpoint
 
     def _move_decentralized(self, action):
         # Get directions
@@ -1114,8 +1258,21 @@ class Environment:
         grid = self.remove_edges(grid)
         possible_indexes = np.argwhere(np.array(grid) == States.OBS.value)
         np.random.shuffle(possible_indexes)
-        indices = possible_indexes[0:int(len(possible_indexes)*self.obstacle_density)]
+        indices = possible_indexes[0:int(len(possible_indexes)*(1-self.obstacle_density))]
         for index in indices:
             grid[index[0]][index[1]] = States.UNEXP.value
 
         return np.array(grid)
+    
+    def set_obstacles(self):
+        # Calculate the number of elements to be filled with 1's
+        total_elements = (HEIGHT - 2) * (WIDTH - 2)
+        num_ones_to_place = int(self.obstacle_density * total_elements)
+
+        # Generate random indices to place 1's
+        possible_indexes = np.argwhere(np.array(self.grid) == States.UNEXP.value)
+        np.random.shuffle(possible_indexes)
+        indexes = possible_indexes[:num_ones_to_place]
+
+        # Set the elements at the random indices to 1
+        self.grid[indexes[:, 0], indexes[:, 1]] = States.OBS.value

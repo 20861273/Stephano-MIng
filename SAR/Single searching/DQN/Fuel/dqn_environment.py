@@ -7,8 +7,8 @@ import math
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 10
+WIDTH = 10
 
 # DENSITY = 30 # percentage
 
@@ -43,8 +43,8 @@ class Environment:
         self.prev_pos = [Point(0,0)]*self.nr
         self.starting_pos = [Point(0,0)]*self.nr
 
-        # self.starting_fuel = WIDTH*HEIGHT/2
-        self.starting_fuel = 20
+        # self.starting_fuel = (WIDTH-2)*2+(HEIGHT-2)*2-4
+        self.starting_fuel = WIDTH*HEIGHT + int(WIDTH*HEIGHT*0.2)
         self.fuel = self.starting_fuel
 
         self.curriculum_learning = curriculum_learning
@@ -219,7 +219,6 @@ class Environment:
 
     def step_centralized(self, actions):
         self.score = 0
-        self.fuel -= 1
 
         # 2. Do action
         self._move_centralized(actions) # update the robot
@@ -289,7 +288,7 @@ class Environment:
         #         self.fuel = self.starting_fuel
         #         game_over = True
         #         return image_state, non_image_state, reward, game_over, (1, self.collision)
-
+        self.fuel -= 1
         # 6. return game over and score
         reward = self.score
         return image_state, non_image_state, reward, game_over, (0, self.collision)

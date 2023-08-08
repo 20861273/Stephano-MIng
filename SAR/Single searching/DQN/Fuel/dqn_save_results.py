@@ -279,7 +279,7 @@ class print_results:
             plt.close()
 
     
-    def print_graph(self, success, policy, path, actions, starting_pos, dir_path, cntr, env):
+    def print_graph(self, success, policy, path, actions, starting_pos, obstacles, dir_path, cntr, env):
         """
         Prints the grid environment
         """
@@ -308,7 +308,7 @@ class print_results:
         for i in range(env.grid.shape[0]): # y
             for j in range(env.grid.shape[1]): # x
                 ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="white", alpha=0.5)
-                if env.grid[i][j] == 1: ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="k", alpha=0.5)
+                if obstacles[i,j] == True: ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="k", alpha=0.5)
                 elif Point(j,i) == starting_pos:
                     ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5],\
                             [i + 0.5, i + 0.5, i + 1.5, i + 1.5], \

@@ -18,11 +18,12 @@ if __name__ == '__main__':
     testing_parameters = {
                         "training": False,
                         "load checkpoint": False,
-                        "show rewards interval": 1000,
-                        "show plot": True,
+                        "show rewards interval": 100,
+                        "show plot": False,
                         "save plot": False,
-                        "policy number": [2],
-                        "testing iterations": 1000
+                        "policy number": [0,1,2],
+                        "test type": "grid", # test types: grid and iterative
+                        "testing iterations": 200
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
@@ -33,31 +34,34 @@ if __name__ == '__main__':
                     "agent type": "DQN",
                     "learning rate": [0.0001],
                     "discount rate": [0.7,0.8,0.9],
-                    "epsilon": [[0.01,0.01,0.01]],
+                    "epsilon": [[0.1,0.1,0.1]],
 
                     "training sessions": 1,
                     "episodes": 10000,
                     "positive rewards": [1],
-                    "positive exploration rewards": [0],
+                    "positive exploration rewards": [0.1],
                     "negative rewards": [1],
                     "negative step rewards": [0.01],
-                    "max steps": [36],
+                    "max steps": [200],
 
                     "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
                     "obstacles": False,
                     "obstacle density": 0.7,
                     "encoding": "full_image",
+                    "stacked frames": False,
                     "input dims": (2,HEIGHT, WIDTH),
-                    "lidar": True,
+                    "lidar": False,
+                    "guide": True,
+                    "fuel": True,
 
                     "batch size": 64,
                     "mem size": 100000,
-                    "replace": 100,
-                    "channels": [16, 32],
+                    "replace": 1000,
+                    "channels": [32, 64],
                     "kernel": [2, 2],
                     "stride": [1, 1],
-                    "fc dims": [32,64,32],
+                    "fc dims": [128],
 
                     "prioritized": True,
                     "starting beta": 0.5,
@@ -122,7 +126,8 @@ if __name__ == '__main__':
     elif hp["encoding"] == "image" or hp["encoding"] == "image_occupancy":
         hp["input dims"] = (2,HEIGHT, WIDTH)
     elif hp["encoding"] == "full_image":
-        hp["input dims"] = (1,HEIGHT, WIDTH)
+        if hp["stacked frames"]: hp["input dims"] = (4,HEIGHT, WIDTH)
+        else: hp["input dims"] = (1,HEIGHT, WIDTH)
 
     if hp["lidar"] and "image" not in hp["encoding"]:
         hp["input dims"][0] += 4
@@ -149,7 +154,7 @@ if __name__ == '__main__':
                                                             hp["curriculum learning"], hp["reward system"], hp["allow windowed revisiting"],
                                                             dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                             pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
-                                                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["lidar"],
+                                                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["stacked frames"], hp["guide"], hp["lidar"], hp["fuel"],
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"],
                                                             hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"])
@@ -174,5 +179,7 @@ if __name__ == '__main__':
                                         i_exp += 1
     else:
         if hp["training type"] == "centralized":
-            test_centralized_dqn(testing_parameters["policy number"], load_path, save_path, models_path, testing_parameters["testing iterations"], testing_parameters["show plot"], testing_parameters["save plot"])
+            test_centralized_dqn(testing_parameters["policy number"], load_path, save_path, models_path,
+                                 testing_parameters["testing iterations"], testing_parameters["show plot"],
+                                 testing_parameters["save plot"], testing_parameters["test type"])
 

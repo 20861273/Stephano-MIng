@@ -7,7 +7,7 @@ import torch as T
 from dqn_save_results import print_results
 import matplotlib.pyplot as plt
 
-def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_iterations, show_plot, save_plot):
+def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_iterations, show_plot, save_plot, test_type):
 
     for policy in policy_num:
         debug = True
@@ -46,7 +46,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         # model_name = hp["env size"]
         if hp["agent type"] == "DQN":
             agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
-                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["lidar"],
+                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["guide"], hp["lidar"],
                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                             hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
                             algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=load_models_path)
@@ -63,7 +63,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         agent.q_eval.eval()
         agent.q_next.eval()
                         #nr, reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, training_type, encoding, lidar, curriculum_learning, episodes)
-        env = Environment(hp["number of drones"], hp["obstacles"], hp["obstacle density"], hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], hp["lidar"], hp["curriculum learning"], 50000)
+        env = Environment(hp["number of drones"], hp["obstacles"], hp["obstacle density"], hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0], hp["positive exploration rewards"][0], hp["negative step rewards"][0], hp["training type"], hp["encoding"], hp["guide"], hp["lidar"], False, hp["curriculum learning"], 50000)
 
         PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
 
@@ -80,6 +80,16 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
                 print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
             image_observation, non_image_observation = env.reset(10000, 99)
 
+            if hp["stacked frames"]:
+                # adds dimension for previous time steps
+                image_observations = np.expand_dims(image_observation, axis=1)
+                image_observations = np.repeat(image_observations, 4, axis=1)
+                image_observations = image_observations[:, :, 0, :]
+
+                image_observations_ = np.expand_dims(image_observation, axis=1)
+                image_observations_ = np.repeat(image_observations_, 4, axis=1)
+                image_observations_ = image_observations_[:, :, 0, :]
+
             trajectory = []
 
             done = False
@@ -95,8 +105,14 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
                 actions = []
                 action = [0]*hp["number of drones"]
                 for i_r in range(0,hp["number of drones"]):
-                    if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"])
-                    else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], previous_action[i_r])
+                    if hp["stacked frames"]:
+                        image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation)
+                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], hp["allow windowed revisiting"])
+                        else: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], previous_action[i_r])
+                    else:
+                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"])
+                        else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], previous_action[i_r])
+                    
                     previous_action = action.copy()
                 actions.append(action)
                 trajectory.append((env.pos[i_r], action, i_r))

@@ -104,9 +104,9 @@ PATH = os.path.join(PATH, 'DQN')
 load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
-step = 10#len(scores[0][0])/10000
+step = 100#len(scores[0][0])/10000
 moving_step = 10
-policies = [0,1,2]
+policies = [0,1]
 
 
 rewards = []
@@ -121,7 +121,7 @@ num_policies =     len(hp["learning rate"]) \
                         * len(hp["positive exploration rewards"]) \
                         * len(hp["negative step rewards"]) \
                         * len(hp["max steps"])
-for policy in range(num_policies):
+for policy in range(len(policies)): #num_policies
     file_name = "ts_rewards%s.json" %(str(policy))
     rewards.append(read_json(load_path, file_name))
 
