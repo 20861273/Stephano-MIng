@@ -73,10 +73,12 @@ class DeepQNetwork(nn.Module):
         dims = self.conv1(state)
         dims = self.conv2(dims)
         # dims = self.conv3(dims)
-        if self.lidar:
+        if self.lidar and not self.guide:
             return int(np.prod(dims.size())) + 4*self.nr #+ 1 # image size + surrounding states + percentage explored
-        elif self.guide:
-            return int(np.prod(dims.size())) + 5*self.nr
+        elif self.guide and not self.lidar:
+            return int(np.prod(dims.size())) + 1
+        elif self.lidar and self.guide:
+            return int(np.prod(dims.size())) + 6
         else:
             return int(np.prod(dims.size())) # image size
 

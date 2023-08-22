@@ -16,21 +16,21 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-                        "training": False,
+                        "training": True,
                         "load checkpoint": False,
                         "show rewards interval": 100,
                         "show plot": False,
                         "save plot": False,
-                        "policy number": [0,1,2],
+                        "policy number": [2],
                         "test type": "grid", # test types: grid and iterative
-                        "testing iterations": 200
+                        "testing iterations": 1000
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
     # agent types: DQN, DDQN
     hp = {
-                    "number of drones": 1,
-                    "training type": "centralized",
+                    "number of drones": 5,
+                    "training type": "centralized", # centralized (turn based), centralized actions
                     "agent type": "DQN",
                     "learning rate": [0.0001],
                     "discount rate": [0.7,0.8,0.9],
@@ -41,29 +41,29 @@ if __name__ == '__main__':
                     "positive rewards": [1],
                     "positive exploration rewards": [0.1],
                     "negative rewards": [1],
-                    "negative step rewards": [0.01],
+                    "negative step rewards": [0.05],
                     "max steps": [200],
 
-                    "n actions": 4,
+                    "n actions": 5,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
                     "obstacles": False,
-                    "obstacle density": 0.7,
-                    "encoding": "full_image",
+                    "obstacle density": 0.3,
+                    "encoding": "image_occupancy",
                     "stacked frames": False,
                     "input dims": (2,HEIGHT, WIDTH),
                     "lidar": False,
                     "guide": True,
-                    "fuel": True,
+                    "fuel": False,
 
                     "batch size": 64,
                     "mem size": 100000,
                     "replace": 1000,
                     "channels": [32, 64],
-                    "kernel": [2, 2],
+                    "kernel": [1, 1],
                     "stride": [1, 1],
                     "fc dims": [128],
 
-                    "prioritized": True,
+                    "prioritized": False,
                     "starting beta": 0.5,
 
                     "device": 0,
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "10-07-2023 01h21m48s")
+    load_checkpoint_path = os.path.join(PATH, "17-08-2023 16h10m31s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -124,7 +124,12 @@ if __name__ == '__main__':
     elif hp["encoding"] == "position_exploration" or hp["encoding"] == "position_occupancy":
         hp["input dims"] = [HEIGHT*WIDTH*2]
     elif hp["encoding"] == "image" or hp["encoding"] == "image_occupancy":
-        hp["input dims"] = (2,HEIGHT, WIDTH)
+        if hp["stacked frames"]:
+            hp["input dims"] = (4,3,HEIGHT, WIDTH)
+            if hp["number of drones"] > 1: hp["input dims"] = (4,4,HEIGHT, WIDTH)
+        else:
+            hp["input dims"] = (3,HEIGHT, WIDTH)
+            if hp["number of drones"] > 1: hp["input dims"] = (4,HEIGHT, WIDTH)
     elif hp["encoding"] == "full_image":
         if hp["stacked frames"]: hp["input dims"] = (4,HEIGHT, WIDTH)
         else: hp["input dims"] = (1,HEIGHT, WIDTH)
@@ -158,7 +163,7 @@ if __name__ == '__main__':
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"],
                                                             hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"])
-                                            elif hp["training type"] == "decentralized":
+                                            elif hp["training type"] == "centralized actions":
                                                 load_checkpoint = distributed_dqn(
                                                             hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],
                                                             dr_i, lr_i, er_i[0], er_i[1], er_i[2],

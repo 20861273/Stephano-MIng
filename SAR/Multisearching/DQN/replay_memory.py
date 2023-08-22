@@ -9,15 +9,15 @@ class ReplayBuffer(object):
         self.guide = guide
         self.mem_size = max_size
         self.stack_size = 4
-        self.non_image_size = 5
+        self.non_image_size = 1
         self.mem_cntr = 0 # mem_cntr of the last stored memory
         self.image_observations = np.zeros((input_shape),
                                      dtype=np.float32)
         self.image_observations_ = np.zeros((input_shape),
                                      dtype=np.float32)
-        self.non_image_observations = np.zeros((self.non_image_size),
+        self.non_image_observations = np.zeros((self.stack_size, self.non_image_size),
                                      dtype=np.float32)
-        self.non_image_observations_ = np.zeros((self.non_image_size),
+        self.non_image_observations_ = np.zeros((self.stack_size, self.non_image_size),
                                      dtype=np.float32)
         self.state_memory = np.zeros((self.mem_size, *input_shape),
                                      dtype=np.float32)
@@ -64,27 +64,49 @@ class ReplayBuffer(object):
 
         return states, actions, rewards, states_, terminals
     
-    def preprocess_observation(self, step, image_observation):
+    def preprocess_observation(self, step, image_observation, r_i):
         if not np.all(self.state_memory):
             if step == 0:
                 for i in range(self.stack_size): # number of stacked images
-                    self.image_observations[i] = image_observation[0][0]
+                    self.image_observations[i] = image_observation[r_i][0]
             else:
                 self.image_observations = self.image_observations[1:]
-                self.image_observations = np.concatenate((self.image_observations, [image_observation[0][0]]))
+                self.image_observations = np.concatenate((self.image_observations, [image_observation[r_i][0]]))
 
         return self.image_observations
     
-    def preprocess_observation_(self, step, image_observation_):
+    def preprocess_observation_(self, step, image_observation_, r_i):
         if not np.all(self.state_memory):
             if step == 0:
                 for i in range(self.stack_size): # number of stacked images
-                    self.image_observations_[i] = image_observation_[0][0]
+                    self.image_observations_[i] = image_observation_[r_i][0]
             else:
                 self.image_observations_ = self.image_observations_[1:]
-                self.image_observations_ = np.concatenate((self.image_observations_, [image_observation_[0][0]]))
+                self.image_observations_ = np.concatenate((self.image_observations_, [image_observation_[r_i][0]]))
 
         return self.image_observations_
+    
+    def preprocess_observation_n(self, step, non_image_observation, r_i):
+        if not np.all(self.state_memory):
+            if step == 0:
+                for i in range(self.stack_size): # number of stacked images
+                    self.non_image_observations[i] = non_image_observation[r_i][0]
+            else:
+                self.non_image_observations = self.image_observations[1:]
+                self.non_image_observations = np.concatenate((self.non_image_observations, [non_image_observation[r_i][0]]))
+
+        return self.non_image_observations
+    
+    def preprocess_observation_n_(self, step, non_image_observation_, r_i):
+        if not np.all(self.state_memory):
+            if step == 0:
+                for i in range(self.stack_size): # number of stacked images
+                    self.non_image_observations_[i] = non_image_observation_[r_i][0]
+            else:
+                self.non_image_observations_ = self.non_image_observations_[1:]
+                self.non_image_observations_ = np.concatenate((self.non_image_observations_, [non_image_observation_[r_i][0]]))
+
+        return self.non_image_observations_
 
 
 class PrioritizedReplayMemory(object):

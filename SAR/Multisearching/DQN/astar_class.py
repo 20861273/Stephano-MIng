@@ -11,6 +11,10 @@ class GridWithWeights(object):
         self.height = height
         self.States = States
 
+    def in_bounds(self, id):
+        (x, y) = id
+        return 0 <= x < self.width and 0 <= y < self.height
+
     def is_unoccupied(self, id):
         (x, y) = id
         return self.grid[y,x] != self.States.OBS.value
@@ -21,6 +25,7 @@ class GridWithWeights(object):
         results = [Point(x+1, y), Point(x, y-1), Point(x-1, y), Point(x, y+1)]
         # This is done to prioritise straight paths
         #if (x + y) % 2 == 0: results.reverse()
+        results = list(filter(self.in_bounds, results))
         results = list(filter(self.is_unoccupied, results))
         return results
 

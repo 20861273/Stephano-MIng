@@ -213,7 +213,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
 
             
                 for i in range(0, testing_iterations):
-                
+
                     if i % 100 == 0 and i != 0:
                         print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
                     image_observation, non_image_observation = env.reset(10000, 99)
@@ -230,7 +230,7 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
                     done = False
 
                     starting_positions.append(env.starting_pos[0])
-                
+
                     for step in range(int(hp["max steps"][0])):
                         for i_r in range(0,hp["number of drones"]):
                             path.append(env.pos[i_r])

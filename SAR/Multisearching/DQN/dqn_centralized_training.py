@@ -31,11 +31,12 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         rewards, steps, episode_loss = [], [], []
         cntr, timeout_cntr = 0, 0
         percentage = 0.0
+        previous_avg_collisions = 0
 
         # initialize environment
         env = Environment(nr, obstacles, obstacle_density, reward_system,
                           positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
-                          training_type, encoding, guide, lidar, fuel, curriculum_learning, episodes)
+                          training_type, encoding, guide, lidar, fuel, curriculum_learning, episodes, i_exp, i_ts, save_path)
         
         collisions_grid = np.zeros(env.grid.shape)
 
@@ -46,13 +47,13 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                             n_actions, starting_beta, input_dims, guide, lidar,
                             c_dims, k_size, s_size, fc_dims,
                             mem_size, batch_size, replace, prioritized,
-                            algo='DQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+                            algo='DQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
         elif agent_type == "DDQN":
             agent = DDQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
                             n_actions, starting_beta, input_dims, lidar,
                             c_dims, k_size, s_size, fc_dims,
                             mem_size, batch_size, replace, prioritized,
-                            algo='DDQNAgent_distributed', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+                            algo='DDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
         
         # for debugging
         fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
@@ -61,18 +62,26 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         # load agent experiences and rewards
         if load_checkpoint:
             if int(os.listdir(models_path)[-1][0]) == i_exp:
-                checkpoint = agent.load_models() 
+                checkpoint = agent.load_models()
+            else:
+                checkpoint = {  'session': 1,
+                                'epoch': 0,
+                                'episode': 0}
 
             if i_ts < checkpoint['epoch']:
                 continue           
 
-            file_name = "ts_rewards%s.json" %(str(checkpoint['session']))
-            file_name = os.path.join(load_checkpoint_path, file_name)
-            ts_rewards = read_json(file_name)
+            if checkpoint['epoch'] == 0 and checkpoint['episode'] == 0:
+                ts_rewards = []
+                rewards = []
+            else:
+                file_name = "ts_rewards%s.json" %(str(checkpoint['session']))
+                file_name = os.path.join(load_checkpoint_path, file_name)
+                ts_rewards = read_json(file_name)
 
-            file_name = "rewards%s.json" %(str(checkpoint['session']))
-            file_name = os.path.join(load_checkpoint_path, file_name)
-            rewards = read_json(file_name)
+                file_name = "rewards%s.json" %(str(checkpoint['session']))
+                file_name = os.path.join(load_checkpoint_path, file_name)
+                rewards = read_json(file_name)
 
         print("Experience: %s, Epoch: %s,\n\
             Discount rate: %s, Learning rate: %s, Epsilon: %s\n\
@@ -113,11 +122,19 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                 # adds dimension for previous time steps
                 image_observations = np.expand_dims(image_observation, axis=1)
                 image_observations = np.repeat(image_observations, 4, axis=1)
-                image_observations = image_observations[:, :, 0, :]
+                # image_observations = image_observations[:, :, 0, :]
 
                 image_observations_ = np.expand_dims(image_observation, axis=1)
                 image_observations_ = np.repeat(image_observations_, 4, axis=1)
-                image_observations_ = image_observations_[:, :, 0, :]
+                # image_observations_ = image_observations_[:, :, 0, :]
+
+                non_image_observations = np.expand_dims(non_image_observation, axis=1)
+                non_image_observations = np.repeat(non_image_observations, 4, axis=1)
+                # non_image_observations = non_image_observations[:, :, 0, :]
+
+                non_image_observations_ = np.expand_dims(non_image_observation, axis=1)
+                non_image_observations_ = np.repeat(non_image_observations_, 4, axis=1)
+                # non_image_observations_ = non_image_observations_[:, :, 0, :]
 
             # for debugging
             if show_plot:
@@ -126,15 +143,20 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             
             # episode loop
             for step in range(max_steps):
+                # print("\n\n")
                 # action selection
+                action = [None]*nr
                 for i_r in range(0,nr):
                     if stacked:
-                        image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation)
-                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], allow_windowed_revisiting)
-                        else: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], allow_windowed_revisiting, previous_action[i_r])
+                        image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation, i_r)
+                        non_image_observations[i_r] = agent.memory.preprocess_observation_n(step, non_image_observation, i_r)
+                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observations[i_r], allow_windowed_revisiting, stacked)
+                        else: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observations[i_r], allow_windowed_revisiting, stacked, previous_action[i_r])
                     else:
-                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting)
-                        else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, previous_action[i_r])
+                        if step == 0:
+                            action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, stacked, action)
+                        else:
+                            action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, stacked, action, previous_action[i_r])
                     previous_action = action.copy()
                 
                 # execute step
@@ -150,11 +172,14 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                 if not load_checkpoint:
                     for i_r in range(0,nr):
                         if stacked:
-                            image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation)
-                            image_observations_[i_r] = agent.memory.preprocess_observation_(step, image_observation_)
+                            image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation, i_r)
+                            image_observations_[i_r] = agent.memory.preprocess_observation_(step, image_observation_, i_r)
+                            non_image_observations[i_r] = agent.memory.preprocess_observation_n(step, non_image_observation, i_r)
+                            non_image_observations_[i_r] = agent.memory.preprocess_observation_n_(step, non_image_observation_, i_r)
                             agent.store_transition(image_observations[i_r], non_image_observation[i_r], action[i_r],
                                                 reward, image_observations_[i_r], non_image_observation_[i_r], done)
                         else:
+
                             agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
                                                 reward, image_observation_[i_r], non_image_observation_[i_r], done)
                         loss = agent.learn()
@@ -162,6 +187,11 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
 
                 image_observation = image_observation_
                 non_image_observation = non_image_observation_
+
+                # for debugging
+                if show_plot:
+                    plt.cla()
+                    PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info[0])
 
                 collision_state = any(any(collision_tpye) for collision_tpye in info[1].values())
                 if collision_state: # collisions counter
@@ -171,11 +201,6 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                                 collisions_grid[env.pos[i_r].y, env.pos[i_r].x] += 1
                 elif info[0] == 0 and step == max_steps-1: # timeout counter
                     timeout_cntr += 1
-
-                # for debugging
-                if show_plot:
-                    plt.cla()
-                    PR.print_trajectories(ax, save_path, i_ts, env, action, reward, info[0])
 
                 # checks if termination condition was met
                 if done:
@@ -196,7 +221,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             avg_collisions = np.mean(collisions_grid)
 
             # save checkpoint
-            if i_episode % 10000 == 0 and i_episode != 0:
+            if i_episode % 1000 == 0 and i_episode != 0:
                 if not load_checkpoint:
                     print('... saving checkpoint ...')
                     agent.save_models(i_exp, i_ts, i_episode, time.time()-start_time, loss)
@@ -217,7 +242,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                         ',reward= %.2f,' % episode_reward,
                         'average_reward= %.2f,' % avg_reward,
                         'average_steps= %.2f,' % avg_steps,
-                        # 'collisions= %.2f,' % (avg_collisions-previous_avg_collisions),
+                        'collisions= %.2f,' % (avg_collisions-previous_avg_collisions),
                         'epsilon= %.2f' %(agent.epsilon), 
                         'loss=%f' % loss,
                         'success= %.4f' % (percentage))

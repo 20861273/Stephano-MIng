@@ -2,13 +2,14 @@ import numpy as np
 import torch as T
 from deep_q_network import DeepQNetwork
 from replay_memory import ReplayBuffer, PrioritizedReplayMemory
-from dqn_environment import Direction, WIDTH, HEIGHT, States
+from dqn_environment import Direction, WIDTH, HEIGHT, States, Point
 import copy
 
 class DQNAgent(object):
     def __init__(self, encoding, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
                  input_dims, guide, lidar, c_dims, k_size, s_size, fc_dims,
                  mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
+        self.nr = nr
         self.gamma = gamma
         self.epsilon = epsilon
         self.lr = lr
@@ -32,8 +33,8 @@ class DQNAgent(object):
         global Transition_dtype
         global blank_trans
         if (self.lidar or self.guide) and "image" in self.encoding:
-            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (6*nr)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (6*nr)), ('done', np.bool_)])
-            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((6*nr), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((6*nr), dtype=np.float32), False)
+            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (6)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (6)), ('done', np.bool_)])
+            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((6), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((6), dtype=np.float32), False)
         else:
             Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('done', np.bool_)])
             blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), False)
@@ -72,85 +73,152 @@ class DQNAgent(object):
                                     name=self.env_name+'_'+self.algo+'_q_next',
                                     chkpt_dir=self.chkpt_dir)
 
-    def choose_action(self, env, i_r, image_observation, non_image_observation, allow_windowed_revisiting, previous_action=None):
+    def choose_action(self, env, i_r, image_observation, non_image_observation, allow_windowed_revisiting, stacked, other_actions=None, previous_action=None):
         chose_max_action = False
         if np.random.random() > self.epsilon or not self.q_eval.training:
             chose_max_action = True
-            image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
+            if stacked: image_state = T.tensor(np.array(image_observation),dtype=T.float32).to(self.q_eval.device)
+            else: image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
             if (self.lidar or self.guide) and "image" in self.encoding:
                 # non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device).reshape((1,1))
-                non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+                if stacked: non_image_state = T.tensor(np.array(non_image_observation),dtype=T.float32).to(self.q_eval.device)
+                else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
                 actions = self.q_eval.forward(image_state, non_image_state)
             else:
                 actions = self.q_eval.forward(image_state)
-            actions = self.check_obstacles(env, i_r, actions.tolist())
-            action = T.argmax(actions).item()
+            actions = self.check_obstacles(env, i_r, other_actions, actions.tolist())
+            if T.all(actions == -float('inf')):
+                return Direction.STAY.value
+            else: action = T.argmax(actions).item()
         else:
-            actions = self.check_obstacles(env, i_r, [self.action_space])
+            actions = self.check_obstacles(env, i_r, other_actions, [self.action_space])
             exclude = [i for i,e in enumerate(actions.tolist()[0]) if e == float("-inf")]
-            action = np.random.choice([i for i in range(len(self.action_space)) if i not in exclude])
+            if len(exclude) == len(self.action_space):
+                return Direction.STAY.value
+            else: action = np.random.choice([i for i in range(len(self.action_space)-1) if i not in exclude])
+            # action = np.random.choice(self.action_space)
         
-        if not previous_action == None and not allow_windowed_revisiting:
-            if action == Direction.UP.value and previous_action == Direction.DOWN.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
-            if action == Direction.DOWN.value and previous_action == Direction.UP.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
-            if action == Direction.RIGHT.value and previous_action == Direction.LEFT.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
-            if action == Direction.LEFT.value and previous_action == Direction.RIGHT.value:
-                if not chose_max_action:
-                    image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
-                    if self.lidar and "image" in self.encoding:
-                        non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                        actions = self.q_eval.forward(image_state, non_image_state)
-                    else:
-                        actions = self.q_eval.forward(image_state)
-                actions = T.topk(actions, 2)
-                action = actions.indices[0][1].item()
-
+        # if not previous_action == None and not allow_windowed_revisiting:
+        #     if action == Direction.UP.value and previous_action == Direction.DOWN.value:
+        #         if not chose_max_action:
+        #             image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #             if self.lidar and "image" in self.encoding:
+        #                 non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #                 actions = self.q_eval.forward(image_state, non_image_state)
+        #             else:
+        #                 actions = self.q_eval.forward(image_state)
+        #         actions = T.topk(actions, 2)
+        #         action = actions.indices[0][1].item()
+        #     if action == Direction.DOWN.value and previous_action == Direction.UP.value:
+        #         if not chose_max_action:
+        #             image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #             if self.lidar and "image" in self.encoding:
+        #                 non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #                 actions = self.q_eval.forward(image_state, non_image_state)
+        #             else:
+        #                 actions = self.q_eval.forward(image_state)
+        #         actions = T.topk(actions, 2)
+        #         action = actions.indices[0][1].item()
+        #     if action == Direction.RIGHT.value and previous_action == Direction.LEFT.value:
+        #         if not chose_max_action:
+        #             image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #             if self.lidar and "image" in self.encoding:
+        #                 non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #                 actions = self.q_eval.forward(image_state, non_image_state)
+        #             else:
+        #                 actions = self.q_eval.forward(image_state)
+        #         actions = T.topk(actions, 2)
+        #         action = actions.indices[0][1].item()
+        #     if action == Direction.LEFT.value and previous_action == Direction.RIGHT.value:
+        #         if not chose_max_action:
+        #             image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #             if self.lidar and "image" in self.encoding:
+        #                 non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+        #                 actions = self.q_eval.forward(image_state, non_image_state)
+        #             else:
+        #                 actions = self.q_eval.forward(image_state)
+        #         actions = T.topk(actions, 2)
+        #         action = actions.indices[0][1].item()
         
         return action
 
-    def check_obstacles(self, env, i_r, actions):
-        surroundings = []
+    def check_obstacles(self, env, i_r, other_actions, actions):
+        surroundings = [False]*(len(self.action_space)-1)
+
         right_is_boundary = env.pos[i_r].x == WIDTH - 1
         left_is_boundary = env.pos[i_r].x == 0
         top_is_boundary = env.pos[i_r].y == 0
         bottom_is_boundary = env.pos[i_r].y == HEIGHT - 1
 
-        surroundings.append(right_is_boundary or (env.grid[env.pos[i_r].y][env.pos[i_r].x+1] == States.OBS.value if not right_is_boundary else True))
-        surroundings.append(left_is_boundary or (env.grid[env.pos[i_r].y][env.pos[i_r].x-1] == States.OBS.value if not left_is_boundary else True))
-        surroundings.append(top_is_boundary or (env.grid[env.pos[i_r].y-1][env.pos[i_r].x] == States.OBS.value if not top_is_boundary else True))
-        surroundings.append(bottom_is_boundary or (env.grid[env.pos[i_r].y+1][env.pos[i_r].x] == States.OBS.value if not bottom_is_boundary else True))
+        # check if boundary
+        if right_is_boundary:
+            surroundings[0] = True
+        if left_is_boundary:
+            surroundings[1] = True
+        if top_is_boundary:
+            surroundings[2] = True
+        if bottom_is_boundary:
+            surroundings[3] = True
+
+        # all possible positions of current drone
+        possible_positions = [False]*len(self.action_space)
+        current_temp_x = env.pos[i_r].x
+        current_temp_y = env.pos[i_r].y
+        if not right_is_boundary: #right
+            possible_positions[0] = Point(current_temp_x+1, current_temp_y)
+        if not left_is_boundary: #left
+            possible_positions[1] = Point(current_temp_x-1, current_temp_y)
+        if not top_is_boundary: #up
+            possible_positions[2] = Point(current_temp_x, current_temp_y-1)
+        if not bottom_is_boundary: #down
+            possible_positions[3] = Point(current_temp_x, current_temp_y+1)
+
+        # move drones to new positions
+        new_positions = [False]*self.nr
+        for r in range(self.nr):
+            temp_x = env.pos[r].x
+            temp_y = env.pos[r].y
+            if r >= i_r: break
+            if other_actions[r] == Direction.LEFT.value:
+                temp_x -= 1
+            if other_actions[r] == Direction.RIGHT.value:
+                temp_x += 1
+            if other_actions[r] == Direction.UP.value:
+                temp_y -= 1
+            if other_actions[r] == Direction.DOWN.value:
+                temp_y += 1
+            
+            new_positions[r] = Point(temp_x, temp_y)
+
+        # check if drones collide
+        for r in range(self.nr):
+            if r >= i_r: break
+            # checks new positions
+            if new_positions[r] == possible_positions[0]: #right
+                surroundings[0] = True
+            if new_positions[r] == possible_positions[1]: #left
+                surroundings[1] = True
+            if new_positions[r] == possible_positions[2]: #up
+                surroundings[2] = True
+            if new_positions[r] == possible_positions[3]: #down
+                surroundings[3] = True
+            # checks crossing positions
+            if possible_positions[0] == env.pos[r] and new_positions[r] == env.pos[i_r]:
+                surroundings[0] = True
+            if possible_positions[1] == env.pos[r] and new_positions[r] == env.pos[i_r]:
+                surroundings[1] = True
+            if possible_positions[2] == env.pos[r] and new_positions[r] == env.pos[i_r]:
+                surroundings[2] = True
+            if possible_positions[3] == env.pos[r] and new_positions[r] == env.pos[i_r]:
+                surroundings[3] = True
 
         temp_actions = []
-        for i in range(len(actions[0])):
+        for i in range(len(actions[0])-1):
             if not surroundings[i]: temp_actions.append(actions[0][i])
             else: temp_actions.append(float("-inf"))
+
+        # add stay action
+        temp_actions.append(float("-inf"))
         
         return T.tensor([temp_actions])
     
@@ -242,6 +310,8 @@ class DQNAgent(object):
             if (self.lidar or self.guide) and "image" in self.encoding:
                 non_image_states=T.tensor(np.copy(data[:]['non_image_state'])).to(self.q_eval.device)
                 non_image_states_=T.tensor(np.copy(data[:]['next_non_image_state'])).to(self.q_eval.device)
+                # non_image_states = non_image_states.reshape((-1, 1))
+                # non_image_states_ = non_image_states_.reshape((-1, 1))
 
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]

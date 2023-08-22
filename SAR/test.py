@@ -13,6 +13,11 @@ from datetime import datetime
 
 from collections import namedtuple
 
+exclude = [0,1,2,3]
+
+for i in range(50):
+    print(np.random.choice([i for i in range(4) if i not in exclude]))
+
 
 
 # def gradual_increase_ones(array, current_time_step):
