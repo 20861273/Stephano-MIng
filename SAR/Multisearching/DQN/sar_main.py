@@ -16,20 +16,20 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-                        "training": True,
+                        "training": False,
                         "load checkpoint": False,
                         "show rewards interval": 100,
                         "show plot": False,
                         "save plot": False,
-                        "policy number": [2],
-                        "test type": "grid", # test types: grid and iterative
-                        "testing iterations": 1000
+                        "policy number": [0],
+                        "test type": "iterative", # test types: grid and iterative
+                        "testing iterations": 300
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
     # agent types: DQN, DDQN
     hp = {
-                    "number of drones": 5,
+                    "number of drones": 2,
                     "training type": "centralized", # centralized (turn based), centralized actions
                     "agent type": "DQN",
                     "learning rate": [0.0001],
@@ -37,9 +37,9 @@ if __name__ == '__main__':
                     "epsilon": [[0.1,0.1,0.1]],
 
                     "training sessions": 1,
-                    "episodes": 10000,
-                    "positive rewards": [1],
-                    "positive exploration rewards": [0.1],
+                    "episodes": 5000,
+                    "positive rewards": [0],
+                    "positive exploration rewards": [1],
                     "negative rewards": [1],
                     "negative step rewards": [0.05],
                     "max steps": [200],
@@ -59,11 +59,11 @@ if __name__ == '__main__':
                     "mem size": 100000,
                     "replace": 1000,
                     "channels": [32, 64],
-                    "kernel": [1, 1],
+                    "kernel": [2, 2],
                     "stride": [1, 1],
                     "fc dims": [128],
 
-                    "prioritized": False,
+                    "prioritized": True,
                     "starting beta": 0.5,
 
                     "device": 0,
@@ -128,8 +128,12 @@ if __name__ == '__main__':
             hp["input dims"] = (4,3,HEIGHT, WIDTH)
             if hp["number of drones"] > 1: hp["input dims"] = (4,4,HEIGHT, WIDTH)
         else:
-            hp["input dims"] = (3,HEIGHT, WIDTH)
-            if hp["number of drones"] > 1: hp["input dims"] = (4,HEIGHT, WIDTH)
+            hp["input dims"] = (2,HEIGHT, WIDTH)
+            if hp["obstacles"]: hp["input dims"] = (3,HEIGHT, WIDTH)
+            if hp["number of drones"] > 1:
+                hp["input dims"] = (4,HEIGHT, WIDTH)
+                # hp["input dims"] = (3,HEIGHT, WIDTH)
+                if hp["obstacles"]: hp["input dims"] = (4,HEIGHT, WIDTH)
     elif hp["encoding"] == "full_image":
         if hp["stacked frames"]: hp["input dims"] = (4,HEIGHT, WIDTH)
         else: hp["input dims"] = (1,HEIGHT, WIDTH)

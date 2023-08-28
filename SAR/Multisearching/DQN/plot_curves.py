@@ -66,8 +66,8 @@ def plot_learning_curves(scores, filename, policy, c, step, moving_step, ts, pr,
     ax.tick_params(axis='y', colors="C0")
     np_scores = np.array(scores)
     # np_scores.min()-1
-    ax.set_ylim(np_scores.min()-1, np_scores.max()+0.5)
-    # ax.set_ylim(1, 4)
+    # ax.set_ylim(np_scores.min()-1, np_scores.max()+0.5)
+    ax.set_ylim(50, 60)
     ax.set_title("Learning curve:")
     # plt.xlabel("Training Steps")
     # plt.ylabel("Rewards")
@@ -105,7 +105,7 @@ load_path = os.path.join(PATH, 'Saved_data')
 if not os.path.exists(load_path): os.makedirs(load_path)
 
 step = 10#len(scores[0][0])/10000
-moving_step = 10
+moving_step = 1
 policies = [0,1,2]
 
 

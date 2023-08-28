@@ -33,8 +33,8 @@ class DQNAgent(object):
         global Transition_dtype
         global blank_trans
         if (self.lidar or self.guide) and "image" in self.encoding:
-            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (6)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (6)), ('done', np.bool_)])
-            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((6), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((6), dtype=np.float32), False)
+            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (2)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (2)), ('done', np.bool_)])
+            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((2), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((2), dtype=np.float32), False)
         else:
             Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('done', np.bool_)])
             blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), False)
@@ -223,6 +223,20 @@ class DQNAgent(object):
         return T.tensor([temp_actions])
     
     def store_transition(self, image_state, non_image_state, action, reward, image_state_, non_image_state_, done):
+        # rotates observations for 3 extra states in memory
+        # tuples = []
+        # tuples.append((image_state, non_image_state, action, reward, image_state_, non_image_state_, done))
+        # temp_image_state = np.copy(image_state)
+        # temp_image_state_ = np.copy(image_state_)
+        # for _ in range(3):
+        #     breakpoint
+        #     for i in range(image_state.shape[0]):
+        #         temp_image_state[i] = np.rot90(temp_image_state[i])
+        #         temp_image_state_[i] = np.rot90(temp_image_state_[i])
+        #     # add non image and action conversion (up -> right, down -> left, left -> up, right -> down)
+        #     tuples.append((np.copy(temp_image_state), non_image_state, action, reward, np.copy(temp_image_state_), non_image_state_, done))
+
+        # for i in tuples:
         if (self.lidar or self.guide) and "image" in self.encoding:
             self.memory.store_transition(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
             # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)

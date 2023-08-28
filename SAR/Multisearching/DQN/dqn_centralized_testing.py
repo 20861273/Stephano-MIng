@@ -210,12 +210,12 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
                                         load_path, len(paths), env)
                             trajectories.append(trajectory)
                             break
-                        if save_path and len(paths) < 2:
-                            for i in range(hp["number of drones"]):
-                                PR.print_graph(False, policy, i, [sub_path[i] for sub_path in path], 
-                                [sub_actions[i] for sub_actions in t_actions], 
-                                env.starting_pos[i], env.exploration_grid.copy(), 
-                                load_path, len(paths), env, True, step)
+                        # if save_path and len(paths) < 2:
+                        #     for i in range(hp["number of drones"]):
+                        #         PR.print_graph(False, policy, i, [sub_path[i] for sub_path in path], 
+                        #         [sub_actions[i] for sub_actions in t_actions], 
+                        #         env.starting_pos[i], env.exploration_grid.copy(), 
+                        #         load_path, len(paths), env, True, step)
                         if show_plot:
                             plt.cla()
                             PR.print_trajectories(ax, save_path, policy, env, actions[0])

@@ -12,8 +12,8 @@ from enclosed_space_checker import Enclosed_space_check
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 8
+WIDTH = 8
 
 # DENSITY = 30 # percentage
 
@@ -38,6 +38,66 @@ Point = namedtuple('Point', 'x, y')
 
 
 class Environment:
+    """
+    A class used to represent the environment
+
+    ...
+
+    Attributes
+    ----------
+    nr : int
+        number of drones
+    pos : list of named tuples
+        current positions of drones
+    prev_pos : list of named tuples
+        previous positions of drones
+    starting_pos : list of named tuples
+        starting positions of drones
+    positive_reward : float
+        positive reward for a successful episode
+    negative reward : float
+        negative reward for termination state
+    positive_exploration_reward : flaot
+        positive reward for exploring new cells
+    negative_step_reward : float
+        negative reward for taking step
+    collision : dictionary
+        keeps track of collision states for each drone
+    encoding : string
+        keeps track of input encoding used
+    lidar : boolean
+        enables or disables LiDAR of surrounding cells
+    obstacles : boolean
+        enables or disables obstacles
+
+    Methods
+    -------
+    generate_grid()
+        generates grid
+    reset()
+        resets environment
+    get_state()
+        returns state of agents
+    step_centralized(actions)
+        takes step and returns observations
+    calc_reward_centralized()
+        calculates reward for current step
+    get_distance(end, start)
+        returns manhattan distance between end and start
+    get_direction(goal, r_i)
+        returns direction from drone r_i to goal cell
+    get_closest_unexplored(r_i, other_location)
+        returns distance from closest unexplored cell to drone r_i
+    is_collision_centralized(pt, r_i, x ,y, action)
+        checks if any new positions (pt) collides with new position (x,y) of current drone (r_i) when taking action (action)
+    _update_env()
+        updates environment
+    _move_centralized(action)
+        moves all drones
+    check_surrounding_cells(r_i)
+        checks surrounding cells of drone r_i
+    
+    """
     
     def __init__(self, nr, obstacles, obstacle_density,\
                 reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
@@ -126,52 +186,16 @@ class Environment:
         # print("\nGrid size: ", self.grid.shape)
 
     def generate_grid(self):
-        # self.grid = self.random_grid(HEIGHT, WIDTH, 0.4)
-        # Generate grid of zeros 
+        # Generate grid of zeros
+        # For no obstacles: generates grid of H*W
+        # For obstacles: generates grid of (H/2 * W/2) since maze corridors should be 2 wide (grid will be scaled to H*W later in code)
         if self.obstacles: self.grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
         else: self.grid = np.zeros((HEIGHT, WIDTH), dtype=np.int8)
-        # self.grid = self.generate_map()
-
-        
         # self.draw_edges()
 
+        # for curriculum learning: steadily increases size of environment by making border size smaller
         if self.curriculum_learning['collisions']:
             self.draw_bounds(0)
-        # Note: grid[y][x]
-        # Generate obstacles
-        # CODE GOES HERE
-
-        # Static goal location spawning
-        # self.goal = Point(0,0)
-        # grid[self.goal.y, self.goal.x] = States.GOAL.value
-
-        # Random goal location spawning
-        # if self.curriculum_learning['sparse reward']:
-        #     self.clear_rows = np.where(np.any(self.grid == States.UNEXP.value, axis=1))[0]
-        #     if self.clear_rows.shape[0]:
-        #         np.random.shuffle(self.clear_rows)
-        #         self.clear_rows = self.clear_rows[:5]
-        #     self.goal = [0]*self.clear_rows.shape[0]
-        #     for i, row in enumerate(self.clear_rows):
-        #         indices = np.argwhere(self.grid == States.UNEXP.value)
-        #         np.random.shuffle(indices)
-        #         self.goal[i] = Point(indices[0,1], row)
-        #         self.grid[self.goal[i].y, self.goal[i].x] = States.GOAL.value
-        # else:
-        #     indices = np.argwhere(self.grid == States.UNEXP.value)
-        #     np.random.shuffle(indices)
-        #     self.goal = Point(indices[0,1], indices[0,0])
-        #     self.grid[self.goal.y, self.goal.x] = States.GOAL.value
-
-        # Set robot(s) start position
-        # for i in range(0, self.nr):
-        #     indices = np.argwhere(self.grid == States.UNEXP.value)
-        #     np.random.shuffle(indices)
-        #     self.starting_pos[i] = Point(indices[0,0], indices[0,1])
-        #     self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
-            
-        # self.pos = self.starting_pos.copy()
-        # self.prev_pos = self.starting_pos.copy()
 
     def reset(self, current_episode, percentage = 0.0):
         self.collision = {  'obstacle' :   [False]*self.nr,
@@ -414,6 +438,7 @@ class Environment:
             temp_action //= 4
         return actions_completed
 
+    # give positive reward for each new cell explored
     def calc_reward_centralized(self):
         temp_arr = np.array([False]*self.nr)
         score = 0
@@ -543,10 +568,10 @@ class Environment:
                         non_image_state[r_i] = [self.fuel, 0, 4]
                         # non_image_state = [[self.fuel, 0, 0,0,0,0]]
                     else:
-                        non_image_state[r_i] = [0]
+                        # non_image_state[r_i] = [0]
                         # non_image_state[r_i] = [4]
                         # non_image_state[r_i] = [0,0,0,0]
-                        # non_image_state[r_i] = [0, 4]
+                        non_image_state[r_i] = [0, 4]
                         # non_image_state[r_i] = [0, 0,0,0,0]
                         if self.lidar:
                             # non_image_state[r_i] = [0] + self.check_surrounding_cells(r_i)
@@ -564,10 +589,10 @@ class Environment:
                         # non_image_state = [self.fuel, closest_unexplored]
                     else:
                         # non_image_state[r_i] = [closest_unexplored] 
-                        non_image_state[r_i] = [len(path)] # Test 1
+                        # non_image_state[r_i] = [len(path)] # Test 1
                         # non_image_state[r_i] = [self.get_direction(path[0], r_i)] # Test 3
                         # non_image_state[r_i] = self.get_direction(path[0], r_i) # Test 7
-                        # non_image_state[r_i] = [len(path), self.get_direction(path[0], r_i)] # Test 2
+                        non_image_state[r_i] = [len(path), self.get_direction(path[0], r_i)] # Test 2
                         # non_image_state[r_i] = [len(path)] + self.get_direction(path[0], r_i)
                         if self.lidar:
                             # non_image_state[r_i] = [len(path)]  + self.check_surrounding_cells(r_i)
@@ -728,13 +753,25 @@ class Environment:
 
             # Non-padded
             if not self.encoding == "full_image":
-                image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
-                if self.nr > 1: image_map = np.zeros((self.nr,) + (4,) + self.grid.shape)
+                image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
+                if obstacles: np.zeros((self.nr,) + (3,) + self.grid.shape)
+                if self.nr > 1:
+                    image_map = np.zeros((self.nr,) + (4,) + self.grid.shape)
+                    # image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+                    if obstacles: np.zeros((self.nr,) + (4,) + self.grid.shape)
                 for r_i in range(self.nr):
-                    image_map[r_i][0] = location_map[r_i]
-                    image_map[r_i][1] = obstacle_map
-                    image_map[r_i][2] = exploration_map
-                    if self.nr > 1: image_map[r_i][3] = drone_map[r_i]
+                    i = 0
+                    image_map[r_i][i] = location_map[r_i]
+                    if obstacles:
+                        i += 1
+                        image_map[r_i][i] = obstacle_map
+                    i += 1
+                    image_map[r_i][i] = obstacle_map
+                    i += 1
+                    image_map[r_i][i] = exploration_map
+                    if self.nr > 1:
+                        i += 1
+                        image_map[r_i][i] = drone_map[r_i]
             elif self.encoding == "full_image":
                 image_map = np.zeros((self.nr,) + (1,) + self.grid.shape)
                 for r_i in range(self.nr):

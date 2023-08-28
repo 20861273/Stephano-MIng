@@ -6,9 +6,52 @@ import torch.optim as optim
 import numpy as np
 
 class DeepQNetwork(nn.Module):
-    # def __init__(self, encoding, nr, lr,
-    #              n_actions, input_dims, lidar, lstm, c_dims, k_size, s_size,
-    #                 fc_dims, lstm_h, device_num, name, chkpt_dir):
+    """
+    A class used to represent the environment
+
+    ...
+
+    Attributes
+    ----------
+    nr : int
+        number of drones
+    encoding : string
+        keeps track of input encoding used
+    n_actions : int
+        number of actions in action space
+    input_dims : tuple
+        shape of input
+    guide : boolean
+        enables or disables closest unexplored cell state
+    lidar : boolean
+        enables or disables LiDAR state of surrounding cells
+    c_dims : list
+        number of channels for each convolutional layer
+    k_size : list
+        kernel size for each convolutional layer
+    s_size : list
+        stride size for each convolutional layer
+    fc_dims : list
+        number of neurons for each fully connected layer
+    device_num : int
+        which device (GPU/CPU) should be used
+    name : string
+        name of neural network, ie. DQN, DDQN
+    chkpt_dir : string
+        directory of checkpoint
+
+    Methods
+    -------
+    calculate_conv_output_dims()
+        calculation of fully connected layer input size
+    forward(image_state, non_image_state=None)
+        forward pass
+    save_checkpoint(session, epoch, episode, time, loss)
+        saves trained agent policy
+    load_checkpoint()
+        loads trained agent policy
+    
+    """
     def __init__(self, encoding, nr, lr,
                  n_actions, input_dims, guide, lidar, c_dims, k_size, s_size,
                     fc_dims, device_num, name, chkpt_dir):
@@ -37,28 +80,44 @@ class DeepQNetwork(nn.Module):
             self.k_size = k_size.copy()
             self.s_size = s_size.copy()
 
+            # convolutional layers
             self.conv1 = nn.Conv2d(input_dims[0], c_dims[0], k_size[0], stride=s_size[0])
             # nn.MaxPool2d(kernel_size=2)
             self.conv2 = nn.Conv2d(c_dims[0], c_dims[1], k_size[1], stride=s_size[1])
             # nn.MaxPool2d(kernel_size=2)
             # self.conv3 = nn.Conv2d(c_dims[1], c_dims[2], k_size[2], stride=s_size[2])
 
+            # calculation of fully connected layer input size
             fc_input_dims = self.calculate_conv_output_dims()
 
+            # fully connected layers
             self.fc1 = nn.Linear(fc_input_dims, fc_dims[0])
+            
+            # self.fc1 = nn.Linear(fc_input_dims, fc_dims[0])
+            # self.fc2 = nn.Linear(fc_dims[0], fc_dims[1])
+
+            # if self.lstm:
+            
+            #     self.lstm = nn.LSTM(self.n_actions, self.lstm_h)
+            #     self.fc3 = nn.Linear(fc_dims[0], self.n_actions)
+
+
+            # output layer
             self.fc2 = nn.Linear(fc_dims[0], self.n_actions)
+            # self.fc3 = nn.Linear(fc_dims[1], self.n_actions)
+
+            # random initialization of weights
+            nn.init.normal_(self.conv1.weight, mean=0, std=0.01)
+            nn.init.normal_(self.conv2.weight, mean=0, std=0.01)
+            
+            nn.init.normal_(self.fc1.weight, mean=0, std=0.01)
+            nn.init.normal_(self.fc2.weight, mean=0, std=0.01)
+            # nn.init.normal_(self.fc3.weight, mean=0, std=0.01)
         else:
             self.fc1 = nn.Linear(*self.input_dims, self.fc_dims[0]) # * unpacking the input list
             self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
             self.fc3 = nn.Linear(self.fc_dims[1], self.fc_dims[2])
-            self.fc4 = nn.Linear(self.fc_dims[2], self.n_actions)
-        
-        # if self.lstm:
-            
-        #     self.lstm = nn.LSTM(self.n_actions, self.lstm_h)
-        #     self.fc3 = nn.Linear(fc_dims[0], self.n_actions)
-
-        
+            self.fc4 = nn.Linear(self.fc_dims[2], self.n_actions)        
         
         self.optimizer = optim.Adam(self.parameters(), lr=lr)
         self.loss = nn.MSELoss()
@@ -76,7 +135,7 @@ class DeepQNetwork(nn.Module):
         if self.lidar and not self.guide:
             return int(np.prod(dims.size())) + 4*self.nr #+ 1 # image size + surrounding states + percentage explored
         elif self.guide and not self.lidar:
-            return int(np.prod(dims.size())) + 1
+            return int(np.prod(dims.size())) + 2
         elif self.lidar and self.guide:
             return int(np.prod(dims.size())) + 6
         else:
@@ -85,24 +144,29 @@ class DeepQNetwork(nn.Module):
     def forward(self, image_state, non_image_state=None):
         # print(image_state.device)
         if "image" in self.encoding:
+            # forward pass convolutional layers
             conv1 = F.relu(self.conv1(image_state))
             conv2 = F.relu(self.conv2(conv1))
             # conv3 = F.relu(self.conv3(conv2))
             # conv3 shape is BS x n_filters x H x W
 
+            # reshape with view, basically np.reshape ( conv_state shape is BS x (n_filters * H * W) )
             # conv_state = conv1.view(conv1.size()[0], -1)
             conv_state = conv2.view(conv2.size()[0], -1)
             # conv_state = conv3.view(conv3.size()[0], -1)
-            # conv_state shape is BS x (n_filters * H * W)
+            
 
             if self.lidar or self.guide:
                 # consentrate output of convolutional layers and non-image state
                 concatenated_state = T.cat((conv_state, non_image_state), dim=1)
 
+                # forward pass fully connected layers
                 flat1 = F.relu(self.fc1(concatenated_state))
+                # flat2 = F.relu(self.fc2(flat1))
             else:
                 flat1 = F.relu(self.fc1(conv_state))
             actions = self.fc2(flat1)
+            # actions = self.fc3(flat2)
         else:
             # image_state = image_state.to(self.device)
             x = F.relu(self.fc1(image_state))
@@ -112,6 +176,7 @@ class DeepQNetwork(nn.Module):
 
         return actions
 
+    # saves trained agent policy
     def save_checkpoint(self, session, epoch, episode, time, loss):
         T.save({
             'session': session,
@@ -123,6 +188,7 @@ class DeepQNetwork(nn.Module):
             'loss': loss,
             }, self.checkpoint_file)
 
+    # loads trained agent policy
     def load_checkpoint(self):
         print('... loading checkpoint ...')
         cuda_string = 'cuda:' + str(self.device_num)

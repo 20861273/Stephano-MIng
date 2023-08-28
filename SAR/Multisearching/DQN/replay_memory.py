@@ -9,7 +9,7 @@ class ReplayBuffer(object):
         self.guide = guide
         self.mem_size = max_size
         self.stack_size = 4
-        self.non_image_size = 1
+        self.non_image_size = 2
         self.mem_cntr = 0 # mem_cntr of the last stored memory
         self.image_observations = np.zeros((input_shape),
                                      dtype=np.float32)
@@ -33,7 +33,7 @@ class ReplayBuffer(object):
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
 
-    def store_transition(self, state, action, reward, state_, done, other_state, other_state_):
+    def store_transition(self, state, action, reward, state_, done, other_state=None, other_state_=None):
         index = self.mem_cntr % self.mem_size
 
         self.state_memory[index] = state
