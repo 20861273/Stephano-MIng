@@ -1,11 +1,11 @@
 import numpy as np
 import torch as T
-from deep_q_network import DeepQNetwork
+from duel_deep_q_network import DuelDeepQNetwork
 from replay_memory import ReplayBuffer, PrioritizedReplayMemory
 from dqn_environment import Direction, WIDTH, HEIGHT, States, Point
 import copy
 
-class DQNAgent(object):
+class DuelDQNAgent(object):
     def __init__(self, encoding, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
                  input_dims, guide, lidar, lstm, c_dims, k_size, s_size, fc_dims,
                  mem_size, batch_size, replace, nstep, nstep_N, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
@@ -48,7 +48,7 @@ class DQNAgent(object):
         
         if self.prioritized:
             # self.memory = ReplayMemory(mem_size, input_dims, n_actions, eps=0.0001, prob_alpha=0.5)
-            self.memory = ReplayMemory(self.nr, self.encoding, self.lidar, self.guide, mem_size, self.batch_size, self.nstep, self.nstep_N, replay_alpha=0.5)
+            self.memory = ReplayMemory(self.encoding, self.lidar, self.guide, mem_size, self.batch_size, self.nstep, self.nstep_N, replay_alpha=0.5)
             
             # Other implementation of PER in replay_memory.py
             # if self.lidar and self.encoding == "image":
@@ -59,9 +59,9 @@ class DQNAgent(object):
             # self.memory = PrioritizedReplayMemory(lidar, self.input_dims, mem_size, alpha=0.5)
 
         else:
-            self.memory = ReplayBuffer(self.nr, self.guide, mem_size, input_dims, self.nstep, self.nstep_N)
-
-        self.q_eval = DeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
+            self.memory = ReplayBuffer(self.guide, mem_size, input_dims, self.nstep, self.nstep_N)
+        
+        self.q_eval = DuelDeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
                                     self.input_dims, self.guide, self.lidar, self.lstm,
                                     c_dims, k_size, s_size,
                                     fc_dims,
@@ -69,7 +69,7 @@ class DQNAgent(object):
                                     name=self.env_name+'_'+self.algo+'_q_eval',
                                     chkpt_dir=self.chkpt_dir)
 
-        self.q_next = DeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
+        self.q_next = DuelDeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
                                     self.input_dims, self.guide, self.lidar, self.lstm,
                                     c_dims, k_size, s_size, fc_dims,
                                     device_num,
@@ -86,10 +86,10 @@ class DQNAgent(object):
                 # non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device).reshape((1,1))
                 if stacked: non_image_state = T.tensor(np.array(non_image_observation),dtype=T.float32).to(self.q_eval.device)
                 else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
-                actions = self.q_eval.forward(image_state, non_image_state)
+                _, advantage = self.q_eval.forward(image_state, non_image_state)
             else:
                 actions = self.q_eval.forward(image_state)
-            actions = self.check_obstacles(env, i_r, other_actions, actions.tolist())
+            actions = self.check_obstacles(env, i_r, other_actions, advantage.tolist())
             if T.all(actions == -float('inf')):
                 return Direction.STAY.value
             else: action = T.argmax(actions).item()
@@ -330,11 +330,17 @@ class DQNAgent(object):
                 # non_image_states = non_image_states.reshape((-1, 1))
                 # non_image_states_ = non_image_states_.reshape((-1, 1))
 
-                q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
-                q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
+                V_s, A_s = self.q_eval.forward(image_states, non_image_states)
+                V_s_, A_s_ = self.q_next.forward(image_states_, non_image_states_)
             else:
-                q_pred = self.q_eval.forward(image_states)[indices, actions]
-                q_next = self.q_next.forward(image_states_).max(dim=1)[0]          
+                V_s, A_s = self.q_eval.forward(image_states)
+                V_s_, A_s_ = self.q_next.forward(image_states_)           
+
+            # calculate q function for states and next states
+            q_pred = T.add(V_s,
+                            (A_s - A_s.mean(dim=1, keepdim=True)))[indices, actions]
+            q_next = T.add(V_s_,
+                            (A_s_ - A_s_.mean(dim=1, keepdim=True))).max(dim=1)[0]
 
             q_next[dones] = 0.0
             q_target = rewards + self.gamma*q_next
@@ -351,16 +357,21 @@ class DQNAgent(object):
             indices = np.arange(self.batch_size)
             if (self.lidar or self.guide) and "image" in self.encoding:
                 image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones = self.sample_memory(self.beta)
-                q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
-                q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
+                V_s, A_s = self.q_eval.forward(image_states, non_image_states)
+                V_s_, A_s_ = self.q_next.forward(image_states_, non_image_states_)                
             else:
                 image_states, actions, rewards, image_states_, dones = self.sample_memory(self.beta)
-                q_pred = self.q_eval.forward(image_states)[indices, actions]
-                q_next = self.q_next.forward(image_states_).max(dim=1)[0]
+                V_s, A_s = self.q_eval.forward(image_states)
+                V_s_, A_s_ = self.q_next.forward(image_states_)
+
+            # calculate q function for states and next states
+            q_pred = T.add(V_s,
+                            (A_s - A_s.mean(dim=1, keepdim=True)))[indices, actions]
+            q_next = T.add(V_s_,
+                            (A_s_ - A_s_.mean(dim=1, keepdim=True))).max(dim=1)[0]
 
             q_next[dones] = 0.0
-            if self.nstep: q_target = rewards + (self.gamma**self.nstep_N)*q_next
-            else: q_target = rewards + self.gamma*q_next
+            q_target = rewards + self.gamma*q_next
             loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
 
         loss.backward()

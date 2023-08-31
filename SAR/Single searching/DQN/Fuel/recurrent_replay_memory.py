@@ -6,6 +6,7 @@ import random
 
 class ReplayBuffer(object):
     def __init__(self, lidar, max_size, input_shape, n_actions):
+        self.starting_indices = []
         self.mem_size = max_size
         self.input_shape = input_shape
         self.mem_cntr = 0 # mem_cntr of the last stored memory
@@ -27,8 +28,10 @@ class ReplayBuffer(object):
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
 
-    def store_transition(self, state, action, reward, state_, done, non_image_state, non_image_state_):#image_state, action, reward, image_state_, done, non_image_state, non_image_state_
+    def store_transition(self, state, action, reward, state_, done, non_image_state, non_image_state_, start=None):#image_state, action, reward, image_state_, done, non_image_state, non_image_state_
         index = self.mem_cntr % self.mem_size
+
+        if start != None: self.starting_indices.append(index)
 
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
@@ -42,6 +45,20 @@ class ReplayBuffer(object):
     def sample_buffer(self, batch_size, sequence_len):
         max_mem = min(self.mem_cntr, self.mem_size)
         batch = np.random.choice(max_mem-sequence_len, batch_size, replace=False)
+
+        # don't cross episodes
+        # find indices to exclude
+        exclude_indices = []
+        for s_i in self.starting_indices:
+            if s_i == 0: break
+            exclude_indices = exclude_indices + [i-j for j in range(sequence_len, 0, -1)]
+        # make list of all valid indices
+        indices = []
+        for i in range(max_mem-sequence_len):
+            if i in exclude_indices: break
+            indices.append(i)
+        # choose random indices from valid indices list
+        batch = np.random.choice(len(indices), batch_size, replace=False)
 
         # Since the transitions are numpy arrays slicing won't work with the batch list
         # Thus the indices of the batch list are generated below into a list

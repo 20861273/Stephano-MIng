@@ -1,14 +1,14 @@
 import numpy as np
 import torch as T
 from deep_q_network import DeepQNetwork
-from replay_memory import ReplayBuffer, PrioritizedReplayMemory
+from recurrent_replay_memory import ReplayBuffer
 from dqn_environment import Direction, WIDTH, HEIGHT, States, Point
 import copy
 
-class DQNAgent(object):
+class DRQNAgent(object):
     def __init__(self, encoding, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
                  input_dims, guide, lidar, lstm, c_dims, k_size, s_size, fc_dims,
-                 mem_size, batch_size, replace, nstep, nstep_N, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
+                 mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
         self.nr = nr
         self.gamma = gamma
         self.epsilon = epsilon
@@ -30,8 +30,7 @@ class DQNAgent(object):
         self.prioritized = prioritized
         self.beta = starting_beta
         self.encoding = encoding
-        self.nstep = nstep
-        self.nstep_N = nstep_N
+        self.sequence_len = 10
 
         global Transition_dtype
         global blank_trans
@@ -48,7 +47,7 @@ class DQNAgent(object):
         
         if self.prioritized:
             # self.memory = ReplayMemory(mem_size, input_dims, n_actions, eps=0.0001, prob_alpha=0.5)
-            self.memory = ReplayMemory(self.nr, self.encoding, self.lidar, self.guide, mem_size, self.batch_size, self.nstep, self.nstep_N, replay_alpha=0.5)
+            self.memory = ReplayMemory(self.encoding, self.lidar, self.guide, mem_size, self.batch_size, self.sequence_len, self.nr, replay_alpha=0.5)
             
             # Other implementation of PER in replay_memory.py
             # if self.lidar and self.encoding == "image":
@@ -59,8 +58,8 @@ class DQNAgent(object):
             # self.memory = PrioritizedReplayMemory(lidar, self.input_dims, mem_size, alpha=0.5)
 
         else:
-            self.memory = ReplayBuffer(self.nr, self.guide, mem_size, input_dims, self.nstep, self.nstep_N)
-
+            self.memory = ReplayBuffer(self.guide, mem_size, input_dims, self.nr)
+        
         self.q_eval = DeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
                                     self.input_dims, self.guide, self.lidar, self.lstm,
                                     c_dims, k_size, s_size,
@@ -86,8 +85,10 @@ class DQNAgent(object):
                 # non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device).reshape((1,1))
                 if stacked: non_image_state = T.tensor(np.array(non_image_observation),dtype=T.float32).to(self.q_eval.device)
                 else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+                self.q_eval.init_hidden(1)
                 actions = self.q_eval.forward(image_state, non_image_state)
             else:
+                self.q_eval.init_hidden(1)
                 actions = self.q_eval.forward(image_state)
             actions = self.check_obstacles(env, i_r, other_actions, actions.tolist())
             if T.all(actions == -float('inf')):
@@ -225,7 +226,7 @@ class DQNAgent(object):
         
         return T.tensor([temp_actions])
     
-    def store_transition(self, image_state, non_image_state, action, reward, image_state_, non_image_state_, done):
+    def store_transition(self, image_state, non_image_state, action, reward, image_state_, non_image_state_, done, episode=None):
         # rotates observations for 3 extra states in memory
         # tuples = []
         # tuples.append((image_state, non_image_state, action, reward, image_state_, non_image_state_, done))
@@ -240,33 +241,53 @@ class DQNAgent(object):
         #     tuples.append((np.copy(temp_image_state), non_image_state, action, reward, np.copy(temp_image_state_), non_image_state_, done))
 
         # for i in tuples:
-        if (self.lidar or self.guide) and "image" in self.encoding:
-            self.memory.store_transition(image_state, action, reward, image_state_, done, self.gamma, non_image_state, non_image_state_)
-            # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
+        
+        if self.prioritized:
+            if (self.lidar or self.guide) and "image" in self.encoding:
+                self.memory.store_transition(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
+                # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
+            else:
+                self.memory.store_transition(image_state, action, reward, image_state_, done, episode)
+                # self.memory.add(image_state, action, reward, image_state_, done)
         else:
-            self.memory.store_transition(image_state, action, reward, image_state_, done, self.gamma)
-            # self.memory.add(image_state, action, reward, image_state_, done)
+            if (self.lidar or self.guide) and "image" in self.encoding:
+                self.memory.store_transition(image_state, action, reward, image_state_, done, non_image_state, non_image_state_, episode)
+                # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
+            else:
+                self.memory.store_transition(image_state, action, reward, image_state_, done, episode)
+                # self.memory.add(image_state, action, reward, image_state_, done)
 
     def sample_memory(self, beta, prioritized=False):
         if not prioritized:
             if (self.lidar or self.guide) and "image" in self.encoding:
                 image_state, non_image_state, action, reward, new_image_state, new_non_image_state, done = \
-                                        self.memory.sample_buffer(self.batch_size)
+                                        self.memory.sample_buffer(self.batch_size, self.sequence_len)
             else:
                 image_state, action, reward, new_image_state, done = \
-                                        self.memory.sample_buffer(self.batch_size)
+                                        self.memory.sample_buffer(self.batch_size, self.sequence_len)
             
-            image_states = T.tensor(image_state).to(self.q_eval.device)
+            # reshape input data to move the sequence length to a separate dimension
+            # from (batch_size, sequence_length, channels, height, width)
+            # to (batch_size*sequence_length, channels, height, width)
+            reshaped_image_state = image_state.reshape(-1, self.input_dims[0], self.input_dims[1], self.input_dims[2])
+            reshaped_non_image_states = non_image_state.reshape(-1,2)
+            reshaped_actions = action.reshape(-1)
+            reshaped_rewards = reward.reshape(-1)
+            reshaped_image_states_ = new_image_state.reshape(-1, self.input_dims[0], self.input_dims[1], self.input_dims[2])
+            reshaped_non_image_states_ = new_non_image_state.reshape(-1,2)
+            reshaped_dones = done.reshape(-1)
             
-            rewards = T.tensor(reward).to(self.q_eval.device)
-            dones = T.tensor(done).to(self.q_eval.device)
-            actions = T.tensor(action).to(self.q_eval.device)
-            image_states_ = T.tensor(new_image_state).to(self.q_eval.device)
+            image_states = T.tensor(reshaped_image_state).to(self.q_eval.device)
+            
+            rewards = T.tensor(reshaped_rewards).to(self.q_eval.device)
+            dones = T.tensor(reshaped_dones).to(self.q_eval.device)
+            actions = T.tensor(reshaped_actions).to(self.q_eval.device)
+            image_states_ = T.tensor(reshaped_image_states_).to(self.q_eval.device)
             
 
             if (self.lidar or self.guide) and "image" in self.encoding:
-                non_image_states = T.tensor(non_image_state).to(self.q_eval.device)
-                non_image_states_ = T.tensor(new_non_image_state).to(self.q_eval.device)
+                non_image_states = T.tensor(reshaped_non_image_states).to(self.q_eval.device)
+                non_image_states_ = T.tensor(reshaped_non_image_states_).to(self.q_eval.device)
 
                 return image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones
             else:
@@ -299,12 +320,12 @@ class DQNAgent(object):
 
         return checkpoint
 
-    def learn(self, step):
+    def learn(self):
         if self.prioritized:
             if self.memory.transitions.index<self.batch_size and self.memory.transitions.full==False:
                 return
         else:
-            if self.memory.mem_cntr < self.batch_size:
+            if self.memory.mem_cntr-self.sequence_len < self.batch_size:
                 return
 
         if self.prioritized:
@@ -315,31 +336,47 @@ class DQNAgent(object):
 
             self.beta += 0.00005
             self.beta = min(1, self.beta)
-            indices = np.arange(self.batch_size)
+            indices = np.arange(self.batch_size*self.sequence_len)
             
             tree_idxs, data, weights = self.memory.sample(self.beta)
-            image_states=T.tensor(np.copy(data[:]['image_state'])).to(self.q_eval.device)
-            rewards=T.tensor(np.copy(data[:]['reward'])).to(self.q_eval.device)
-            dones=T.tensor(np.copy(data[:]['done'])).to(self.q_eval.device)
-            actions=T.tensor(np.copy(data[:]['action'])).to(self.q_eval.device)
-            image_states_=T.tensor(np.copy(data[:]['next_image_state'])).to(self.q_eval.device)
+
+            # reshape input data to move the sequence length to a separate dimension
+            # from (batch_size, sequence_length, channels, height, width)
+            # to (batch_size*sequence_length, channels, height, width)
+            reshaped_image_state = np.copy(data[:]['image_state']).reshape(-1, self.input_dims[0], self.input_dims[1], self.input_dims[2])
+            reshaped_non_image_states = np.copy(data[:]['non_image_state']).reshape(-1,2)
+            reshaped_actions = np.copy(data[:]['action']).reshape(-1)
+            reshaped_rewards = np.copy(data[:]['reward']).reshape(-1)
+            reshaped_image_states_ = np.copy(data[:]['next_image_state']).reshape(-1, self.input_dims[0], self.input_dims[1], self.input_dims[2])
+            reshaped_non_image_states_ = np.copy(data[:]['next_non_image_state']).reshape(-1,2)
+            reshaped_dones = np.copy(data[:]['done']).reshape(-1)
+
+            image_states=T.tensor(reshaped_image_state).to(self.q_eval.device)
+            rewards=T.tensor(reshaped_rewards).to(self.q_eval.device)
+            dones=T.tensor(reshaped_dones).to(self.q_eval.device)
+            actions=T.tensor(reshaped_actions).to(self.q_eval.device)
+            image_states_=T.tensor(reshaped_image_states_).to(self.q_eval.device)
 
             if (self.lidar or self.guide) and "image" in self.encoding:
-                non_image_states=T.tensor(np.copy(data[:]['non_image_state'])).to(self.q_eval.device)
-                non_image_states_=T.tensor(np.copy(data[:]['next_non_image_state'])).to(self.q_eval.device)
+                non_image_states=T.tensor(reshaped_non_image_states).to(self.q_eval.device)
+                non_image_states_=T.tensor(reshaped_non_image_states_).to(self.q_eval.device)
                 # non_image_states = non_image_states.reshape((-1, 1))
                 # non_image_states_ = non_image_states_.reshape((-1, 1))
 
+                self.q_eval.init_hidden(self.batch_size*self.sequence_len)
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
+                self.q_next.init_hidden(self.batch_size*self.sequence_len)
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
             else:
-                q_pred = self.q_eval.forward(image_states)[indices, actions]
-                q_next = self.q_next.forward(image_states_).max(dim=1)[0]          
+                self.q_eval.init_hidden(self.batch_size*self.sequence_len)
+                q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
+                self.q_next.init_hidden(self.batch_size*self.sequence_len)
+                q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
 
             q_next[dones] = 0.0
             q_target = rewards + self.gamma*q_next
             errors = T.sub(q_target, q_pred).to(self.q_eval.device)
-            loss = self.q_eval.loss(T.multiply(errors, T.tensor(weights).to(self.q_eval.device)).float(), T.zeros(self.batch_size).to(self.q_eval.device).float()).to(self.q_eval.device)
+            loss = self.q_eval.loss(T.multiply(errors[::self.sequence_len], T.tensor(weights).to(self.q_eval.device)).float(), T.zeros(self.batch_size).to(self.q_eval.device).float()).to(self.q_eval.device)
 
         else:
             # add zero grad before adding trasition
@@ -348,19 +385,22 @@ class DQNAgent(object):
             # replace target here
             self.replace_target_network()
             
-            indices = np.arange(self.batch_size)
+            indices = np.arange(self.batch_size*self.sequence_len)
             if (self.lidar or self.guide) and "image" in self.encoding:
                 image_states, non_image_states, actions, rewards, image_states_, non_image_states_, dones = self.sample_memory(self.beta)
+                self.q_eval.init_hidden(self.batch_size*self.sequence_len)
                 q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
+                self.q_next.init_hidden(self.batch_size*self.sequence_len)
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
             else:
                 image_states, actions, rewards, image_states_, dones = self.sample_memory(self.beta)
-                q_pred = self.q_eval.forward(image_states)[indices, actions]
-                q_next = self.q_next.forward(image_states_).max(dim=1)[0]
+                self.q_eval.init_hidden(self.batch_size*self.sequence_len)
+                q_pred = self.q_eval.forward(image_states, non_image_states)[indices, actions]
+                self.q_next.init_hidden(self.batch_size*self.sequence_len)
+                q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
 
             q_next[dones] = 0.0
-            if self.nstep: q_target = rewards + (self.gamma**self.nstep_N)*q_next
-            else: q_target = rewards + self.gamma*q_next
+            q_target = rewards + self.gamma*q_next
             loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
 
         loss.backward()
@@ -368,21 +408,15 @@ class DQNAgent(object):
 
         self.learn_step_counter += 1
 
-        if step == 0: self.decrement_epsilon()
+        self.decrement_epsilon()
 
-        if self.prioritized: self.memory.update_priorities(tree_idxs, errors)
+        if self.prioritized: self.memory.update_priorities(tree_idxs, errors[::self.sequence_len])
 
         return loss.cpu().detach().numpy()
-    
-    def finish_nstep(self):
-        if self.prioritized:
-            self.memory.finish_nstep(self.gamma)
-        else:
-            self.memory.finish_nstep(self.gamma)
 
 
 class SegmentTree():
-    def __init__(self, size):
+    def __init__(self, size, sequence_len, nr):
         self.index = 0
         self.size = size
         self.full = False  # Used to track actual capacity
@@ -390,6 +424,8 @@ class SegmentTree():
         self.sum_tree = np.zeros((self.tree_start + self.size,), dtype=np.float32)
         self.data = np.array([blank_trans] * size, dtype=Transition_dtype)
         self.max = 1  # Initial max value to return (1 = 1^ω)
+        self.sequence_len = sequence_len
+        self.nr = nr
 
     def _update_nodes(self, indices):
         children_indices = indices * 2 + np.expand_dims([1, 2], axis=1)
@@ -449,61 +485,32 @@ class SegmentTree():
 
     # Returns data given a data index
     def get(self, data_index):
-        return self.data[data_index % self.size]
+        # indices = [(idx + np.arange(0, self.sequence_len*self.nr, self.nr)) % self.size for idx in data_index]
+        indices = [(idx - np.arange(self.sequence_len*self.nr, 0, -self.nr)) % self.size for idx in data_index]
+        
+        return self.data[indices]
 
     def total(self):
         return self.sum_tree[0]
     
 
 class ReplayMemory:
-    def __init__(self, nr, encoding, lidar, guide, max_size, batch_size, nstep, nstep_N, replay_alpha):
+    def __init__(self, encoding, lidar, guide, max_size, batch_size, sequence_len, nr, replay_alpha):
         self.encoding = encoding
         self.lidar = lidar
         self.guide = guide
         self.batch_size=batch_size
         self.capacity = max_size
         self.replay_alpha = replay_alpha
-        self.transitions = SegmentTree(self.capacity)
+        self.transitions = SegmentTree(self.capacity, sequence_len, nr)
         self.t = 0
-        self.nr = nr
-        self.nstep = nstep
-        self.nstep_N = nstep_N
-        self.nstep_buffer = []
 
-    def store_transition(self, image_state, action, reward, next_image_state, done, gamma, non_image_state=None, next_non_image_state=None):
+    def store_transition(self, image_state, action, reward, next_image_state, done, non_image_state=None, next_non_image_state=None):
         if (self.lidar or self.guide) and "image" in self.encoding:
-            if self.nstep:
-                self.nstep_buffer.append((image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done))
-
-                if(len(self.nstep_buffer)<self.nstep_N*self.nr):
-                    return
-                
-                R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
-                image_state, non_image_state, action, _, next_image_state, next_non_image_state, done = self.nstep_buffer.pop(0)
-            self.transitions.append((self.t, image_state, non_image_state, action, R, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         else:
-            if self.nstep:
-                self.nstep_buffer.append((image_state, action, reward, next_image_state, done))
-
-                if(len(self.nstep_buffer)<self.nstep_N*self.nr):
-                    return
-                
-                R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
-                image_state, action, _, next_image_state, done = self.nstep_buffer.pop(0)
-            self.transitions.append((self.t, image_state, action, R, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
-
-    def finish_nstep(self, gamma):
-        while len(self.nstep_buffer) > 0:
-            R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0, len(self.nstep_buffer), self.nr)])
-            if self.guide:
-                state, other_state, action, _, state_, other_state_, done = self.nstep_buffer.pop(0)
-                self.transitions.append((self.t, state, other_state, action, R, state_, other_state_, done), self.transitions.max)
-            else:
-                state, action, _, state_, done = self.nstep_buffer.pop(0)
-                self.transitions.append((self.t, state, action, R, state_, done), self.transitions.max)
-            
-            self.t = 0 if done else self.t + 1
     
     def sample(self, replay_beta, epsilon=0.001):
         capacity = self.capacity if self.transitions.full else self.transitions.index

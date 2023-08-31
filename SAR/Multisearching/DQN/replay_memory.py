@@ -5,7 +5,8 @@ import random
 # last at sample buffer
 
 class ReplayBuffer(object):
-    def __init__(self, guide, max_size, input_shape, n_actions):
+    def __init__(self, nr, guide, max_size, input_shape, nstep, N):
+        self.nr = nr
         self.guide = guide
         self.mem_size = max_size
         self.stack_size = 4
@@ -33,8 +34,23 @@ class ReplayBuffer(object):
         self.reward_memory = np.zeros(self.mem_size, dtype=np.float32)
         self.terminal_memory = np.zeros(self.mem_size, dtype=np.bool_)
 
-    def store_transition(self, state, action, reward, state_, done, other_state=None, other_state_=None):
+        self.nstep = nstep
+        self.nstep_N = N
+        self.nstep_buffer = []
+
+    def store_transition(self, state, action, reward, state_, done, gamma, other_state=None, other_state_=None):
         index = self.mem_cntr % self.mem_size
+
+        if self.nstep:
+            if self.guide: self.nstep_buffer.append((state, other_state, action, reward, state_, other_state_, done))
+            else: self.nstep_buffer.append((state, action, reward, state_, done))
+
+            if(len(self.nstep_buffer)<self.nstep_N*self.nr):
+                return
+            
+            R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
+            if self.guide: state, other_state, action, _, state_, other_state_, done = self.nstep_buffer.pop(0)
+            else: state, action, _, state_, done = self.nstep_buffer.pop(0)
 
         self.state_memory[index] = state
         self.new_state_memory[index] = state_
@@ -42,9 +58,29 @@ class ReplayBuffer(object):
             self.other_state_memory[index] = other_state
             self.new_other_state_memory[index] = other_state_
         self.action_memory[index] = action
-        self.reward_memory[index] = reward
+        if self.nstep: self.reward_memory[index] = R
+        else: self.reward_memory[index] = reward
         self.terminal_memory[index] = done
+        
         self.mem_cntr += 1
+    
+    def finish_nstep(self, gamma):
+        while len(self.nstep_buffer) > 0:
+            index = self.mem_cntr % self.mem_size
+            R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0, len(self.nstep_buffer), self.nr)])
+            if self.guide: state, other_state, action, _, state_, other_state_, done = self.nstep_buffer.pop(0)
+            else: state, action, _, state_, done = self.nstep_buffer.pop(0)
+
+            self.state_memory[index] = state
+            self.new_state_memory[index] = state_
+            if self.guide:
+                self.other_state_memory[index] = other_state
+                self.new_other_state_memory[index] = other_state_
+            self.action_memory[index] = action
+            self.reward_memory[index] = R
+            self.terminal_memory[index] = done
+            
+            self.mem_cntr += 1
 
     def sample_buffer(self, batch_size):
         max_mem = min(self.mem_cntr, self.mem_size)

@@ -1,5 +1,6 @@
 import numpy as np
 from dqn_agent import DQNAgent
+from ddqn_agent import DDQNAgent
 from dqn_utils import read_json, write_json
 from dqn_environment import Environment, HEIGHT, WIDTH, States, Point, Direction
 import os
@@ -46,16 +47,28 @@ def test_centralized_dqn(policy_num, load_path, save_path, models_path, testing_
         # model_name = hp["env size"]
         if hp["agent type"] == "DQN":
             agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], 0, 0, 0, hp["learning rate"][0],
-                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["guide"], hp["lidar"],
+                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["guide"], hp["lidar"], hp["lstm"],
                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
-                            hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
+                            hp["mem size"], hp["batch size"], hp["replace"], False, 10, hp["prioritized"],
                             algo='DQNAgent_centralized_turn', env_name=model_name, chkpt_dir=load_models_path)
         elif hp["agent type"] == "DDQN":
-            agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], hp["epsilon"][0][0], hp["epsilon"][0][1], hp["epsilon"][0][2], hp["learning rate"][0],
-                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["lidar"],
+            agent = DDQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], 0, 0, 0, hp["learning rate"][0],
+                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["guide"], hp["lidar"], hp["lstm"],
                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                             hp["mem size"], hp["batch size"], hp["replace"], hp["prioritized"],
-                            algo='DDQNAgent_distributed', env_name=model_name, chkpt_dir=load_models_path)
+                            algo='DDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=load_models_path)
+        elif hp["agent type"] == "DuelDQN":
+            agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], 0, 0, 0, hp["learning rate"][0],
+                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["guide"], hp["lidar"], hp["lstm"],
+                            hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
+                            hp["mem size"], hp["batch size"], hp["replace"], False, 10, hp["prioritized"],
+                            algo='DuelDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=load_models_path)
+        elif hp["agent type"] == "DuelDDQN":
+            agent = DQNAgent(hp["encoding"], hp["number of drones"], hp["discount rate"][0], 0, 0, 0, hp["learning rate"][0],
+                            hp["n actions"], hp["starting beta"], hp["input dims"], hp["guide"], hp["lidar"], hp["lstm"],
+                            hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
+                            hp["mem size"], hp["batch size"], hp["replace"], False, 10, hp["prioritized"],
+                            algo='DuelDDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=load_models_path)
 
         
         hp["curriculum learning"] = {"sparse reward": False, "collisions": False}

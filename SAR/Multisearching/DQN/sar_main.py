@@ -16,12 +16,12 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-                        "training": False,
+                        "training": True,
                         "load checkpoint": False,
                         "show rewards interval": 100,
                         "show plot": False,
                         "save plot": False,
-                        "policy number": [0],
+                        "policy number": [0,1,2],
                         "test type": "iterative", # test types: grid and iterative
                         "testing iterations": 300
     }
@@ -37,7 +37,7 @@ if __name__ == '__main__':
                     "epsilon": [[0.1,0.1,0.1]],
 
                     "training sessions": 1,
-                    "episodes": 5000,
+                    "episodes": 20000,
                     "positive rewards": [0],
                     "positive exploration rewards": [1],
                     "negative rewards": [1],
@@ -54,6 +54,7 @@ if __name__ == '__main__':
                     "lidar": False,
                     "guide": True,
                     "fuel": False,
+                    "lstm": False,
 
                     "batch size": 64,
                     "mem size": 100000,
@@ -63,6 +64,8 @@ if __name__ == '__main__':
                     "stride": [1, 1],
                     "fc dims": [128],
 
+                    "nstep": True,
+                    "nstep N": 10,
                     "prioritized": True,
                     "starting beta": 0.5,
 
@@ -131,8 +134,8 @@ if __name__ == '__main__':
             hp["input dims"] = (2,HEIGHT, WIDTH)
             if hp["obstacles"]: hp["input dims"] = (3,HEIGHT, WIDTH)
             if hp["number of drones"] > 1:
-                hp["input dims"] = (4,HEIGHT, WIDTH)
-                # hp["input dims"] = (3,HEIGHT, WIDTH)
+                # hp["input dims"] = (4,HEIGHT, WIDTH)
+                hp["input dims"] = (3,HEIGHT, WIDTH)
                 if hp["obstacles"]: hp["input dims"] = (4,HEIGHT, WIDTH)
     elif hp["encoding"] == "full_image":
         if hp["stacked frames"]: hp["input dims"] = (4,HEIGHT, WIDTH)
@@ -140,6 +143,8 @@ if __name__ == '__main__':
 
     if hp["lidar"] and "image" not in hp["encoding"]:
         hp["input dims"][0] += 4
+    
+    if hp["agent type"] == "DRQN": hp["lstm"] = True
 
     if not testing_parameters["load checkpoint"]:
         save_hp(save_path, hp)
@@ -165,8 +170,8 @@ if __name__ == '__main__':
                                                             pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
                                                             hp["n actions"], hp["starting beta"], hp["input dims"], hp["stacked frames"], hp["guide"], hp["lidar"], hp["fuel"],
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
-                                                            hp["batch size"], hp["mem size"], hp["replace"],
-                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"])
+                                                            hp["batch size"], hp["mem size"], hp["replace"], hp["nstep"], hp["nstep N"],
+                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"], hp["lstm"])
                                             elif hp["training type"] == "centralized actions":
                                                 load_checkpoint = distributed_dqn(
                                                             hp["number of drones"], hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["encoding"],

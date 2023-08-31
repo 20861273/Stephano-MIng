@@ -13,10 +13,13 @@ from datetime import datetime
 
 from collections import namedtuple
 
-exclude = [0,1,2,3]
 
-for i in range(50):
-    print(np.random.choice([i for i in range(4) if i not in exclude]))
+original_list = [15, 20, 30]
+big_list = []
+for i in original_list:
+    big_list = big_list + [i-j for j in range(3, 0, -1)]
+
+print(big_list)
 
 
 

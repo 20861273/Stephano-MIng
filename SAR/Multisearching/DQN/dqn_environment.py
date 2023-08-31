@@ -756,8 +756,8 @@ class Environment:
                 image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
                 if obstacles: np.zeros((self.nr,) + (3,) + self.grid.shape)
                 if self.nr > 1:
-                    image_map = np.zeros((self.nr,) + (4,) + self.grid.shape)
-                    # image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
+                    # image_map = np.zeros((self.nr,) + (4,) + self.grid.shape)
+                    image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
                     if obstacles: np.zeros((self.nr,) + (4,) + self.grid.shape)
                 for r_i in range(self.nr):
                     i = 0
@@ -765,8 +765,8 @@ class Environment:
                     if obstacles:
                         i += 1
                         image_map[r_i][i] = obstacle_map
-                    i += 1
-                    image_map[r_i][i] = obstacle_map
+                    # i += 1
+                    # image_map[r_i][i] = obstacle_map
                     i += 1
                     image_map[r_i][i] = exploration_map
                     if self.nr > 1:

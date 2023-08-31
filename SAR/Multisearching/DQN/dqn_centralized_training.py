@@ -2,6 +2,9 @@ from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from dqn_utils import plot_learning_curve, write_json, read_json
 from dqn_agent import DQNAgent
 from ddqn_agent import DDQNAgent
+from duel_dqn_agent import DuelDQNAgent
+from duel_ddqn_agent import DuelDDQNAgent
+from drqn_agent import DRQNAgent
 from dqn_save_results import print_results
 # from replay_memory import ReplayBuffer
 import numpy as np
@@ -17,8 +20,8 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                     max_steps, i_exp,
                     n_actions, starting_beta, input_dims, stacked, guide, lidar, fuel,
                     c_dims, k_size, s_size, fc_dims,
-                    batch_size, mem_size, replace,
-                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num):
+                    batch_size, mem_size, replace, nstep, nstep_N,
+                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num, lstm):
     
     # initialize training session variables
     start_time = time.time()
@@ -44,16 +47,34 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         model_name = str(i_exp) + "_" + env_size
         if agent_type == "DQN":
             agent = DQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
-                            n_actions, starting_beta, input_dims, guide, lidar,
+                            n_actions, starting_beta, input_dims, guide, lidar, lstm,
                             c_dims, k_size, s_size, fc_dims,
-                            mem_size, batch_size, replace, prioritized,
+                            mem_size, batch_size, replace, nstep, nstep_N, prioritized,
                             algo='DQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
         elif agent_type == "DDQN":
             agent = DDQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
-                            n_actions, starting_beta, input_dims, lidar,
+                            n_actions, starting_beta, input_dims, guide, lidar, lstm,
+                            c_dims, k_size, s_size, fc_dims,
+                            mem_size, batch_size, replace, nstep, nstep_N, prioritized,
+                            algo='DDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+        elif agent_type == "DRQN":
+            agent = DRQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+                            n_actions, starting_beta, input_dims, guide, lidar, lstm,
                             c_dims, k_size, s_size, fc_dims,
                             mem_size, batch_size, replace, prioritized,
                             algo='DDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+        elif agent_type == "DuelDQN":
+            agent = DuelDQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+                            n_actions, starting_beta, input_dims, guide, lidar, lstm,
+                            c_dims, k_size, s_size, fc_dims,
+                            mem_size, batch_size, replace, nstep, nstep_N, prioritized,
+                            algo='DuelDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+        elif agent_type == "DuelDDQN":
+            agent = DuelDDQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
+                            n_actions, starting_beta, input_dims, guide, lidar, lstm,
+                            c_dims, k_size, s_size, fc_dims,
+                            mem_size, batch_size, replace, nstep, nstep_N, prioritized,
+                            algo='DuelDDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
         
         # for debugging
         fig,ax = plt.subplots(figsize=(WIDTH*2*2, HEIGHT*2))
@@ -179,10 +200,13 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                             agent.store_transition(image_observations[i_r], non_image_observation[i_r], action[i_r],
                                                 reward, image_observations_[i_r], non_image_observation_[i_r], done)
                         else:
-
-                            agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
-                                                reward, image_observation_[i_r], non_image_observation_[i_r], done)
-                        loss = agent.learn()
+                            if agent_type == "DRQN":
+                                agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
+                                                    reward, image_observation_[i_r], non_image_observation_[i_r], done, step)
+                            else:
+                                agent.store_transition(image_observation[i_r], non_image_observation[i_r], action[i_r],
+                                                    reward, image_observation_[i_r], non_image_observation_[i_r], done)
+                        loss = agent.learn(step)
                         if not loss == None: average_loss += float(loss)
 
                 image_observation = image_observation_
@@ -204,6 +228,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
 
                 # checks if termination condition was met
                 if done:
+                    agent.finish_nstep()
                     # for debugging
                     if show_plot:
                         plt.cla()

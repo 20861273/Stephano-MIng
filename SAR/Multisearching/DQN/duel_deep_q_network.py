@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 
-class DeepQNetwork(nn.Module):
+class DuelDeepQNetwork(nn.Module):
     """
     A class used to represent the environment
 
@@ -55,7 +55,7 @@ class DeepQNetwork(nn.Module):
     def __init__(self, encoding, nr, lr,
                  n_actions, input_dims, guide, lidar, lstm, c_dims, k_size, s_size,
                     fc_dims, device_num, name, chkpt_dir):
-        super(DeepQNetwork, self).__init__()
+        super(DuelDeepQNetwork, self).__init__()
         self.checkpoint_dir = chkpt_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name)
 
@@ -102,9 +102,9 @@ class DeepQNetwork(nn.Module):
                 # self.fc2 = nn.Linear(fc_dims[0], fc_dims[1])
 
 
-                # output layer
-                self.fc2 = nn.Linear(fc_dims[0], self.n_actions)
-                # self.fc3 = nn.Linear(fc_dims[1], self.n_actions)
+                # split into value and advantage stream
+                self.V = nn.Linear(fc_dims[0], 1)
+                self.A = nn.Linear(fc_dims[0], n_actions)
 
             # random initialization of weights
             nn.init.normal_(self.conv1.weight, mean=0, std=0.01)
@@ -119,8 +119,8 @@ class DeepQNetwork(nn.Module):
                 nn.init.normal_(self.fc1.weight, mean=0, std=0.01)
             else:
                 nn.init.normal_(self.fc1.weight, mean=0, std=0.01)
-                nn.init.normal_(self.fc2.weight, mean=0, std=0.01)
-                # nn.init.normal_(self.fc3.weight, mean=0, std=0.01)
+                nn.init.normal_(self.V.weight, mean=0, std=0.01)
+                nn.init.normal_(self.A.weight, mean=0, std=0.01)
         else:
             self.fc1 = nn.Linear(*self.input_dims, self.fc_dims[0]) # * unpacking the input list
             self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
@@ -180,8 +180,8 @@ class DeepQNetwork(nn.Module):
             if self.lstm:
                 actions = F.relu(self.fc1(lstm_out.view(-1, self.fc_dims[0])))
             else:
-                actions = self.fc2(flat1)
-                # actions = self.fc3(flat2)
+                V = self.V(flat1)
+                A = self.A(flat1)
         else:
             # image_state = image_state.to(self.device)
             x = F.relu(self.fc1(image_state))
@@ -189,7 +189,7 @@ class DeepQNetwork(nn.Module):
             x = F.relu(self.fc3(x))
             actions = self.fc4(x)
 
-        return actions
+        return V,A
 
     def init_hidden(self, batch_size):
         if self.training:
