@@ -13,8 +13,8 @@ class Enclosed_space_check:
         cnter = 0
         labels = []
 
-        for x in range(self.width-1):
-            for y in range(self.height-1):
+        for x in range(self.width):
+            for y in range(self.height):
                 if self.binary_grid[y,x] != self.States.UNEXP.value:
                     continue
                 if cnter == 0:
@@ -46,7 +46,7 @@ class Enclosed_space_check:
                         if not combined: 
                             labels[index].append((x+1,y))
 
-                # checks if right is connected
+                # checks if bottom is connected
                 if y != self.height-1:
                     if self.binary_grid[y,x] == self.binary_grid[y+1,x]:
                         # checks if (x+1,y) is in a label list already

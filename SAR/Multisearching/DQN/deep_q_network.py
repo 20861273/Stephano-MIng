@@ -82,10 +82,9 @@ class DeepQNetwork(nn.Module):
             self.s_size = s_size.copy()
 
             # convolutional layers
+            self.maxpool = nn.MaxPool2d(kernel_size=2, stride=1)
             self.conv1 = nn.Conv2d(input_dims[0], c_dims[0], k_size[0], stride=s_size[0])
-            # nn.MaxPool2d(kernel_size=2)
             self.conv2 = nn.Conv2d(c_dims[0], c_dims[1], k_size[1], stride=s_size[1])
-            # nn.MaxPool2d(kernel_size=2)
             # self.conv3 = nn.Conv2d(c_dims[1], c_dims[2], k_size[2], stride=s_size[2])
 
             # calculation of fully connected layer input size
@@ -154,7 +153,9 @@ class DeepQNetwork(nn.Module):
         if "image" in self.encoding:
             # forward pass convolutional layers
             conv1 = F.relu(self.conv1(image_state))
+            # conv1 = self.maxpool(conv1)
             conv2 = F.relu(self.conv2(conv1))
+            # conv2 = self.maxpool(conv2)
             # conv3 = F.relu(self.conv3(conv2))
             # conv3 shape is BS x n_filters x H x W
 

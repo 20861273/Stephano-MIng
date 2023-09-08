@@ -12,8 +12,8 @@ from enclosed_space_checker import Enclosed_space_check
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 8
-WIDTH = 8
+HEIGHT = 6
+WIDTH = 6
 
 # DENSITY = 30 # percentage
 
@@ -101,7 +101,7 @@ class Environment:
     
     def __init__(self, nr, obstacles, obstacle_density,\
                 reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
-                training_type, encoding, guide, lidar, refuel, curriculum_learning, total_episodes, exp, ts, save_path):
+                training_type, encoding, guide, lidar, refuel, curriculum_learning, total_episodes, total_steps, exp, ts, save_path, goal_spawning=False):
         
         self.nr = nr
         self.cntr = 0
@@ -114,7 +114,7 @@ class Environment:
         self.refuel = refuel
 
         if self.refuel: self.starting_fuel = (WIDTH-2)*2+(HEIGHT-2)*2-4
-        else: self.starting_fuel = 200
+        else: self.starting_fuel = HEIGHT*WIDTH*3
         self.fuel = self.starting_fuel
         self.guide = guide
 
@@ -128,19 +128,19 @@ class Environment:
         self.obstacle_density = obstacle_density
         
         if self.obstacles:
-            self.generate_grid()
-            self.starting_grid = self.grid.copy()
-            # self.starting_grid = self.generate_maze(HEIGHT, WIDTH)
-            # self.draw_edges()
-            self.set_obstacles()
-
-            self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
-            
-            ES = Enclosed_space_check(HEIGHT, WIDTH, self.starting_grid, States)
-            self.starting_grid = ES.enclosed_space_handler()
-            self.grid = self.starting_grid.copy()
-
             if exp == 0 and ts == 0:
+                self.generate_grid()
+                self.starting_grid = self.grid.copy()
+                # self.starting_grid = self.generate_maze(HEIGHT, WIDTH)
+                # self.draw_edges()
+                self.set_obstacles()
+
+                self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
+                
+                ES = Enclosed_space_check(HEIGHT, WIDTH, self.starting_grid, States)
+                self.starting_grid = ES.enclosed_space_handler()
+                self.grid = self.starting_grid.copy()
+
                 file_name = "grid.json"
                 file_name = os.path.join(save_path, file_name)
                 write_json(self.grid.tolist(), file_name)
@@ -174,7 +174,7 @@ class Environment:
                             'boundary' :   [False]*self.nr,
                             'drone'    :   [False]*self.nr,
                             'trapped'  :   [False]*self.nr}
-        self.collision_state = False
+        self.collision_state = [False]*self.nr
 
         self.training_type = training_type
         self.encoding = encoding
@@ -182,6 +182,8 @@ class Environment:
         self.return_home = False
         self.return_home_cell = [None]*self.nr
         self.astar = Astar(HEIGHT, WIDTH, self.grid, States)
+
+        self.goal_spawning = goal_spawning
 
         # print("\nGrid size: ", self.grid.shape)
 
@@ -202,7 +204,7 @@ class Environment:
                             'boundary' :   [False]*self.nr,
                             'drone'    :   [False]*self.nr,
                             'trapped'  :   [False]*self.nr}
-        self.collision_state = False
+        self.collision_state = [False]*self.nr
         # Clear all visited blocks
         if self.obstacles: # and current_episode/self.total_episodes > 0.5:
             # self.obstacle_density = (current_episode)/(self.total_episodes)*self.obstacle_end_density
@@ -308,6 +310,11 @@ class Environment:
         return image_state, non_image_state
 
     def step_centralized(self, actions):
+        self.collision = {  'obstacle' :   [False]*self.nr,
+                            'boundary' :   [False]*self.nr,
+                            'drone'    :   [False]*self.nr,
+                            'trapped'  :   [False]*self.nr}
+        self.collision_state = [False]*self.nr
         self.cntr += 1
         self.score = 0
 
@@ -337,10 +344,10 @@ class Environment:
             self.fuel = self.starting_fuel
 
         # 5. Check exit condition
-        if self.collision_state:
+        if any(self.collision_state):
             self.score -= self.negative_reward
             reward = self.score
-            game_over = True
+            game_over = False
             return image_state, non_image_state, reward, game_over, (0, self.collision)
         
         if self.fuel == 0:
@@ -349,7 +356,7 @@ class Environment:
             game_over = True
             return image_state, non_image_state, reward, game_over, (0, self.collision)
 
-        if self.reward_system["find goal"]:
+        if self.reward_system["find goal"] or self.goal_spawning:
             if self.curriculum_learning['sparse reward']:
                 # if self._found_all_goals():
                 #     self.score += self.positive_reward
@@ -533,7 +540,7 @@ class Environment:
         # gets the distance to all unvisited blocks
         for y in range(self.grid.shape[0]):
             for x in range(self.grid.shape[1]):
-                if self.grid[y,x] == States.UNEXP.value:
+                if temp_exploration_grid[y,x] == False:
                     distance = self.get_distance(Point(x,y), self.pos[r_i])
 
                     if distance <= self.fuel and not other_location == Point(x,y):
@@ -546,10 +553,11 @@ class Environment:
             return min(distances, key=distances.get) # returns position
             # return distances[min(distances, key=distances.get)] #returns distance
 
-    def get_state(self):
+    def get_state(self, x1=None, y1=None, x2=None, y2=None):
         non_image_state = [None]*self.nr
         if self.guide:
             closest_unexplored = [None]*self.nr
+            closest_unexplored_dist = [None]*self.nr
             for r_i in range(self.nr):
                 # checks if enough fuel to get home
                 if self.refuel and self.fuel == self.get_distance(self.pos[r_i], self.starting_pos[r_i]) and self.pos[r_i]!= self.starting_pos[r_i]:
@@ -568,10 +576,11 @@ class Environment:
                         non_image_state[r_i] = [self.fuel, 0, 4]
                         # non_image_state = [[self.fuel, 0, 0,0,0,0]]
                     else:
+                        non_image_state[r_i] = [WIDTH*HEIGHT]
                         # non_image_state[r_i] = [0]
                         # non_image_state[r_i] = [4]
                         # non_image_state[r_i] = [0,0,0,0]
-                        non_image_state[r_i] = [0, 4]
+                        # non_image_state[r_i] = [0, 4]
                         # non_image_state[r_i] = [0, 0,0,0,0]
                         if self.lidar:
                             # non_image_state[r_i] = [0] + self.check_surrounding_cells(r_i)
@@ -579,25 +588,31 @@ class Environment:
                             non_image_state[r_i] = [0, 4] + self.check_surrounding_cells(r_i)
                 else:
                     # print(closest_unexplored, closest_unexplored[r_i])
-                    path = self.astar.a_star(self.pos[r_i], closest_unexplored[r_i])
-                    del path[0]
+                    # path = self.astar.a_star(self.pos[r_i], closest_unexplored[r_i])
+                    # del path[0]
+
+                    # closest_unexplored_dist[r_i] = self.get_distance(self.pos[r_i], closest_unexplored[r_i])
 
                     if self.refuel:
                         # non_image_state = [self.fuel, len(path)]
-                        non_image_state[r_i] = [self.fuel, len(path), self.get_direction(path[0], r_i)]
+                        # non_image_state[r_i] = [self.fuel, len(path), self.get_direction(path[0], r_i)]
+                        non_image_state[r_i] = [self.fuel, closest_unexplored_dist[r_i], self.get_direction(closest_unexplored[r_i], r_i)]
                         # non_image_state = [[self.fuel, len(path)] + self.get_direction(path[0])]
                         # non_image_state = [self.fuel, closest_unexplored]
                     else:
+                        non_image_state[r_i] = [closest_unexplored[r_i].x*WIDTH + closest_unexplored[r_i].y]
                         # non_image_state[r_i] = [closest_unexplored] 
                         # non_image_state[r_i] = [len(path)] # Test 1
                         # non_image_state[r_i] = [self.get_direction(path[0], r_i)] # Test 3
                         # non_image_state[r_i] = self.get_direction(path[0], r_i) # Test 7
-                        non_image_state[r_i] = [len(path), self.get_direction(path[0], r_i)] # Test 2
+                        # non_image_state[r_i] = [len(path), self.get_direction(path[0], r_i)] # Test 2: a star distance (with obstacles)
+                        # non_image_state[r_i] = [closest_unexplored_dist[r_i], self.get_direction(closest_unexplored[r_i], r_i)] # Test 2: manhattan distance (without obstacles)
                         # non_image_state[r_i] = [len(path)] + self.get_direction(path[0], r_i)
                         if self.lidar:
                             # non_image_state[r_i] = [len(path)]  + self.check_surrounding_cells(r_i)
                             # non_image_state[r_i] = [self.get_direction(path[0], r_i)]  + self.check_surrounding_cells(r_i)
-                            non_image_state[r_i] = [len(path), self.get_direction(path[0], r_i)]  + self.check_surrounding_cells(r_i)
+                            # non_image_state[r_i] = [len(path), self.get_direction(path[0], r_i)]  + self.check_surrounding_cells(r_i)
+                            non_image_state[r_i] = [closest_unexplored_dist[r_i], self.get_direction(closest_unexplored[r_i], r_i)]  + self.check_surrounding_cells(r_i) # Test 2: manhattan distance (without obstacles)
                     
         # get distances of drones
         # for r_c in range(self.nr):
@@ -754,15 +769,18 @@ class Environment:
             # Non-padded
             if not self.encoding == "full_image":
                 image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
-                if obstacles: np.zeros((self.nr,) + (3,) + self.grid.shape)
+                if self.obstacles: image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
                 if self.nr > 1:
                     # image_map = np.zeros((self.nr,) + (4,) + self.grid.shape)
                     image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
-                    if obstacles: np.zeros((self.nr,) + (4,) + self.grid.shape)
+                    if self.obstacles: image_map = np.zeros((self.nr,) + (4,) + self.grid.shape)
+                    # without exploration
+                    # image_map = np.zeros((self.nr,) + (2,) + self.grid.shape)
+                    if self.obstacles: image_map = np.zeros((self.nr,) + (3,) + self.grid.shape)
                 for r_i in range(self.nr):
                     i = 0
                     image_map[r_i][i] = location_map[r_i]
-                    if obstacles:
+                    if self.obstacles:
                         i += 1
                         image_map[r_i][i] = obstacle_map
                     # i += 1
@@ -778,7 +796,7 @@ class Environment:
                     image_map[r_i][0] = location_map[r_i]
 
             image_state = np.copy(image_map)
-            # image_state = np.kron(image_state, np.ones((2, 2)))
+            # image_state = np.kron(image_state, np.ones((10, 10)))
 
             return image_state, non_image_state
 
@@ -793,6 +811,88 @@ class Environment:
         # for y,x in obstables:
         #     obstacle_grid[y, x] = 1.0
         # obstacle_grid = obstacle_grid.flatten()
+
+    def is_obstacle_collision_centralized(self, pt, r_i, x ,y, action):
+        # set new positions
+        new_pos = [Point(x[i], y[i]) for i in range(self.nr)]
+
+        # not needed. check later
+        if r_i == None:
+            next_r = 0
+        else:
+            next_r = r_i + 1
+            if next_r % self.nr == 0: next_r = 0
+
+        obstacles = np.argwhere(self.grid == States.OBS.value)
+        # Collision with obstacle
+        if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
+            self.score -= self.negative_reward
+            self.collision['obstacle'][r_i] = True
+            self.collision_state[r_i] = True
+            x = self.pos[r_i].x
+            y = self.pos[r_i].y
+        return pt.x,pt.y
+
+    def is_border_collision_centralized(self, pt, r_i, x ,y, action):
+        # set new positions
+        new_pos = [Point(x[i], y[i]) for i in range(self.nr)]
+
+        # not needed. check later
+        if r_i == None:
+            next_r = 0
+        else:
+            next_r = r_i + 1
+            if next_r % self.nr == 0: next_r = 0
+
+        # Collision with boundary
+        if not 0 <= pt.y < self.grid.shape[0] or not 0 <= pt.x < self.grid.shape[1]:
+            self.score -= self.negative_reward
+            self.collision['boundary'][r_i] = True
+            self.collision_state[r_i] = True
+            x = self.pos[r_i].x
+            y = self.pos[r_i].y
+        return pt.x,pt.y
+    
+    def is_drone_collision_centralized(self, pt, r_i, x ,y, action):
+        # set new positions
+        new_pos = [Point(x[i], y[i]) for i in range(self.nr)]
+
+        # not needed. check later
+        if r_i == None:
+            next_r = 0
+        else:
+            next_r = r_i + 1
+            if next_r % self.nr == 0: next_r = 0
+        # Collision with other drone
+        for i, pos_i in enumerate(new_pos):
+            # collide at same location
+            if any(self.collision_state):
+                if (i != r_i and pt == self.pos[i]):
+                    if action == Direction.STAY.value:
+                        self.collision['trapped'][r_i] = True
+                        self.collision_state[r_i] = True
+                    else:
+                        self.score -= self.negative_reward
+                        self.collision['drone'][r_i] = True
+                        self.collision['drone'][i] = True
+                        self.collision_state[r_i] = True
+            else:
+                if (i != r_i and pt == pos_i):
+                    if action == Direction.STAY.value:
+                        self.collision['trapped'][r_i] = True
+                        self.collision_state[r_i] = True
+                    else:
+                        self.score -= self.negative_reward
+                        self.collision['drone'][r_i] = True
+                        self.collision['drone'][i] = True
+                        self.collision_state[r_i] = True
+
+            # cross locations thus collide
+            if i < r_i and pt == self.pos[i] and pos_i == self.pos[r_i]:
+                self.score -= self.negative_reward
+                self.collision['drone'][r_i] = True
+                self.collision['drone'][i] = True
+                self.collision_state[r_i] = True
 
     def is_collision_centralized(self, pt, r_i, x ,y, action):
         # set new positions
@@ -845,16 +945,19 @@ class Environment:
         if any(np.equal(obstacles,np.array([pt.y,pt.x])).all(1)):
             self.score[r_i] -= self.negative_reward
             self.collision['obstacle'][r_i] = True
+            self.collision_state[r_i] = True
         # Collision with boundary
         elif not 0 <= pt.y < self.grid.shape[0] or not 0 <= pt.x < self.grid.shape[1]:
             self.score[r_i] -= self.negative_reward
             self.collision['boundary'][r_i] = True
+            self.collision_state[r_i] = True
         # Collision with other drone
         for i, pos_i in enumerate(new_pos):
             if i != r_i and pt == pos_i:
                 self.score[r_i] -= self.negative_reward
                 self.collision['drone'][r_i] = True
                 self.collision['drone'][i] = True
+                self.collision_state[r_i] = True
         
         return self.collision
         
@@ -896,8 +999,13 @@ class Environment:
                 y[i] -= 1
 
         # Set position to new location
+        # for i in range(0, self.nr):
+        #     x[i], y[i] = self.is_obstacle_collision_centralized(Point(x[i],y[i]), i, x, y, action[i])
+        #     x[i], y[i] = self.is_border_collision_centralized(Point(x[i],y[i]), i, x, y, action[i])
+        # for i in range(0, self.nr):
+        #     self.is_drone_collision_centralized(Point(x[i],y[i]), i, x, y, action[i])
         for i in range(0, self.nr):
-                self.collision = self.is_collision_centralized(Point(x[i],y[i]), i, x, y, action[i])
+            self.collision = self.is_collision_centralized(Point(x[i],y[i]), i, x, y, action[i])
         
         collision_types = []
         for collision_type, collision_states in self.collision.items():
@@ -909,20 +1017,20 @@ class Environment:
                 if self.collision[collisions][i]:
                     if collisions == "obstacle" or collisions == "boundary":
                         self.prev_pos[i] = self.pos[i]
-                        self.pos[i] = Point(x[i],y[i])
+                        # self.pos[i] = Point(x[i],y[i])
                         self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
-                        self.collision_state = True
+                        self.collision_state[i] = True
                     elif collisions == "drone":
                         self.prev_pos[i] = self.pos[i]
-                        self.pos[i] = Point(x[i],y[i])
+                        # self.pos[i] = Point(x[i],y[i])
                         self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
-                        self.collision_state = True
+                        self.collision_state[i] = True
                     elif collisions == "trapped":
                         self.prev_pos[i] = self.pos[i]
-                        self.pos[i] = Point(x[i],y[i])
+                        # self.pos[i] = Point(x[i],y[i])
                         self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
-                        self.collision_state = True
-            if not self.collision_state:
+                        self.collision_state[i] = True
+            if not self.collision_state[i]:
                 self.prev_pos[i] = self.pos[i]
                 self.pos[i] = Point(x[i],y[i])
                 self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
@@ -972,13 +1080,13 @@ class Environment:
                         self.pos[i] = self.pos[i]
                         self.prev_pos[i] = self.pos[i]
                         self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
-                        self.collision_state = True
+                        self.collision_state[i] = True
                     elif collisions == "drone":
                         self.prev_pos[i] = self.pos[i]
                         self.pos[i] = Point(x[i],y[i])
                         self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True
-                        self.collision_state = True
-            if not self.collision_state:
+                        self.collision_state[i] = True
+            if not self.collision_state[i]:
                 self.prev_pos[i] = self.pos[i]
                 self.pos[i] = Point(x[i],y[i])
                 self.exploration_grid[self.prev_pos[i].y, self.prev_pos[i].x] = True

@@ -21,17 +21,18 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                     n_actions, starting_beta, input_dims, stacked, guide, lidar, fuel,
                     c_dims, k_size, s_size, fc_dims,
                     batch_size, mem_size, replace, nstep, nstep_N,
-                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num, lstm):
+                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num, lstm, outliers=None):
     
     # initialize training session variables
     start_time = time.time()
-    ts_rewards, ts_steps, ts_losses = [], [], []
+    ts_rewards, ts_steps, ts_losses, ts_success = [], [], [], []
     show_plot = False
+    max_steps = HEIGHT*WIDTH*3
 
     # training sessions loop
     for i_ts in range(training_sessions):
         # initialized in epoch variables
-        rewards, steps, episode_loss = [], [], []
+        rewards, steps, episode_loss, successes = [], [], [], []
         cntr, timeout_cntr = 0, 0
         percentage = 0.0
         previous_avg_collisions = 0
@@ -39,7 +40,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         # initialize environment
         env = Environment(nr, obstacles, obstacle_density, reward_system,
                           positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
-                          training_type, encoding, guide, lidar, fuel, curriculum_learning, episodes, i_exp, i_ts, save_path)
+                          training_type, encoding, guide, lidar, fuel, curriculum_learning, episodes, max_steps, i_exp, i_ts, save_path)
         
         collisions_grid = np.zeros(env.grid.shape)
 
@@ -61,8 +62,8 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             agent = DRQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
                             n_actions, starting_beta, input_dims, guide, lidar, lstm,
                             c_dims, k_size, s_size, fc_dims,
-                            mem_size, batch_size, replace, prioritized,
-                            algo='DDQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
+                            mem_size, batch_size, replace, nstep, nstep_N, prioritized,
+                            algo='DRQNAgent_centralized_turn', env_name=model_name, chkpt_dir=models_path, device_num=device_num)
         elif agent_type == "DuelDQN":
             agent = DuelDQNAgent(encoding, nr, discount_rate, epsilon, eps_min, eps_dec, learning_rate,
                             n_actions, starting_beta, input_dims, guide, lidar, lstm,
@@ -138,6 +139,29 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             # reset environment
             percentage = float(cntr)/float(print_interval)*100.0
             image_observation, non_image_observation = env.reset(i_episode, percentage)
+
+            if outliers != None:
+                for i in range(nr): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = False
+
+                env.grid[env.pos[0].y, env.pos[0].x] = States.UNEXP.value
+                env.exploration_grid[env.pos[0].y, env.pos[0].x] = False
+
+                env.starting_pos[0] = outliers[i_episode % len(outliers)][0]
+                env.pos[0] = outliers[i_episode % len(outliers)][0]
+                
+                env.grid[env.starting_pos[0].y, env.starting_pos[0].x] = States.ROBOT.value
+
+                env.grid[env.pos[1].y, env.pos[1].x] = States.UNEXP.value
+                env.exploration_grid[env.pos[1].y, env.pos[1].x] = False
+
+                env.starting_pos[1] = outliers[i_episode % len(outliers)][1]
+                env.pos[1] = outliers[i_episode % len(outliers)][1]
+                
+                env.grid[env.starting_pos[1].y, env.starting_pos[1].x] = States.ROBOT.value
+
+                for i in range(nr): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = True
+
+                image_observation, non_image_observation = env.get_state()
 
             if stacked:
                 # adds dimension for previous time steps
@@ -239,6 +263,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             rewards.append(episode_reward)
             steps.append(step)
             episode_loss.append(tuple((i_episode, round(average_loss, 5))))
+            successes.append(done)
 
             # calculate average rewards over last 100 episodes (only for display purposes)
             avg_reward = np.mean(rewards[-100:])
@@ -259,6 +284,26 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                     file_name = os.path.join(save_path, file_name)
                     write_json(rewards, file_name)
 
+                    file_name = "ts_steps%s.json" %(str(i_exp))
+                    file_name = os.path.join(save_path, file_name)
+                    write_json(ts_steps, file_name)
+
+                    file_name = "steps%s.json" %(str(i_exp))
+                    file_name = os.path.join(save_path, file_name)
+                    write_json(steps, file_name)
+
+                    file_name = "ts_loss%s.json" %(str(i_exp))
+                    file_name = os.path.join(save_path, file_name)
+                    write_json(ts_losses, file_name)
+
+                    file_name = "collisions%s.json" %(str(i_exp))
+                    file_name = os.path.join(save_path, file_name)
+                    write_json(collisions_grid.tolist(), file_name)
+
+                    file_name = "ts_success%s.json" %(str(i_exp))
+                    file_name = os.path.join(save_path, file_name)
+                    write_json(ts_successes, file_name)
+
             # display progress
             if i_episode % print_interval == 0 or i_episode == episodes-1 and i_episode != 0:
                 percentage = float(cntr)/float(print_interval)*100.0
@@ -278,6 +323,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         ts_rewards.append(rewards)
         ts_steps.append(steps)
         ts_losses.append(episode_loss)
+        ts_success.append(successes)
 
         # save model and rewards
         if not load_checkpoint:
@@ -302,6 +348,10 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             file_name = "collisions%s.json" %(str(i_exp))
             file_name = os.path.join(save_path, file_name)
             write_json(collisions_grid.tolist(), file_name)
+
+            file_name = "ts_success%s.json" %(str(i_exp))
+            file_name = os.path.join(save_path, file_name)
+            write_json(ts_successes, file_name)
     
     # if loaded from wrong training session and all epochs have been trained to final episode,
     # this makes sure the load_checkpoint variable is false for the next training session
@@ -340,5 +390,9 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
     file_name = "collisions%s.json" %(str(i_exp))
     file_name = os.path.join(save_path, file_name)
     write_json(collisions_grid.tolist(), file_name)
+
+    file_name = "ts_success%s.json" %(str(i_exp))
+    file_name = os.path.join(save_path, file_name)
+    write_json(ts_successes, file_name)
 
     return load_checkpoint

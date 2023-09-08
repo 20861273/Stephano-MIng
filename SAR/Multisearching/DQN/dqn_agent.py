@@ -176,6 +176,11 @@ class DQNAgent(object):
         if not bottom_is_boundary: #down
             possible_positions[3] = Point(current_temp_x, current_temp_y+1)
 
+        # check collision with obstacles
+        for i in range(len(possible_positions)-1):
+            if not possible_positions[i]: continue
+            if env.grid[possible_positions[i].y, possible_positions[i].x] == States.OBS.value: surroundings[i] = True
+            
         # move drones to new positions
         new_positions = [False]*self.nr
         for r in range(self.nr):
@@ -480,7 +485,9 @@ class ReplayMemory:
                 
                 R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
                 image_state, non_image_state, action, _, next_image_state, next_non_image_state, done = self.nstep_buffer.pop(0)
-            self.transitions.append((self.t, image_state, non_image_state, action, R, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+                self.transitions.append((self.t, image_state, non_image_state, action, R, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            else:
+                self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)
         else:
             if self.nstep:
                 self.nstep_buffer.append((image_state, action, reward, next_image_state, done))
@@ -490,7 +497,9 @@ class ReplayMemory:
                 
                 R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
                 image_state, action, _, next_image_state, done = self.nstep_buffer.pop(0)
-            self.transitions.append((self.t, image_state, action, R, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+                self.transitions.append((self.t, image_state, non_image_state, action, R, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            else:
+                self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
 
     def finish_nstep(self, gamma):

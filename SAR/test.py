@@ -15,11 +15,10 @@ from collections import namedtuple
 
 
 original_list = [15, 20, 30]
-big_list = []
-for i in original_list:
-    big_list = big_list + [i-j for j in range(3, 0, -1)]
 
-print(big_list)
+
+for i in range(100):
+    print(original_list[i % len(original_list)])
 
 
 

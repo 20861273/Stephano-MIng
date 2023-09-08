@@ -36,8 +36,8 @@ class DuelDDQNAgent(object):
         global Transition_dtype
         global blank_trans
         if (self.lidar or self.guide) and "image" in self.encoding:
-            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (2)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (2)), ('done', np.bool_)])
-            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((2), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((2), dtype=np.float32), False)
+            Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('non_image_state', np.float32, (1,1)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('next_non_image_state', np.float32, (1,1)), ('done', np.bool_)])
+            blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), np.zeros((1,1), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), np.zeros((1,1), dtype=np.float32), False)
         else:
             Transition_dtype = np.dtype([('timestep', np.int32), ('image_state', np.float32, (self.input_dims)), ('action', np.int64), ('reward', np.float32), ('next_image_state', np.float32, (self.input_dims)), ('done', np.bool_)])
             blank_trans = (0, np.zeros((self.input_dims), dtype=np.float32), 0, 0.0,  np.zeros(self.input_dims), False)
@@ -48,7 +48,7 @@ class DuelDDQNAgent(object):
         
         if self.prioritized:
             # self.memory = ReplayMemory(mem_size, input_dims, n_actions, eps=0.0001, prob_alpha=0.5)
-            self.memory = ReplayMemory(self.encoding, self.lidar, self.guide, max_size=mem_size, batch_size=self.batch_size, replay_alpha=0.5)
+            self.memory = ReplayMemory(self.nr, self.encoding, self.lidar, self.guide, mem_size, self.batch_size, self.nstep, self.nstep_N, replay_alpha=0.5)
             
             # Other implementation of PER in replay_memory.py
             # if self.lidar and self.encoding == "image":
@@ -59,7 +59,7 @@ class DuelDDQNAgent(object):
             # self.memory = PrioritizedReplayMemory(lidar, self.input_dims, mem_size, alpha=0.5)
 
         else:
-            self.memory = ReplayBuffer(self.guide, mem_size, input_dims, n_actions)
+            self.memory = ReplayBuffer(self.guide, mem_size, input_dims, self.nstep, self.nstep_N)
         
         self.q_eval = DuelDeepQNetwork(self.encoding, nr, self.lr, self.n_actions,
                                     self.input_dims, self.guide, self.lidar, self.lstm,
@@ -85,10 +85,12 @@ class DuelDDQNAgent(object):
             if (self.lidar or self.guide) and "image" in self.encoding:
                 # non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device).reshape((1,1))
                 if stacked: non_image_state = T.tensor(np.array(non_image_observation),dtype=T.float32).to(self.q_eval.device)
-                else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+                # else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
+                else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device).reshape((1,1))
                 _, advantage = self.q_eval.forward(image_state, non_image_state)
             else:
-                actions = self.q_eval.forward(image_state)
+                _, advantage = self.q_eval.forward(image_state)
+            # action = T.argmax(advantage).item()
             actions = self.check_obstacles(env, i_r, other_actions, advantage.tolist())
             if T.all(actions == -float('inf')):
                 return Direction.STAY.value
@@ -175,6 +177,11 @@ class DuelDDQNAgent(object):
             possible_positions[2] = Point(current_temp_x, current_temp_y-1)
         if not bottom_is_boundary: #down
             possible_positions[3] = Point(current_temp_x, current_temp_y+1)
+
+        # check collision with obstacles
+        for i in range(len(possible_positions)-1):
+            if not possible_positions[i]: continue
+            if env.grid[possible_positions[i].y, possible_positions[i].x] == States.OBS.value: surroundings[i] = True
 
         # move drones to new positions
         new_positions = [False]*self.nr
@@ -327,8 +334,8 @@ class DuelDDQNAgent(object):
             if (self.lidar or self.guide) and "image" in self.encoding:
                 non_image_states=T.tensor(np.copy(data[:]['non_image_state'])).to(self.q_eval.device)
                 non_image_states_=T.tensor(np.copy(data[:]['next_non_image_state'])).to(self.q_eval.device)
-                # non_image_states = non_image_states.reshape((-1, 1))
-                # non_image_states_ = non_image_states_.reshape((-1, 1))
+                non_image_states = non_image_states.reshape((-1, 1))
+                non_image_states_ = non_image_states_.reshape((-1, 1))
 
                 V_s, A_s = self.q_eval.forward(image_states, non_image_states)
                 V_s_, A_s_ = self.q_next.forward(image_states_, non_image_states_)
@@ -348,7 +355,8 @@ class DuelDDQNAgent(object):
 
             max_actions = T.argmax(q_eval, dim=1)
             q_next[dones] = 0.0
-            q_target = rewards + self.gamma*q_next[indices, max_actions]
+            if self.nstep: q_target = rewards + (self.gamma**self.nstep_N)*q_next[indices, max_actions]
+            else: q_target = rewards + self.gamma*q_next[indices, max_actions]
             errors = T.sub(q_target, q_pred).to(self.q_eval.device)
             loss = self.q_eval.loss(T.multiply(errors, T.tensor(weights).to(self.q_eval.device)).float(), T.zeros(self.batch_size).to(self.q_eval.device).float()).to(self.q_eval.device)
 
@@ -381,7 +389,8 @@ class DuelDDQNAgent(object):
 
             max_actions = T.argmax(q_eval, dim=1)
             q_next[dones] = 0.0
-            q_target = rewards + self.gamma*q_next[indices, max_actions]
+            if self.nstep: q_target = rewards + (self.gamma**self.nstep_N)*q_next[indices, max_actions]
+            else: q_target = rewards + self.gamma*q_next[indices, max_actions]
             loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
 
         loss.backward()
@@ -501,7 +510,9 @@ class ReplayMemory:
                 
                 R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
                 image_state, non_image_state, action, _, next_image_state, next_non_image_state, done = self.nstep_buffer.pop(0)
-            self.transitions.append((self.t, image_state, non_image_state, action, R, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+                self.transitions.append((self.t, image_state, non_image_state, action, R, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            else:
+                self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)
         else:
             if self.nstep:
                 self.nstep_buffer.append((image_state, action, reward, next_image_state, done))
@@ -511,7 +522,9 @@ class ReplayMemory:
                 
                 R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
                 image_state, action, _, next_image_state, done = self.nstep_buffer.pop(0)
-            self.transitions.append((self.t, image_state, action, R, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+                self.transitions.append((self.t, image_state, action, R, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            else:
+                self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
 
     def finish_nstep(self, gamma):

@@ -8,7 +8,7 @@ import copy
 class DRQNAgent(object):
     def __init__(self, encoding, nr, gamma, epsilon, eps_min, eps_dec, lr, n_actions, starting_beta,
                  input_dims, guide, lidar, lstm, c_dims, k_size, s_size, fc_dims,
-                 mem_size, batch_size, replace, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
+                 mem_size, batch_size, replace, nstep, nstep_N, prioritized=False, algo=None, env_name=None, chkpt_dir='tmp/dqn', device_num=0):
         self.nr = nr
         self.gamma = gamma
         self.epsilon = epsilon
@@ -31,6 +31,8 @@ class DRQNAgent(object):
         self.beta = starting_beta
         self.encoding = encoding
         self.sequence_len = 10
+        self.nstep = nstep
+        self.nstep_N = nstep_N
 
         global Transition_dtype
         global blank_trans
@@ -47,7 +49,7 @@ class DRQNAgent(object):
         
         if self.prioritized:
             # self.memory = ReplayMemory(mem_size, input_dims, n_actions, eps=0.0001, prob_alpha=0.5)
-            self.memory = ReplayMemory(self.encoding, self.lidar, self.guide, mem_size, self.batch_size, self.sequence_len, self.nr, replay_alpha=0.5)
+            self.memory = ReplayMemory(self.nr, self.encoding, self.lidar, self.guide, mem_size, self.batch_size, self.nstep, self.nstep_N, self.sequence_len, replay_alpha=0.5)
             
             # Other implementation of PER in replay_memory.py
             # if self.lidar and self.encoding == "image":
@@ -244,17 +246,17 @@ class DRQNAgent(object):
         
         if self.prioritized:
             if (self.lidar or self.guide) and "image" in self.encoding:
-                self.memory.store_transition(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
+                self.memory.store_transition(image_state, action, reward, image_state_, done, self.gamma, non_image_state, non_image_state_)
                 # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
             else:
-                self.memory.store_transition(image_state, action, reward, image_state_, done, episode)
+                self.memory.store_transition(image_state, action, reward, image_state_, done, self.gamma, episode)
                 # self.memory.add(image_state, action, reward, image_state_, done)
         else:
             if (self.lidar or self.guide) and "image" in self.encoding:
-                self.memory.store_transition(image_state, action, reward, image_state_, done, non_image_state, non_image_state_, episode)
+                self.memory.store_transition(image_state, action, reward, image_state_, done, self.gamma, non_image_state, non_image_state_, episode)
                 # self.memory.add(image_state, action, reward, image_state_, done, non_image_state, non_image_state_)
             else:
-                self.memory.store_transition(image_state, action, reward, image_state_, done, episode)
+                self.memory.store_transition(image_state, action, reward, image_state_, done, self.gamma, episode)
                 # self.memory.add(image_state, action, reward, image_state_, done)
 
     def sample_memory(self, beta, prioritized=False):
@@ -320,7 +322,7 @@ class DRQNAgent(object):
 
         return checkpoint
 
-    def learn(self):
+    def learn(self, step):
         if self.prioritized:
             if self.memory.transitions.index<self.batch_size and self.memory.transitions.full==False:
                 return
@@ -374,7 +376,8 @@ class DRQNAgent(object):
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
 
             q_next[dones] = 0.0
-            q_target = rewards + self.gamma*q_next
+            if self.nstep: q_target = rewards + (self.gamma**self.nstep_N)*q_next
+            else: q_target = rewards + self.gamma*q_next
             errors = T.sub(q_target, q_pred).to(self.q_eval.device)
             loss = self.q_eval.loss(T.multiply(errors[::self.sequence_len], T.tensor(weights).to(self.q_eval.device)).float(), T.zeros(self.batch_size).to(self.q_eval.device).float()).to(self.q_eval.device)
 
@@ -400,7 +403,8 @@ class DRQNAgent(object):
                 q_next = self.q_next.forward(image_states_, non_image_states_).max(dim=1)[0]
 
             q_next[dones] = 0.0
-            q_target = rewards + self.gamma*q_next
+            if self.nstep: q_target = rewards + (self.gamma**self.nstep_N)*q_next
+            else: q_target = rewards + self.gamma*q_next
             loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
 
         loss.backward()
@@ -413,6 +417,12 @@ class DRQNAgent(object):
         if self.prioritized: self.memory.update_priorities(tree_idxs, errors[::self.sequence_len])
 
         return loss.cpu().detach().numpy()
+    
+    def finish_nstep(self):
+        if self.prioritized:
+            self.memory.finish_nstep(self.gamma)
+        else:
+            self.memory.finish_nstep(self.gamma)
 
 
 class SegmentTree():
@@ -495,7 +505,7 @@ class SegmentTree():
     
 
 class ReplayMemory:
-    def __init__(self, encoding, lidar, guide, max_size, batch_size, sequence_len, nr, replay_alpha):
+    def __init__(self, nr, encoding, lidar, guide, max_size, batch_size, nstep, nstep_N, sequence_len, replay_alpha):
         self.encoding = encoding
         self.lidar = lidar
         self.guide = guide
@@ -504,13 +514,49 @@ class ReplayMemory:
         self.replay_alpha = replay_alpha
         self.transitions = SegmentTree(self.capacity, sequence_len, nr)
         self.t = 0
+        self.nr = nr
+        self.nstep = nstep
+        self.nstep_N = nstep_N
+        self.nstep_buffer = []
 
-    def store_transition(self, image_state, action, reward, next_image_state, done, non_image_state=None, next_non_image_state=None):
+    def store_transition(self, image_state, action, reward, next_image_state, done, gamma, non_image_state=None, next_non_image_state=None):
         if (self.lidar or self.guide) and "image" in self.encoding:
-            self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            if self.nstep:
+                self.nstep_buffer.append((image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done))
+
+                if(len(self.nstep_buffer)<self.nstep_N*self.nr):
+                    return
+                
+                R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
+                image_state, non_image_state, action, _, next_image_state, next_non_image_state, done = self.nstep_buffer.pop(0)
+                self.transitions.append((self.t, image_state, non_image_state, action, R, next_image_state, next_non_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            else:
+                self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)
         else:
-            self.transitions.append((self.t, image_state, action, reward, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            if self.nstep:
+                self.nstep_buffer.append((image_state, action, reward, next_image_state, done))
+
+                if(len(self.nstep_buffer)<self.nstep_N*self.nr):
+                    return
+                
+                R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
+                image_state, action, _, next_image_state, done = self.nstep_buffer.pop(0)
+                self.transitions.append((self.t, image_state, action, R, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
+            else:
+                self.transitions.append((self.t, image_state, non_image_state, action, reward, next_image_state, next_non_image_state, done), self.transitions.max)
         self.t = 0 if done else self.t + 1  # Start new episodes with t = 0
+
+    def finish_nstep(self, gamma):
+        while len(self.nstep_buffer) > 0:
+            R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0, len(self.nstep_buffer), self.nr)])
+            if self.guide:
+                state, other_state, action, _, state_, other_state_, done = self.nstep_buffer.pop(0)
+                self.transitions.append((self.t, state, other_state, action, R, state_, other_state_, done), self.transitions.max)
+            else:
+                state, action, _, state_, done = self.nstep_buffer.pop(0)
+                self.transitions.append((self.t, state, action, R, state_, done), self.transitions.max)
+            
+            self.t = 0 if done else self.t + 1
     
     def sample(self, replay_beta, epsilon=0.001):
         capacity = self.capacity if self.transitions.full else self.transitions.index
