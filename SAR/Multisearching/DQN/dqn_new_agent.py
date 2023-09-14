@@ -2,7 +2,7 @@ import numpy as np
 import torch as T
 from deep_q_network import DeepQNetwork
 from replay_memory import ReplayBuffer, PrioritizedReplayMemory
-from dqn_environment import Direction, WIDTH, HEIGHT, States, Point
+from dqn_new_environment import Direction, WIDTH, HEIGHT, States, Point
 import copy
 
 class DQNAgent(object):
@@ -89,17 +89,16 @@ class DQNAgent(object):
                 actions = self.q_eval.forward(image_state, non_image_state)
             else:
                 actions = self.q_eval.forward(image_state)
-            actions = self.check_obstacles(env, i_r, other_actions, actions.tolist())
-            if T.all(actions == -float('inf')):
-                return Direction.STAY.value, True
-            else: action = T.argmax(actions).item()
-            # action = T.argmax(actions).item()
+            valid_actions = self.check_obstacles(env, i_r, other_actions, actions.tolist())
+            if T.all(valid_actions == -float('inf')):
+                return T.argmax(actions).item(), True
+            action = T.argmax(valid_actions).item()
         else:
-            actions = self.check_obstacles(env, i_r, other_actions, [self.action_space])
-            exclude = [i for i,e in enumerate(actions.tolist()[0]) if e == float("-inf")]
-            if len(exclude) == len(self.action_space):
-                return Direction.STAY.value, True
-            else: action = np.random.choice([i for i in range(len(self.action_space)) if i not in exclude])
+            valid_actions = self.check_obstacles(env, i_r, other_actions, [self.action_space])
+            if T.all(valid_actions == -float('inf')):
+                return np.random.choice(self.action_space), True
+            exclude = [i for i,e in enumerate(valid_actions.tolist()[0]) if e == float("-inf")]
+            action = np.random.choice([i for i in range(len(self.action_space)) if i not in exclude])
             # action = np.random.choice(self.action_space)
         
         # if not previous_action == None and not allow_windowed_revisiting:
@@ -147,22 +146,87 @@ class DQNAgent(object):
         return action, False
 
     def check_obstacles(self, env, i_r, other_actions, actions):
-        surroundings = [False]*(len(self.action_space)) # right, left, up, down
+        surroundings = [False]*(len(self.action_space))
 
         right_is_boundary = env.pos[i_r].x == WIDTH - 1
         left_is_boundary = env.pos[i_r].x == 0
         top_is_boundary = env.pos[i_r].y == 0
         bottom_is_boundary = env.pos[i_r].y == HEIGHT - 1
 
-        # check if boundary
-        if right_is_boundary:
-            surroundings[0] = True
-        if left_is_boundary:
-            surroundings[1] = True
-        if top_is_boundary:
-            surroundings[2] = True
-        if bottom_is_boundary:
-            surroundings[3] = True
+        # all possible positions of current drone
+        # also check boundaries
+        possible_positions = [False]*len(self.action_space)
+        current_temp_x = env.pos[i_r].x
+        current_temp_y = env.pos[i_r].y
+        if env.direction[i_r] == "up": #up
+            # forward action
+            if not top_is_boundary:
+                possible_positions[0] = Point(current_temp_x, current_temp_y-1)
+            else:
+                surroundings[0] = True
+            # left action
+            if not left_is_boundary:
+                possible_positions[2] = Point(current_temp_x-1, current_temp_y)
+            else:
+                surroundings[2] = True
+            # right action
+            if not right_is_boundary:
+                possible_positions[1] = Point(current_temp_x+1, current_temp_y)
+            else:
+                surroundings[1] = True
+        if env.direction[i_r] == "down": #down
+            # forward action
+            if not bottom_is_boundary:
+                possible_positions[0] = Point(current_temp_x, current_temp_y+1)
+            else:
+                surroundings[0] = True
+            # right action
+            if not left_is_boundary:
+                possible_positions[1] = Point(current_temp_x-1, current_temp_y)
+            else:
+                surroundings[1] = True
+            # left action
+            if not right_is_boundary:
+                possible_positions[2] = Point(current_temp_x+1, current_temp_y)
+            else:
+                surroundings[2] = True
+        if env.direction[i_r] == "right": #right
+            # left action
+            if not top_is_boundary:
+                possible_positions[2] = Point(current_temp_x, current_temp_y-1)
+            else:
+                surroundings[2] = True
+            # forward action
+            if not right_is_boundary:
+                possible_positions[0] = Point(current_temp_x+1, current_temp_y)
+            else:
+                surroundings[0] = True
+            # right action
+            if not bottom_is_boundary:
+                possible_positions[1] = Point(current_temp_x, current_temp_y+1)
+            else:
+                surroundings[1] = True
+        if env.direction[i_r] == "left": #left
+            # right action
+            if not top_is_boundary:
+                possible_positions[1] = Point(current_temp_x, current_temp_y-1)
+            else:
+                surroundings[1] = True
+            # forward action
+            if not left_is_boundary:
+                possible_positions[0] = Point(current_temp_x-1, current_temp_y)
+            else:
+                surroundings[0] = True
+            # left action
+            if not bottom_is_boundary:
+                possible_positions[2] = Point(current_temp_x, current_temp_y+1)
+            else:
+                surroundings[2] = True
+
+        # check collision with obstacles
+        for i in range(len(possible_positions)-1):
+            if not possible_positions[i]: continue
+            if env.grid[possible_positions[i].y, possible_positions[i].x] == States.OBS.value: surroundings[i] = True
 
         # move drones to new positions
         new_positions = [False]*self.nr
@@ -170,114 +234,54 @@ class DQNAgent(object):
             temp_x = env.pos[r].x
             temp_y = env.pos[r].y
             if r >= i_r: break
-            if other_actions[r] == Direction.LEFT.value:
-                temp_x -= 1
-            if other_actions[r] == Direction.RIGHT.value:
-                temp_x += 1
-            if other_actions[r] == Direction.UP.value:
-                temp_y -= 1
-            if other_actions[r] == Direction.DOWN.value:
-                temp_y += 1
-            
+            if other_actions[r] == None: break
+            if env.direction[r] == "up":
+                if other_actions[r] == Direction.FORWARD.value:
+                    temp_y -= 1
+                if other_actions[r] == Direction.RIGHT.value:
+                    temp_x += 1
+                if other_actions[r] == Direction.LEFT.value:
+                    temp_x -= 1
+            elif env.direction[r] == "down":
+                if other_actions[r] == Direction.FORWARD.value:
+                    temp_y += 1
+                if other_actions[r] == Direction.RIGHT.value:
+                    temp_x -= 1
+                if other_actions[r] == Direction.LEFT.value:
+                    temp_x += 1
+            elif env.direction[r] == "right":
+                if other_actions[r] == Direction.FORWARD.value:
+                    temp_x += 1
+                if other_actions[r] == Direction.RIGHT.value:
+                    temp_y += 1
+                if other_actions[r] == Direction.LEFT.value:
+                    temp_y -= 1
+            elif env.direction[r] == "left":
+                if other_actions[r] == Direction.FORWARD.value:
+                    temp_x -= 1
+                if other_actions[r] == Direction.RIGHT.value:
+                    temp_y -= 1
+                if other_actions[r] == Direction.LEFT.value:
+                    temp_y += 1
+
             new_positions[r] = Point(temp_x, temp_y)
-
-        # all possible positions of drones (excluding drone collisions)
-        possible_positions = [[False] * len(self.action_space) for _ in range(self.nr)]
-        for r in range(self.nr):
-            current_temp_x = env.pos[r].x
-            current_temp_y = env.pos[r].y
-
-            temp_right_is_boundary = env.pos[r].x == WIDTH - 1
-            temp_left_is_boundary = env.pos[r].x == 0
-            temp_top_is_boundary = env.pos[r].y == 0
-            temp_bottom_is_boundary = env.pos[r].y == HEIGHT - 1
-
-            if not temp_right_is_boundary: #right
-                possible_positions[r][0] = Point(current_temp_x+1, current_temp_y)
-            if not temp_left_is_boundary: #left
-                possible_positions[r][1] = Point(current_temp_x-1, current_temp_y)
-            if not temp_top_is_boundary: #up
-                possible_positions[r][2] = Point(current_temp_x, current_temp_y-1)
-            if not temp_bottom_is_boundary: #down
-                possible_positions[r][3] = Point(current_temp_x, current_temp_y+1)
-
-            # check collision with obstacles
-            for i in range(len(possible_positions[0])):
-                if not possible_positions[r][i]: continue
-                if env.grid[possible_positions[r][i].y, possible_positions[r][i].x] == States.OBS.value: possible_positions[r][i] = False
-
-            # check if new position of previous drones equal to any possible positions
-            # or equal to current position of next drones
-            if r >= i_r:
-                for n_r, new_pos in enumerate(new_positions):
-                    for i in range(len(possible_positions[0])):
-                        if new_pos == possible_positions[r][i] and new_pos != False:
-                            possible_positions[r][i] = False
-                    if new_pos == env.pos[r] and env.pos[n_r] not in new_positions:
-                        possible_positions[r][possible_positions[r].index(env.pos[n_r])] = False
-
-        # mark position as invalid
-        for i,pos in enumerate(possible_positions[i_r]):
-            if not pos: surroundings[i] = True
-        
-        # check collision with obstacles of current drone
-        for i in range(len(self.action_space)):
-            if not possible_positions[i_r][i]: continue
-            if env.grid[possible_positions[i_r][i].y, possible_positions[i_r][i].x] == States.OBS.value: surroundings[i] = True
 
         # check if drones collide
         for r in range(self.nr):
             if r >= i_r: break
-            # checks new positions
-            if new_positions[r] == possible_positions[i_r][0]: #right
-                surroundings[0] = True
-            if new_positions[r] == possible_positions[i_r][1]: #left
-                surroundings[1] = True
-            if new_positions[r] == possible_positions[i_r][2]: #up
-                surroundings[2] = True
-            if new_positions[r] == possible_positions[i_r][3]: #down
-                surroundings[3] = True
-            # checks crossing positions
-            if possible_positions[i_r][0] == env.pos[r] and new_positions[r] == env.pos[i_r]:
-                surroundings[0] = True
-                possible_positions[i_r][0] = False
-            if possible_positions[i_r][1] == env.pos[r] and new_positions[r] == env.pos[i_r]:
-                surroundings[1] = True
-                possible_positions[i_r][1] = False
-            if possible_positions[i_r][2] == env.pos[r] and new_positions[r] == env.pos[i_r]:
-                surroundings[2] = True
-                possible_positions[i_r][2] = False
-            if possible_positions[i_r][3] == env.pos[r] and new_positions[r] == env.pos[i_r]:
-                surroundings[3] = True
-                possible_positions[i_r][3] = False
-
-        if i_r != self.nr-1:
-            for r in range(self.nr):
-                if r <= i_r: continue
-                # if only one position to go to
-                if len([True for pos in possible_positions[r] if not pos]) == len(self.action_space)-1:
-                    for i, pos in enumerate(possible_positions[r]):
-                        if not pos: continue
-                        # if the only position is cur_pos == env.pos[r]
-                        if any([True for cur_pos in possible_positions[i_r] if cur_pos == pos]) or pos == env.pos[i_r]:
-                            if pos in possible_positions[i_r]:
-                                surroundings[possible_positions[i_r].index(pos)] = True # new position would block next drone
-                            if env.pos[r] in possible_positions[i_r]:
-                                surroundings[possible_positions[i_r].index(env.pos[r])] = True # force drone collision by moving to next drone position (current position of current drone is only valid position of next drone)
+            if other_actions[r] == None: break
+            
+            for i in range(len(possible_positions)):
+                # checks new positions
+                if new_positions[r] == possible_positions[i]: surroundings[i] = True
+                # checks crossing positions
+                if possible_positions[i] == env.pos[r] and new_positions[r] == env.pos[i_r]:
+                    surroundings[i] = True
 
         temp_actions = []
         for i in range(len(actions[0])):
             if not surroundings[i]: temp_actions.append(actions[0][i])
             else: temp_actions.append(float("-inf"))
-
-        # add stay action
-        # temp_actions.append(float("-inf"))
-        temp = [False]*4
-        for j,i in enumerate(temp_actions):
-            if i == float('-inf'): temp[j] = True
-        
-        if all(temp):
-            breakpoint
         
         return T.tensor([temp_actions])
     

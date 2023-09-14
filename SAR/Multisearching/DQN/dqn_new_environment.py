@@ -12,18 +12,16 @@ from enclosed_space_checker import Enclosed_space_check
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 6
+WIDTH = 6
 
 # DENSITY = 30 # percentage
 
 # Direction states
 class Direction(Enum):
-    RIGHT = 0
-    LEFT = 1
-    UP = 2
-    DOWN = 3
-    STAY = 4
+    FORWARD = 0
+    RIGHT = 1
+    LEFT = 2
 
 # Block states
 class States(Enum):
@@ -294,12 +292,13 @@ class Environment:
                 self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos.copy()
-        self.prev_pos = self.starting_pos.copy()
+        for r in range(self.nr):
+            self.prev_pos[r] = Point(self.starting_pos[r].x-1, self.starting_pos[r].y)
 
         for i in range(self.nr):
             self.exploration_grid[self.pos[i].y, self.pos[i].x] = True
 
-        self.direction = [(Direction.RIGHT).value for i in range(self.nr)]
+        self.direction = ["right"]*self.nr
                 
         self.score = 0
 
@@ -320,6 +319,17 @@ class Environment:
         self.cntr += 1
         self.score = 0
 
+        # checks if no actions
+        for i in range(self.nr):
+            if actions[i] == None:
+                self.score -= self.negative_reward
+                game_over = True  
+                reward = self.score
+                self.collision['drone'][i] = True
+                self.collision_state = True
+                image_state, non_image_state, _ = self.get_state()
+                return image_state, non_image_state, reward, game_over, (0, self.collision)
+
         # 2. Do action
         self._move_centralized(actions) # update the robot
             
@@ -333,17 +343,6 @@ class Environment:
 
         self.score += self.calc_reward_centralized(closest_unexplored)
         self.score -= self.negative_step_reward
-
-        if self.score > 0:
-            breakpoint
-
-        # checks if no actions
-        for i in range(self.nr):
-            if actions[i] == Direction.STAY.value:
-                self.score -= self.negative_reward
-                game_over = True  
-                reward = self.score
-                return image_state, non_image_state, reward, game_over, (0, self.collision)
 
         if np.array([True for i in range(0, self.nr) if self.pos[i] == self.starting_pos[i]]).any() == True:
             self.fuel = self.starting_fuel
@@ -483,26 +482,6 @@ class Environment:
     
     def get_distance(self, end, start):
         return abs(start.x - end.x) + abs(start.y - end.y)
-    
-    def get_direction(self, goal, r_i):
-        if goal.x == self.pos[r_i].x+1:
-            direction = Direction.RIGHT.value
-            # direction = [1,0,0,0]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x+1, self.pos[r_i].y)
-        elif goal.x == self.pos[r_i].x-1:
-            direction = Direction.LEFT.value
-            # direction = [0,1,0,0]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x-1, self.pos[r_i].y)
-        elif goal.y == self.pos[r_i].y+1:
-            direction = Direction.DOWN.value
-            # direction = [0,0,1,0]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x, self.pos[r_i].y+1)
-        elif goal.y == self.pos[r_i].y-1:
-            direction = Direction.UP.value
-            # direction = [0,0,0,1]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x, self.pos[r_i].y-1)
-
-        return direction
     
     def get_closest_unexplored(self, r_i, other_location):
         distances = {}
@@ -842,11 +821,11 @@ class Environment:
                     state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, closest_unexplored[r_i].x, closest_unexplored[r_i].y] #+ self.check_surrounding_cells(r_i)
                 else:
                     state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, 0, 0] #+ self.check_surrounding_cells(r_i)
-            # for r_i in range(self.nr):
-            #     for i in range(self.nr):
-            #         if i == r_i: continue
-            #         state[r_i].append(self.pos[i].x)
-            #         state[r_i].append(self.pos[i].y)
+            for r_i in range(self.nr):
+                for i in range(self.nr):
+                    if i == r_i: continue
+                    state[r_i].append(self.pos[i].x)
+                    state[r_i].append(self.pos[i].y)
             
             
             return state, [None]*self.nr, closest_unexplored
@@ -919,24 +898,16 @@ class Environment:
             # collide at same location
             if any(self.collision_state):
                 if (i != r_i and pt == self.pos[i]):
-                    if action == Direction.STAY.value:
-                        self.collision['trapped'][r_i] = True
-                        self.collision_state[r_i] = True
-                    else:
-                        self.score -= self.negative_reward
-                        self.collision['drone'][r_i] = True
-                        self.collision['drone'][i] = True
-                        self.collision_state[r_i] = True
+                    self.score -= self.negative_reward
+                    self.collision['drone'][r_i] = True
+                    self.collision['drone'][i] = True
+                    self.collision_state[r_i] = True
             else:
                 if (i != r_i and pt == pos_i):
-                    if action == Direction.STAY.value:
-                        self.collision['trapped'][r_i] = True
-                        self.collision_state[r_i] = True
-                    else:
-                        self.score -= self.negative_reward
-                        self.collision['drone'][r_i] = True
-                        self.collision['drone'][i] = True
-                        self.collision_state[r_i] = True
+                    self.score -= self.negative_reward
+                    self.collision['drone'][r_i] = True
+                    self.collision['drone'][i] = True
+                    self.collision_state[r_i] = True
 
             # cross locations thus collide
             if i < r_i and pt == self.pos[i] and pos_i == self.pos[r_i]:
@@ -945,7 +916,7 @@ class Environment:
                 self.collision['drone'][i] = True
                 self.collision_state[r_i] = True
 
-    def is_collision_centralized(self, pt, r_i, x ,y, action):
+    def is_collision_centralized(self, pt, r_i, x ,y): # pt : new position of selected drone, r_i : selected drone, (x,y) : new positions
         # set new positions
         new_pos = [Point(x[i], y[i]) for i in range(self.nr)]
 
@@ -967,16 +938,14 @@ class Environment:
             self.collision['boundary'][r_i] = True
         # Collision with other drone
         for i, pos_i in enumerate(new_pos):
+            if i == r_i: continue
             # collide at same location
-            if i < r_i and pt == pos_i:
-                if action == Direction.STAY.value:
-                    self.collision['trapped'][r_i] = True
-                else:
-                    self.score -= self.negative_reward
-                    self.collision['drone'][r_i] = True
-                    self.collision['drone'][i] = True
+            if pt == pos_i:
+                self.score -= self.negative_reward
+                self.collision['drone'][r_i] = True
+                self.collision['drone'][i] = True
             # cross locations thus collide
-            if i < r_i and pt == self.pos[i] and pos_i == self.pos[r_i]:
+            if pt == self.pos[i] and pos_i == self.pos[r_i]:
                 self.score -= self.negative_reward
                 self.collision['drone'][r_i] = True
                 self.collision['drone'][i] = True            
@@ -1019,35 +988,78 @@ class Environment:
             
 
     def _move_centralized(self, action):
-        # Get directions
-        for i in range(0, self.nr):
-            if action[i] == (Direction.LEFT).value:
-                self.direction[i] = action[i]
-            elif action[i] == (Direction.RIGHT).value:
-                self.direction[i] = action[i]
-            elif action[i] == (Direction.UP).value:
-                self.direction[i] = action[i]
-            elif action[i] == (Direction.DOWN).value:
-                self.direction[i] = action[i]
-            elif action[i] == (Direction.STAY).value:
-                self.direction[i] = action[i]
-
         # Set temp x and y variables
         x = [None]*self.nr
         y = [None]*self.nr
+        self.prev_direction = self.direction.copy()
 
-        # Calculate new location
+        # Move to new positions
         for i in range(0, self.nr):
             x[i] = self.pos[i].x
             y[i] = self.pos[i].y
-            if self.direction[i] == (Direction.RIGHT).value:
-                x[i] += 1
-            elif self.direction[i] == (Direction.LEFT).value:
-                x[i] -= 1
-            elif self.direction[i] == (Direction.DOWN).value:
-                y[i] += 1
-            elif self.direction[i] == (Direction.UP).value:
-                y[i] -= 1
+            if action[i] == (Direction.FORWARD).value:
+                # vertical direction
+                if self.pos[i].x == self.prev_pos[i].x:
+                    # down
+                    if self.pos[i].y > self.prev_pos[i].y:
+                        y[i] += 1
+                        self.direction[i] = "down"
+                    # up
+                    else:
+                        y[i] -= 1
+                        self.direction[i] = "up"
+                # horizontal direction
+                elif self.pos[i].y == self.prev_pos[i].y:
+                    # right
+                    if self.pos[i].x > self.prev_pos[i].x:
+                        x[i] += 1
+                        self.direction[i] = "right"
+                    # left
+                    else:
+                        x[i] -= 1
+                        self.direction[i] = "left"
+            elif action[i] == (Direction.RIGHT).value:
+                # vertical direction
+                if self.pos[i].x == self.prev_pos[i].x:
+                    # moved down
+                    if self.pos[i].y > self.prev_pos[i].y:
+                        x[i] -= 1
+                        self.direction[i] = "left"
+                    # moved up
+                    else:
+                        x[i] += 1
+                        self.direction[i] = "right"
+                # horizontal direction
+                else:
+                    # moved up
+                    if self.pos[i].x > self.prev_pos[i].x:
+                        y[i] += 1
+                        self.direction[i] = "down"
+                    # moved down
+                    else:
+                        y[i] -= 1
+                        self.direction[i] = "up"
+            elif action[i] == (Direction.LEFT).value:
+                # vertical direction
+                if self.pos[i].x == self.prev_pos[i].x:
+                    # moved down
+                    if self.pos[i].y > self.prev_pos[i].y:
+                        x[i] += 1
+                        self.direction[i] = "right"
+                    # moved up
+                    else:
+                        x[i] -= 1
+                        self.direction[i] = "left"
+                # horizontal direction
+                else:
+                    # moved up
+                    if self.pos[i].x > self.prev_pos[i].x:
+                        y[i] -= 1
+                        self.direction[i] = "up"
+                    # moved down
+                    else:
+                        y[i] += 1
+                        self.direction[i] = "down"
 
         # Set position to new location
         # for i in range(0, self.nr):
@@ -1056,7 +1068,7 @@ class Environment:
         # for i in range(0, self.nr):
         #     self.is_drone_collision_centralized(Point(x[i],y[i]), i, x, y, action[i])
         for i in range(0, self.nr):
-            self.collision = self.is_collision_centralized(Point(x[i],y[i]), i, x, y, action[i])
+            self.collision = self.is_collision_centralized(Point(x[i],y[i]), i, x, y)
         
         collision_types = []
         for collision_type, collision_states in self.collision.items():

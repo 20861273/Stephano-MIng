@@ -16,28 +16,29 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-                        "training": False,
+                        "training": True,
                         "load checkpoint": False,
                         "show rewards interval": 100,
                         "show plot": False,
-                        "save plot": True,
+                        "save plot": False,
                         "policy number": [0],
-                        "test type": "iterative", # test types: grid and iterative
+                        "session": [],
+                        "test type": "grid", # test types: grid and iterative
                         "testing iterations": 500,
-                        "goal spawning": True
+                        "goal spawning": False
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
     # agent types: DQN, DDQN
     hp = {
-                    "number of drones": 2,
+                    "number of drones": 4,
                     "training type": "centralized", # centralized (turn based), centralized actions
-                    "agent type": "DuelDDQN",
+                    "agent type": "DQN",
                     "learning rate": [0.0001],
-                    "discount rate": [0.8],
-                    "epsilon": [[0.1,0.1,0.1]],
+                    "discount rate": [0.75,0.8,0.85],
+                    "epsilon": [[1,0.1,0.1]],
 
-                    "training sessions": 1,
+                    "training sessions": 3,
                     "episodes": 10000,
                     "positive rewards": [0],
                     "positive exploration rewards": [1],
@@ -45,15 +46,15 @@ if __name__ == '__main__':
                     "negative step rewards": [0.05],
                     "max steps": [200],
 
-                    "n actions": 5,
+                    "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
                     "obstacles": False,
                     "obstacle density": 0.3,
-                    "encoding": "image_occupancy",
+                    "encoding": "local",
                     "stacked frames": False,
                     "input dims": (2,HEIGHT, WIDTH),
                     "lidar": False,
-                    "guide": True,
+                    "guide": False,
                     "fuel": False,
                     "lstm": False,
 
@@ -63,7 +64,7 @@ if __name__ == '__main__':
                     "channels": [32, 64],
                     "kernel": [2, 2],
                     "stride": [1, 1],
-                    "fc dims": [128],
+                    "fc dims": [16,32],
 
                     "nstep": False,
                     "nstep N": 10,
@@ -91,7 +92,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "06-09-2023 14h52m51s")
+    load_checkpoint_path = os.path.join(PATH, "Saved_data")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -150,6 +151,8 @@ if __name__ == '__main__':
     elif hp["encoding"] == "full_image":
         if hp["stacked frames"]: hp["input dims"] = (4,HEIGHT, WIDTH)
         else: hp["input dims"] = (1,HEIGHT, WIDTH)
+    elif hp["encoding"] == "local":
+        hp["input dims"] = (4)#+2*(hp["number of drones"]-1))
 
     if hp["lidar"] and "image" not in hp["encoding"]:
         hp["input dims"][0] += 4
@@ -204,7 +207,7 @@ if __name__ == '__main__':
                                         i_exp += 1
     else:
         if hp["training type"] == "centralized":
-            test_centralized_dqn(testing_parameters["policy number"], load_path, save_path, models_path,
+            test_centralized_dqn(testing_parameters["policy number"], testing_parameters["session"], load_path, save_path, models_path,
                                  testing_parameters["testing iterations"], testing_parameters["goal spawning"], testing_parameters["show plot"],
                                  testing_parameters["save plot"], testing_parameters["test type"])
 

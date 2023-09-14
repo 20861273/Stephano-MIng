@@ -12,14 +12,13 @@ import matplotlib.cm as cm
 from datetime import datetime
 
 from collections import namedtuple
+Point = namedtuple('Point', 'x, y')
 
 
-original_list = [15, 20, 30]
+possible = [[False] * 4 for _ in range(2)]
 
-
-for i in range(100):
-    print(original_list[i % len(original_list)])
-
+possible[0][1] = True
+print(possible)
 
 
 # def gradual_increase_ones(array, current_time_step):
@@ -87,8 +86,8 @@ for i in range(100):
 #         first = False
 
 
-l = [[1,2,3],[4,5,6],[7,8,9]]
+# l = [[1,2,3],[4,5,6],[7,8,9]]
 
-l.append([1])
+# l.append([1])
 
-print(l)
+# print(l)

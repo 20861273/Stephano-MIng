@@ -67,7 +67,7 @@ def plot_learning_curves(scores, filename, policy, c, step, moving_step, ts, pr,
     np_scores = np.array(scores)
     # np_scores.min()-1
     # ax.set_ylim(np_scores.min()-1, np_scores.max()+0.5)
-    ax.set_ylim(25, np_scores.max()+0.5)
+    ax.set_ylim(0, np_scores.max()+0.5)
     ax.set_title("Learning curve:")
     # plt.xlabel("Training Steps")
     # plt.ylabel("Rewards")
@@ -177,7 +177,7 @@ lc = True
 sc = True
 
 step = 10#len(scores[0][0])/10000
-moving_step = 1
+moving_step = 10
 policies = [0,1,2]
 
 

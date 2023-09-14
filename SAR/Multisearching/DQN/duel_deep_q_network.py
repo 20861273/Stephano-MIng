@@ -139,9 +139,9 @@ class DuelDeepQNetwork(nn.Module):
     def calculate_conv_output_dims(self):
         state = T.zeros(1, *self.input_dims)
         dims = self.conv1(state)
-        # dims = self.maxpool(dims)
+        dims = self.maxpool(dims)
         dims = self.conv2(dims)
-        # dims = self.maxpool(dims)
+        dims = self.maxpool(dims)
         # dims = self.conv3(dims)
         if self.lidar and not self.guide:
             return int(np.prod(dims.size())) + 4*self.nr #+ 1 # image size + surrounding states + percentage explored
@@ -157,9 +157,9 @@ class DuelDeepQNetwork(nn.Module):
         if "image" in self.encoding:
             # forward pass convolutional layers
             conv1 = F.relu(self.conv1(image_state))
-            # conv1 = self.maxpool(conv1)
+            conv1 = self.maxpool(conv1)
             conv2 = F.relu(self.conv2(conv1))
-            # conv2 = self.maxpool(conv2)
+            conv2 = self.maxpool(conv2)
             # conv3 = F.relu(self.conv3(conv2))
             # conv3 shape is BS x n_filters x H x W
 

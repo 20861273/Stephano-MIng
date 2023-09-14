@@ -288,6 +288,17 @@ class print_results:
                 elif actions[i] == Direction.DOWN.value:
                     action = "Down [v]"
                 text.set_text(f"Drone {i}:\nAction: {action}\nReward: {reward}")
+                # if actions[i][0] == Direction.LEFT.value:
+                #     action = "Left [<]"
+                # elif actions[i][0] == Direction.RIGHT.value:
+                #     action = "Right [>]"
+                # # elif actions[i] == Direction.UP.value:
+                # #     action = "Up [^]"
+                # # elif actions[i] == Direction.DOWN.value:
+                # #     action = "Down [v]"
+                # elif actions[i][0] == Direction.FORWARD.value:
+                #     action = "FORWARD"
+                # text.set_text(f"Drone {i}:\nAction: {action}\nReward: {reward}")
         else:
             legend = ax.legend([0]*env.nr, loc='center left', bbox_to_anchor=(1, 0.5))
             handles = legend.legendHandles
@@ -307,7 +318,7 @@ class print_results:
 
         # file_name = "p%dtrajectory%d.png" %(policy, cnt)
         # plt.savefig(os.path.join(dir_traj, file_name))
-        plt.pause(0.05)
+        plt.pause(0.5)
         if done:
             plt.pause(0.5)
     

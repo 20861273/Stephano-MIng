@@ -1,0 +1,12 @@
+/dist/
+/perlin_noise.egg-info/
+setup.cfg
+/ENV/
+/**/__pycache__/
+/.pytest_cache/
+perlin.ipynb
+
+/.ipynb_checkpoints/
+/.tox
+/.venv
+/.mypy_cache

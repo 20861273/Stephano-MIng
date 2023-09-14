@@ -1,6 +1,6 @@
-
+from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 from dqn_utils import plot_learning_curve, write_json, read_json
-
+from dqn_agent import DQNAgent
 from ddqn_agent import DDQNAgent
 from duel_dqn_agent import DuelDQNAgent
 from duel_ddqn_agent import DuelDDQNAgent
@@ -22,14 +22,6 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                     c_dims, k_size, s_size, fc_dims,
                     batch_size, mem_size, replace, nstep, nstep_N,
                     prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num, lstm, outliers=None):
-    
-    if n_actions == 3:
-        from dqn_new_agent import DQNAgent
-        from dqn_new_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
-    else:
-        from dqn_agent import DQNAgent
-        from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
-    
     
     # initialize training session variables
     start_time = time.time()
@@ -91,16 +83,15 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         
         # load agent experiences and rewards
         if load_checkpoint:
-            if int(os.listdir(models_path)[-1][0]) == i_exp and int(os.listdir(models_path)[-1][2]) == i_ts:
+            if int(os.listdir(models_path)[-1][0]) == i_exp:
                 checkpoint = agent.load_models()
             else:
-                if i_ts < int(os.listdir(models_path)[-1][2]):
-                    breakpoint
-                    continue
-                else:
-                    checkpoint = {  'session': 1,
-                                    'epoch': 0,
-                                    'episode': 0}     
+                checkpoint = {  'session': 1,
+                                'epoch': 0,
+                                'episode': 0}
+
+            if i_ts < checkpoint['epoch']:
+                continue           
 
             if checkpoint['epoch'] == 0 and checkpoint['episode'] == 0:
                 ts_rewards = []
@@ -110,25 +101,9 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                 file_name = os.path.join(load_checkpoint_path, file_name)
                 ts_rewards = read_json(file_name)
 
-                file_name = "ts_steps%s.json" %(str(checkpoint['session']))
-                file_name = os.path.join(load_checkpoint_path, file_name)
-                ts_rewards = read_json(file_name)
-
-                file_name = "ts_losses%s.json" %(str(checkpoint['session']))
-                file_name = os.path.join(load_checkpoint_path, file_name)
-                ts_rewards = read_json(file_name)
-
-                file_name = "rewards%s_%s.json" %(str(checkpoint['session']), str(checkpoint['epoch']))
+                file_name = "rewards%s.json" %(str(checkpoint['session']))
                 file_name = os.path.join(load_checkpoint_path, file_name)
                 rewards = read_json(file_name)
-
-                file_name = "steps%s_%s.json" %(str(checkpoint['session']), str(checkpoint['epoch']))
-                file_name = os.path.join(load_checkpoint_path, file_name)
-                steps = read_json(file_name)
-
-                file_name = "losses%s_%s.json" %(str(checkpoint['session']), str(checkpoint['epoch']))
-                file_name = os.path.join(load_checkpoint_path, file_name)
-                episode_loss = read_json(file_name)
 
         print("Experience: %s, Epoch: %s,\n\
             Discount rate: %s, Learning rate: %s, Epsilon: %s\n\
@@ -149,7 +124,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
 
             # if epoch loaded the epoch should start at the right episode
             if load_checkpoint:
-                if i_episode < checkpoint['episode']:
+                if i_episode <= checkpoint['episode']:
                     continue
                 else:
                     load_checkpoint = False
@@ -164,6 +139,29 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             # reset environment
             percentage = float(cntr)/float(print_interval)*100.0
             image_observation, non_image_observation = env.reset(i_episode, percentage)
+
+            if outliers != None:
+                for i in range(nr): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = False
+
+                env.grid[env.pos[0].y, env.pos[0].x] = States.UNEXP.value
+                env.exploration_grid[env.pos[0].y, env.pos[0].x] = False
+
+                env.starting_pos[0] = outliers[i_episode % len(outliers)][0]
+                env.pos[0] = outliers[i_episode % len(outliers)][0]
+                
+                env.grid[env.starting_pos[0].y, env.starting_pos[0].x] = States.ROBOT.value
+
+                env.grid[env.pos[1].y, env.pos[1].x] = States.UNEXP.value
+                env.exploration_grid[env.pos[1].y, env.pos[1].x] = False
+
+                env.starting_pos[1] = outliers[i_episode % len(outliers)][1]
+                env.pos[1] = outliers[i_episode % len(outliers)][1]
+                
+                env.grid[env.starting_pos[1].y, env.starting_pos[1].x] = States.ROBOT.value
+
+                for i in range(nr): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = True
+
+                image_observation, non_image_observation = env.get_state()
 
             if stacked:
                 # adds dimension for previous time steps
@@ -193,7 +191,6 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                 # print("\n\n")
                 # action selection
                 action = [None]*nr
-                true_boolean = False
                 for i_r in range(0,nr):
                     if stacked:
                         image_observations[i_r] = agent.memory.preprocess_observation(step, image_observation, i_r)
@@ -202,11 +199,10 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                         else: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observations[i_r], allow_windowed_revisiting, stacked, previous_action[i_r])
                     else:
                         if step == 0:
-                            action[i_r], boolean = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, stacked, action)
+                            action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, stacked, action)
                         else:
-                            action[i_r], boolean = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, stacked, action, previous_action[i_r])
+                            action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], allow_windowed_revisiting, stacked, action, previous_action[i_r])
                     previous_action = action.copy()
-                    if boolean: true_boolean = True
                 
                 # execute step
                 image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)
@@ -251,8 +247,6 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                         for i_r, collision_state in enumerate(collision_states):
                             if collision_state:
                                 collisions_grid[env.pos[i_r].y, env.pos[i_r].x] += 1
-                                if not true_boolean:
-                                    breakpoint
                 elif info[0] == 0 and step == max_steps-1: # timeout counter
                     timeout_cntr += 1
 
@@ -286,21 +280,17 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                     file_name = os.path.join(save_path, file_name)
                     write_json(ts_rewards, file_name)
 
-                    file_name = "rewards%s_%s.json" %(str(i_exp), str(i_ts))
+                    file_name = "rewards%s.json" %(str(i_exp))
                     file_name = os.path.join(save_path, file_name)
                     write_json(rewards, file_name)
-
-                    file_name = "steps%s_%s.json" %(str(i_exp), str(i_ts))
-                    file_name = os.path.join(save_path, file_name)
-                    write_json(steps, file_name)
-
-                    file_name = "losses%s_%s.json" %(str(i_exp), str(i_ts))
-                    file_name = os.path.join(save_path, file_name)
-                    write_json(episode_loss, file_name)
 
                     file_name = "ts_steps%s.json" %(str(i_exp))
                     file_name = os.path.join(save_path, file_name)
                     write_json(ts_steps, file_name)
+
+                    file_name = "steps%s.json" %(str(i_exp))
+                    file_name = os.path.join(save_path, file_name)
+                    write_json(steps, file_name)
 
                     file_name = "ts_loss%s.json" %(str(i_exp))
                     file_name = os.path.join(save_path, file_name)
@@ -343,17 +333,9 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             file_name = os.path.join(save_path, file_name)
             write_json(ts_rewards, file_name)
 
-            file_name = "rewards%s_%s.json" %(str(i_exp), str(i_ts))
+            file_name = "rewards%s.json" %(str(i_exp))
             file_name = os.path.join(save_path, file_name)
             write_json(rewards, file_name)
-
-            file_name = "steps%s.json" %(str(i_exp), str(i_ts))
-            file_name = os.path.join(save_path, file_name)
-            write_json(steps, file_name)
-
-            file_name = "losses%s_%s.json" %(str(i_exp), str(i_ts))
-            file_name = os.path.join(save_path, file_name)
-            write_json(episode_loss, file_name)
 
             file_name = "ts_steps%s.json" %(str(i_exp))
             file_name = os.path.join(save_path, file_name)
