@@ -6,7 +6,7 @@ import math
 
 # Environment characteristics
 HEIGHT = 4
-WIDTH = 3
+WIDTH = 4
 # DENSITY = 30 # percentage
 
 # Direction states
@@ -33,6 +33,7 @@ class Environment:
     def __init__(self):
         # Generates grid (Grid[y,x])
         self.grid = self.generate_grid()
+        self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
 
         # Set robot(s) position
         self.pos = self.starting_pos

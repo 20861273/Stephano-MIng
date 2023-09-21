@@ -14,11 +14,28 @@ from datetime import datetime
 from collections import namedtuple
 Point = namedtuple('Point', 'x, y')
 
+w1 = np.arange(-1, 10, 0.1)
+w2 = np.arange(-1, 10, 0.1)
+a = np.arange(-1, 10, 0.1)
+b = np.arange(-1, 10, 0.1)
 
-possible = [[False] * 4 for _ in range(2)]
+c = [8,8,3,2]
+d = [7,3,4,1]
 
-possible[0][1] = True
-print(possible)
+store = []
+f = np.array([0,0,0,0])
+
+for i in w1:
+    for j in w2:
+        for k in a:
+            for l in b:
+                for m in range(len(c)):
+                    f[m] = i * math.exp(-k*c[m]) + j * math.exp(-l*d[m])
+                if f[3] < f[0] and f[0]<f[1] and f[1]<f[2]:
+                    store.append[(w1,w2,a,b)]
+
+
+store
 
 
 # def gradual_increase_ones(array, current_time_step):

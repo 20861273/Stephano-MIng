@@ -103,7 +103,7 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
             env = Environment(hp["number of drones"], hp["obstacles"], hp["obstacle density"],
                             hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0],
                             hp["positive exploration rewards"][0], hp["negative step rewards"][0],
-                            hp["training type"], hp["encoding"], hp["guide"], hp["lidar"], False,
+                            hp["training type"], hp["encoding"], hp["guide"], hp["lidar"], hp["fuel"],
                             hp["curriculum learning"], 50000, 200, policy_num, 1, load_path, goal_spawning)
 
             PR = print_results(env.grid, env.grid.shape[0], env.grid.shape[1])
@@ -193,8 +193,8 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                                         if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], action)
                                         else: action[i_r] = agent.choose_action(env, i_r, image_observations[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], action, previous_action[i_r])
                                     else:
-                                        if step == 0: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], hp["stacked frames"], action)
-                                        else: action[i_r] = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], hp["stacked frames"], action, previous_action[i_r])
+                                        if step == 0: action[i_r], _ = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], hp["stacked frames"], action)
+                                        else: action[i_r], _ = agent.choose_action(env, i_r, image_observation[i_r], non_image_observation[i_r], hp["allow windowed revisiting"], hp["stacked frames"], action, previous_action[i_r])
                                     
                                     previous_action = action.copy()
                                 actions.append(action)
@@ -248,7 +248,7 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                                                 load_path, len(paths), env)
                                     trajectories.append(trajectory)
                                     break
-                                if save_path and len(paths) < 2:
+                                if save_plot and len(paths) < 2:
                                     for i in range(hp["number of drones"]):
                                         PR.print_graph(False, policy, i, [sub_path[i] for sub_path in path], 
                                         [sub_actions[i] for sub_actions in t_actions], 
@@ -269,19 +269,20 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                     if save_plot:
                         for i in range(hp["number of drones"]):
                             for cntr, path in enumerate(paths):
-                                PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
-                                            [sub_actions[i] for sub_actions in traj_actions[cntr]], 
-                                            [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
-                                            load_path, cntr, env)
+                                if not successes[cntr]:
+                                    PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
+                                                [sub_actions[i] for sub_actions in traj_actions[cntr]], 
+                                                [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
+                                                load_path, cntr, env)
 
                     p = cnt/((WIDTH)*(HEIGHT))*100
                     print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, (WIDTH)*(HEIGHT), p))
                     print("Average steps: %.2f" %(np.mean(np.array(steps))))
                     print("Average backtracking: %.2f" %(backtracking/steps_taken))
 
-                    # file_name = "Results%s.json" %(str(policy))
-                    # file_name = os.path.join(load_path, file_name)
-                    # write_json("Success:%s, Average steps:%s, Average collisions:%s, Average timeouts:%s" %(str(p), str(np.mean(np.array(steps))), str(np.mean(collisions_grid)), str(timeout_cntr/testing_iterations)), file_name)
+                    file_name = "Results%s_%s.json" %(str(policy), str(ts))
+                    file_name = os.path.join(load_path, file_name)
+                    write_json("Success:%s, Average steps:%s, Average collisions:%s, Average timeouts:%s" %(str(p), str(np.mean(np.array(steps))), str(np.mean(collisions_grid)), str(timeout_cntr/testing_iterations)), file_name)
 
 
                     print(collisions_grid)
@@ -298,6 +299,9 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                                     if y2 == y1 and x2 == x1: continue
                                     if len(paths) == stop:
                                         breakpoint
+
+                                    if env.grid[y1,x1] == States.OBS.value or env.grid[y2,x2] == States.OBS.value:
+                                        continue
                                     # if x == 0 or x == WIDTH-1:
                                     #     continue
                                     # if y == 0 or y == HEIGHT-1:
@@ -326,9 +330,11 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
 
                                     for i in range(hp["number of drones"]): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = True
 
-                                    image_observation, non_image_observation, _ = env.get_state()
-
+                                    if hp["n actions"] == 3:
+                                        for r in range(env.nr):
+                                            env.prev_pos[r] = Point(env.starting_pos[r].x-1, env.starting_pos[r].y)
                                     
+                                    image_observation, non_image_observation, _ = env.get_state()
 
                                     if hp["stacked frames"]:
                                         # adds dimension for previous time steps
@@ -363,15 +369,15 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                                             previous_action = action.copy()
                                         actions.append(action)
 
-                                        for r_i in range(hp["number of drones"]):
-                                            if action[r_i] == Direction.LEFT.value:
-                                                if env.grid[env.pos[r_i].y][env.pos[r_i].x-1] == States.EXP.value: backtracking += 1
-                                            if action[r_i] == Direction.RIGHT.value:
-                                                if env.grid[env.pos[r_i].y][env.pos[r_i].x+1] == States.EXP.value: backtracking += 1
-                                            if action[r_i] == Direction.UP.value:
-                                                if env.grid[env.pos[r_i].y-1][env.pos[r_i].x] == States.EXP.value: backtracking += 1
-                                            if action[r_i] == Direction.DOWN.value:
-                                                if env.grid[env.pos[r_i].y+1][env.pos[r_i].x] == States.EXP.value: backtracking += 1
+                                        # for r_i in range(hp["number of drones"]):
+                                        #     if action[r_i] == Direction.LEFT.value:
+                                        #         if env.grid[env.pos[r_i].y][env.pos[r_i].x-1] == States.EXP.value: backtracking += 1
+                                        #     if action[r_i] == Direction.RIGHT.value:
+                                        #         if env.grid[env.pos[r_i].y][env.pos[r_i].x+1] == States.EXP.value: backtracking += 1
+                                        #     if action[r_i] == Direction.UP.value:
+                                        #         if env.grid[env.pos[r_i].y-1][env.pos[r_i].x] == States.EXP.value: backtracking += 1
+                                        #     if action[r_i] == Direction.DOWN.value:
+                                        #         if env.grid[env.pos[r_i].y+1][env.pos[r_i].x] == States.EXP.value: backtracking += 1
 
                                         image_observation_, non_image_observation_, reward, done, info = env.step_centralized(action)
                                         cnt += info[0]
@@ -433,18 +439,17 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                     if save_plot:
                         for cntr, path in enumerate(paths):
                             for i in range(hp["number of drones"]):
-                                if not successes[cntr]:
-                                    PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
-                                                [sub_actions[i] for sub_actions in traj_actions[cntr]], 
-                                                [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
-                                                load_path, cntr, env)
+                                PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
+                                            [sub_actions[i] for sub_actions in traj_actions[cntr]], 
+                                            [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
+                                            load_path, cntr, env)
 
                     p = cnt/(len(paths))*100
                     print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, len(paths), p))
                     print("Average steps: %.2f" %(np.mean(np.array(steps))))
                     print("Average backtracking: %.2f" %(backtracking/steps_taken))
 
-                    file_name = "Results%s.json" %(str(policy))
+                    file_name = "Results%s_%s.json" %(str(policy), str(ts))
                     file_name = os.path.join(load_path, file_name)
                     write_json("Success:%s, Average steps:%s, Average collisions:%s, Average timeouts:%s" %(str(p), str(np.mean(np.array(steps))), str(np.mean(collisions_grid)), str(timeout_cntr/testing_iterations)), file_name)
 
@@ -564,7 +569,7 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                 print("Average steps: %.2f" %(np.mean(np.array(steps))))
                 print("Average backtracking: %.2f" %(average_backtracking))
 
-                file_name = "Results%s.json" %(str(policy))
+                file_name = "Results%s_%s_goal.json" %(str(policy), str(ts))
                 file_name = os.path.join(load_path, file_name)
                 write_json("Success:%s, Average steps:%s, Average collisions:%s, Average timeouts:%s Average backtracking:%s" \
                         %(str(p), str(np.mean(np.array(steps))), \

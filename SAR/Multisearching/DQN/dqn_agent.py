@@ -154,7 +154,7 @@ class DQNAgent(object):
         top_is_boundary = env.pos[i_r].y == 0
         bottom_is_boundary = env.pos[i_r].y == HEIGHT - 1
 
-        # check if boundary
+        # check if boundary (might not be necessary)
         if right_is_boundary:
             surroundings[0] = True
         if left_is_boundary:
@@ -192,6 +192,7 @@ class DQNAgent(object):
             temp_top_is_boundary = env.pos[r].y == 0
             temp_bottom_is_boundary = env.pos[r].y == HEIGHT - 1
 
+            # check boundary
             if not temp_right_is_boundary: #right
                 possible_positions[r][0] = Point(current_temp_x+1, current_temp_y)
             if not temp_left_is_boundary: #left
@@ -220,7 +221,7 @@ class DQNAgent(object):
         for i,pos in enumerate(possible_positions[i_r]):
             if not pos: surroundings[i] = True
         
-        # check collision with obstacles of current drone
+        # check collision with obstacles of current drone (might not be necessary)
         for i in range(len(self.action_space)):
             if not possible_positions[i_r][i]: continue
             if env.grid[possible_positions[i_r][i].y, possible_positions[i_r][i].x] == States.OBS.value: surroundings[i] = True
@@ -251,6 +252,7 @@ class DQNAgent(object):
                 surroundings[3] = True
                 possible_positions[i_r][3] = False
 
+        # checks if only possible position of any next drone is taken 
         if i_r != self.nr-1:
             for r in range(self.nr):
                 if r <= i_r: continue

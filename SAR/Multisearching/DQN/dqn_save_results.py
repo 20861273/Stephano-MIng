@@ -318,7 +318,7 @@ class print_results:
 
         # file_name = "p%dtrajectory%d.png" %(policy, cnt)
         # plt.savefig(os.path.join(dir_traj, file_name))
-        plt.pause(0.5)
+        plt.pause(0.0005)
         if done:
             plt.pause(0.5)
     

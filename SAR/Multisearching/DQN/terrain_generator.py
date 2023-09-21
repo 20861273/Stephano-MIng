@@ -120,4 +120,6 @@ im2 = ax[2].imshow(prob_dist)
 fig.colorbar(im2, ax=ax[2])
 ax[2].set_title('Probability distribution\nMean: %.2f' %(mean))
 
-plot.show()
+# plot.show()
+
+plot.savefig("fig.png")

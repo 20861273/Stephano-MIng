@@ -20,23 +20,23 @@ if __name__ == '__main__':
                         "load checkpoint": False,
                         "show rewards interval": 100,
                         "show plot": False,
-                        "save plot": False,
-                        "policy number": [0],
-                        "session": [],
+                        "save plot": True,
+                        "policy number": [1],
+                        "session": [2],
                         "test type": "grid", # test types: grid and iterative
-                        "testing iterations": 500,
+                        "testing iterations": 100,
                         "goal spawning": False
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
     # agent types: DQN, DDQN
     hp = {
-                    "number of drones": 4,
+                    "number of drones": 1,
                     "training type": "centralized", # centralized (turn based), centralized actions
                     "agent type": "DQN",
                     "learning rate": [0.0001],
-                    "discount rate": [0.75,0.8,0.85],
-                    "epsilon": [[1,0.1,0.1]],
+                    "discount rate": [0.7,0.8,0.9],
+                    "epsilon": [[0.1,0.1,0.1]],
 
                     "training sessions": 3,
                     "episodes": 10000,
@@ -55,7 +55,7 @@ if __name__ == '__main__':
                     "input dims": (2,HEIGHT, WIDTH),
                     "lidar": False,
                     "guide": False,
-                    "fuel": False,
+                    "fuel": True,
                     "lstm": False,
 
                     "batch size": 64,
@@ -67,7 +67,7 @@ if __name__ == '__main__':
                     "fc dims": [16,32],
 
                     "nstep": False,
-                    "nstep N": 10,
+                    "nstep N": 2,
                     "prioritized": True,
                     "starting beta": 0.5,
 
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "Saved_data")
+    load_checkpoint_path = os.path.join(PATH, "16-09-2023 09h47m05s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')

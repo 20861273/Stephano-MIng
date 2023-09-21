@@ -258,7 +258,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
 
                 # checks if termination condition was met
                 if done:
-                    agent.finish_nstep()
+                    if nstep: agent.finish_nstep()
                     # for debugging
                     if show_plot:
                         plt.cla()
@@ -272,8 +272,8 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             successes.append(done)
 
             # calculate average rewards over last 100 episodes (only for display purposes)
-            avg_reward = np.mean(rewards[-100:])
-            avg_steps = np.mean(steps[-100:])
+            avg_reward = np.mean(rewards[-print_interval:])
+            avg_steps = np.mean(steps[-print_interval:])
             avg_collisions = np.mean(collisions_grid)
 
             # save checkpoint
@@ -347,7 +347,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
             file_name = os.path.join(save_path, file_name)
             write_json(rewards, file_name)
 
-            file_name = "steps%s.json" %(str(i_exp), str(i_ts))
+            file_name = "steps%s_%s.json" %(str(i_exp), str(i_ts))
             file_name = os.path.join(save_path, file_name)
             write_json(steps, file_name)
 

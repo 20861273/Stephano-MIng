@@ -817,15 +817,26 @@ class Environment:
             
             state = [None]*self.nr
             for r_i in range(self.nr):
+                if self.direction[r_i] == "right":
+                    direction = 0
+                if self.direction[r_i] == "left":
+                    direction = 1
+                if self.direction[r_i] == "up":
+                    direction = 2
+                if self.direction[r_i] == "down":
+                    direction = 3
+                
                 if None not in closest_unexplored:
-                    state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, closest_unexplored[r_i].x, closest_unexplored[r_i].y] #+ self.check_surrounding_cells(r_i)
+                    # state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, closest_unexplored[r_i].x, closest_unexplored[r_i].y]
+                    state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, direction, closest_unexplored[r_i].x, closest_unexplored[r_i].y] #+ self.check_surrounding_cells(r_i)
                 else:
-                    state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, 0, 0] #+ self.check_surrounding_cells(r_i)
-            for r_i in range(self.nr):
-                for i in range(self.nr):
-                    if i == r_i: continue
-                    state[r_i].append(self.pos[i].x)
-                    state[r_i].append(self.pos[i].y)
+                    # state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, 0, 0]
+                    state[r_i] = [self.pos[r_i].x, self.pos[r_i].y, direction, 0, 0] #+ self.check_surrounding_cells(r_i)
+            # for r_i in range(self.nr):
+            #     for i in range(self.nr):
+            #         if i == r_i: continue
+            #         state[r_i].append(self.pos[i].x)
+            #         state[r_i].append(self.pos[i].y)
             
             
             return state, [None]*self.nr, closest_unexplored
