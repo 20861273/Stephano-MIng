@@ -326,6 +326,9 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                         'epsilon= %.2f' %(agent.epsilon), 
                         'loss=%f' % loss,
                         'success= %.4f' % (percentage))
+                for name, param in agent.q_eval.named_parameters():
+                    if param.grad is not None:
+                        print(f"Layer: {name}, Gradient Norm: {param.grad.norm().item()}")
                 cntr = 0
                 previous_avg_collisions = avg_collisions
             
@@ -396,6 +399,14 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
     file_name = "rewards%s.json" %(str(i_exp))
     file_name = os.path.join(save_path, file_name)
     write_json(rewards, file_name)
+
+    file_name = "steps%s_%s.json" %(str(i_exp), str(i_ts))
+    file_name = os.path.join(save_path, file_name)
+    write_json(steps, file_name)
+    
+    file_name = "losses%s_%s.json" %(str(i_exp), str(i_ts))
+    file_name = os.path.join(save_path, file_name)
+    write_json(episode_loss, file_name)
 
     file_name = "ts_steps%s.json" %(str(i_exp))
     file_name = os.path.join(save_path, file_name)

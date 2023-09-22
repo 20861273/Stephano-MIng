@@ -78,7 +78,7 @@ class DQNAgent(object):
 
     def choose_action(self, env, i_r, image_observation, non_image_observation, allow_windowed_revisiting, stacked, other_actions=None, previous_action=None):
         chose_max_action = False
-        if np.random.random() > self.epsilon or not self.q_eval.training:
+        if (np.random.random() > self.epsilon or not self.q_eval.training):
             chose_max_action = True
             if stacked: image_state = T.tensor(np.array(image_observation),dtype=T.float32).to(self.q_eval.device)
             else: image_state = T.tensor(np.array([image_observation]),dtype=T.float32).to(self.q_eval.device)
@@ -88,7 +88,9 @@ class DQNAgent(object):
                 else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
                 actions = self.q_eval.forward(image_state, non_image_state)
             else:
+                self.q_eval.eval()
                 actions = self.q_eval.forward(image_state)
+                self.q_eval.train()
             actions = self.check_obstacles(env, i_r, other_actions, actions.tolist())
             if T.all(actions == -float('inf')):
                 return Direction.STAY.value, True
@@ -422,6 +424,17 @@ class DQNAgent(object):
             loss = self.q_eval.loss(q_target, q_pred).to(self.q_eval.device)
 
         loss.backward()
+        # # Set the minimum gradient threshold
+        # min_gradient_threshold = 0.00001
+
+        # # Compute the gradient norms and clip gradients
+        # for param in self.q_eval.parameters():
+        #     if param.grad is not None:
+        #         grad_norm = param.grad.norm()
+        #         if grad_norm < min_gradient_threshold:
+        #             # Clip the gradient to the minimum threshold
+        #             param.grad.data = param.grad.data / grad_norm * min_gradient_threshold
+
         self.q_eval.optimizer.step()
 
         self.learn_step_counter += 1

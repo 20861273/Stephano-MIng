@@ -9,8 +9,8 @@ import os
 from datetime import datetime
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 4
+WIDTH = 4
 class States(Enum):
     UNEXP = 0
     OBS = 1
@@ -33,18 +33,63 @@ class GridWithWeights(object):
         (x, y) = id
         return 0 <= x < self.width and 0 <= y < self.height
 
-    def is_unoccupied(self, id):
+    def is_obstacle(self, id, current_id, cr, path_step):
         (x, y) = id
-        return self.grid[y,x] != States.OBS.value
+        temp_grid = env.grid.copy()
+        if not preprocessing:
+            if steps+path_step <= len(occupied_cells)-1:
+                for r in range(nr):
+                    if cr == r or occupied_cells[steps+path_step][r] == None: continue
+                    # on location collision
+                    temp_grid[occupied_cells[steps+path_step][r].y, occupied_cells[steps+path_step][r].x] = States.OBS.value
+                    # # cross location collision
+                    # if occupied_cells[steps+path_step-1][r] ==  Point(x,y)\
+                    #     and occupied_cells[steps+path_step][r] == Point(current_id[0],current_id[1]):
+                    #     temp_grid[y, x] = States.OBS.value
 
-    def neighbors(self, id, step=None, occupied_cells=None):
+        return temp_grid[y,x] != States.OBS.value
+
+    def is_collision(self, id, cr, cx, cy, path_step):
+        (x, y) = id            
+        # future collision
+        if steps+path_step-1 <= len(occupied_cells)-1:
+            # move drones to possible next step locations
+            possible_locations = [[] for _ in range(nr)]
+            for r in range(nr):
+                if r == cr or occupied_cells[steps+path_step-1][r] == None: continue
+                if steps+path_step <= len(occupied_cells)-1:
+                    if occupied_cells[steps+path_step][r] != None:
+                        possible_locations[r] = occupied_cells[steps+path_step][r]
+                else:
+                    neightbors = [Point(occupied_cells[steps+path_step-1][r].x+1, occupied_cells[steps+path_step-1][r].y),\
+                                    Point(occupied_cells[steps+path_step-1][r].x, occupied_cells[steps+path_step-1][r].y-1),\
+                                    Point(occupied_cells[steps+path_step-1][r].x-1, occupied_cells[steps+path_step-1][r].y),\
+                                    Point(occupied_cells[steps+path_step-1][r].x, occupied_cells[steps+path_step-1][r].y+1)]
+                    neightbors = list(filter(self.in_bounds, neightbors))
+                    neightbors = list(filter(lambda k: self.is_obstacle(k, id, cr, path_step), neightbors))
+                    possible_locations[r] = neightbors
+            
+            # check if only 1 possible location
+            # and if location in new_resutls
+            all_valid = True
+            for p in possible_locations:
+                if len(p) == 1 and p[0] == Point(x,y):
+                    all_valid = False
+                
+            return all_valid
+
+    def neighbors(self, cr, id, step, path_step, occupied_cells):
         (x, y) = id
         # (right, up, left, down)
         results = [Point(x+1, y), Point(x, y-1), Point(x-1, y), Point(x, y+1)]
         # This is done to prioritise straight paths
         #if (x + y) % 2 == 0: results.reverse()
         results = list(filter(self.in_bounds, results))
-        results = list(filter(self.is_unoccupied, results))
+        results = list(filter(lambda k: self.is_obstacle(k, id, cr, path_step), results))
+        if len(results) == 0:
+            breakpoint
+        # if occupied_cells != None:
+        #     results = list(filter(lambda k: self.is_collision(k, cr, x, y, path_step), results))
         return results
 
 class Astar:
@@ -70,7 +115,7 @@ class Astar:
         return path
 
     # A* algorithm
-    def a_star(self, start, end):
+    def a_star(self, start, end, cr=0, step=0, occupied_cells=None):
         self.start = start
         self.came_from = {}
         self.cost_so_far = {}
@@ -82,28 +127,39 @@ class Astar:
             if current == end:
                 break
             current = heapq.heappop(heap)[1]
-            for next_node in self.graph.neighbors(current):
+            neighbors = self.graph.neighbors(cr, current, step, len(self.reconstruct_path(start, current))-1, occupied_cells)
+            for next_node in neighbors:
                 new_cost = self.cost_so_far[current] + self.heuristic(current, next_node) + self.heuristic(next_node, end)
                 if next_node not in self.cost_so_far or new_cost < self.cost_so_far[next_node]: #self.grid[next_node.y, next_node.x] != self.States.OBS.value
                     self.cost_so_far[next_node] = new_cost
                     heapq.heappush(heap, (new_cost, next_node))
                     self.came_from[next_node] = current
         
+        if current != end:
+            print("bugga")
         return self.reconstruct_path(start, end)
     
 class Environment:
-    def __init__(self, obstacle_density):
+    def __init__(self, nr, obstacle_density):
         # spawn grid
         self.grid = np.zeros((HEIGHT, WIDTH))
+        self.nr = nr
         self.obstacle_density = obstacle_density
         
         # spawn drone
+        self.starting_pos = [None]*nr
+        self.pos = self.starting_pos.copy()
+        self.prev_pos = self.starting_pos.copy()
         indices = np.argwhere(self.grid == States.UNEXP.value)
         np.random.shuffle(indices)
-        self.starting_pos = Point(indices[0,1], indices[0,0])
-        self.pos = self.starting_pos
-        self.prev_pos = self.starting_pos
-        self.grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
+        for r in range(self.nr):
+            self.starting_pos[r] = Point(indices[0,1], indices[0,0])
+            self.pos[r] = self.starting_pos[r]
+            self.prev_pos[r] = self.starting_pos[r]
+            self.grid[self.starting_pos[r].y, self.starting_pos[r].x] = States.ROBOT.value
+            indices_list = indices.tolist()
+            del indices_list[0]
+            indices = np.array(indices_list)
 
         # initialise exploration grid
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
@@ -139,10 +195,14 @@ class Environment:
         # spawn drone
         indices = np.argwhere(self.grid == States.UNEXP.value)
         np.random.shuffle(indices)
-        self.starting_pos = Point(indices[0,1], indices[0,0])
-        self.pos = self.starting_pos
-        self.prev_pos = self.starting_pos
-        self.grid[self.starting_pos.y, self.starting_pos.x] = States.ROBOT.value
+        for r in range(self.nr):
+            self.starting_pos[r] = Point(indices[0,1], indices[0,0])
+            self.pos[r] = self.starting_pos[r]
+            self.prev_pos[r] = self.starting_pos[r]
+            self.grid[self.starting_pos[r].y, self.starting_pos[r].x] = States.ROBOT.value
+            indices_list = indices.tolist()
+            del indices_list[0]
+            indices = np.array(indices_list)
 
         # initialise exploration grid
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
@@ -150,15 +210,15 @@ class Environment:
             for y in range(HEIGHT):
                 if self.grid[y,x] != States.UNEXP.value: self.exploration_grid[y, x] = True
         
-    def move(self, new_pos):        
+    def move(self, r, new_pos):        
         # move drone to new position
-        self.prev_pos = self.pos
-        self.pos = Point(new_pos.x,new_pos.y)
+        self.prev_pos[r] = self.pos[r]
+        self.pos[r] = Point(new_pos.x,new_pos.y)
         
         # update grids
-        self.grid[self.prev_pos.y, self.prev_pos.x] = States.EXP.value
-        self.grid[self.pos.y, self.pos.x] = States.ROBOT.value
-        self.exploration_grid[self.pos.y, self.pos.x] = True
+        self.grid[self.prev_pos[r].y, self.prev_pos[r].x] = States.EXP.value
+        self.grid[self.pos[r].y, self.pos[r].x] = States.ROBOT.value
+        self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
 
     def get_distance(self, end, start):
         return abs(start.x - end.x) + abs(start.y - end.y)
@@ -182,10 +242,13 @@ class Environment:
         else:
             return min(distances, key=distances.get) # returns position
     
-    def cost_function(self):
+    def cost_function(self, r):
         # distances = {}
         temp_exploration_grid = self.exploration_grid.copy()
-        temp_exploration_grid[self.pos.y, self.pos.x] = True
+        temp_exploration_grid[self.pos[r].y, self.pos[r].x] = True
+
+        if self.exploration_grid.all():
+            return None
         
         # gets the distance to all unvisited blocks
         # for y in range(self.grid.shape[0]):
@@ -251,7 +314,7 @@ class Environment:
         clusters = {}
         if len(labels) == 1:
             # Access the nested dictionary for drone position
-            point_paths = distances[env.pos].copy()
+            point_paths = distances[env.pos[r]]
             
             # remove points that have been explored
             pop_points = []
@@ -273,21 +336,21 @@ class Environment:
             for cluster in labels:
                 lowest_value = 1000
                 for key in cluster:
-                    if Point(key[0],key[1]) in distances[env.pos] and len(distances[env.pos][Point(key[0],key[1])]) < lowest_value:
+                    if Point(key[0],key[1]) in distances[env.pos[r]] and len(distances[env.pos[r]][Point(key[0],key[1])]) < lowest_value:
                         lowest_key = key
-                        lowest_value = len(distances[env.pos][Point(key[0],key[1])])
+                        lowest_value = len(distances[env.pos[r]][Point(key[0],key[1])])
                 clusters[Point(lowest_key[0], lowest_key[1])] = len(cluster)
 
         costs = {}
         for point in clusters:
-            # costs[point] = 1/len(distances[env.pos][point])
-            # costs[point] = (clusters[point] / (WIDTH*HEIGHT))/(distances[point])
-            costs[point] = (clusters[point]) + self.weight/len(distances[env.pos][point])
             # costs[point] = (1 - distances[point]/(WIDTH + HEIGHT - 1)) + (clusters[point] / (WIDTH*HEIGHT))
+            # costs[point] = (clusters[point] / (WIDTH*HEIGHT))/(distances[point])
+            # costs[point] = (clusters[point]) + self.weight/len(distances[env.pos][point])
+            costs[point] = len(distances[env.pos[r]][point])
 
         return max(costs, key=costs.get)
     
-    def print_graph(self, steps, path, actions, starting_pos, obstacles, dir_path):
+    def print_graph(self, r, steps, path, actions, starting_pos, obstacles, dir_path):
         """
         Prints the grid environment
         """
@@ -316,7 +379,8 @@ class Environment:
         for i in range(env.grid.shape[0]): # y
             for j in range(env.grid.shape[1]): # x
                 ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="white", alpha=0.5)
-                if obstacles[i,j] == True: ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="k", alpha=0.5)
+                if obstacles[i,j] and Point(j,i) not in env.starting_pos:
+                    ax.fill([j+0.5, j + 1.5, j + 1.5, j+0.5], [i+0.5, i+0.5, i + 1.5, i + 1.5], facecolor="k", alpha=0.5)
                 elif Point(j,i) == starting_pos:
                     ax.fill([j + 0.5, j + 1.5, j + 1.5, j + 0.5],\
                             [i + 0.5, i + 0.5, i + 1.5, i + 1.5], \
@@ -359,138 +423,152 @@ class Environment:
                     for i in indices[Point(x,y)]:
                         if i == len(actions): break
                         if actions[i] == "right": 
-                            clabel += "\u2192"
+                            clabel += "%02d\u2192 "%(i)
                             breakpoint
                         elif actions[i] == "left": 
-                            clabel += "\u2190"
+                            clabel += "%02d\u2190 "%(i)
                             breakpoint
                         elif actions[i] == "up": 
-                            clabel += "\u2193"
+                            clabel += "%02d\u2193 "%(i)
                             breakpoint
                         elif actions[i] == "down": 
-                            clabel += "\u2191"
+                            clabel += "%02d\u2191 "%(i)
                             breakpoint
 
                 temp_label = ""
                 if len(clabel) > 3:
-                    for j, c in enumerate(clabel):
-                        temp_label += clabel[j:j+8] + "\n"
+                    for j in range(0, len(clabel), 8):
+                        if len(clabel) > 8:
+                            temp_label += clabel[j:j+8] + "\n"
+                        else: temp_label += clabel[j::]
                     clabel = temp_label
                 
                 ax.text(x+1, y+1, clabel, ha="center", va="center", color="black", fontsize=8)
                 clabel = ""
         
-        plt_title = "A-star algorithm: Steps: %s" %(str(steps))
+        plt_title = "A-star algorithm drone %s: Steps: %s" %(str(r) ,str(steps))
         plt.title(plt_title)
 
-        file_name = "traj.png"
+        file_name = "traj%d.png"%(r)
         plt.savefig(os.path.join(dir_path, file_name))
         plt.close()
 
 save_trajectory = False
-env = Environment(0)
+preprocessing = True
+print("Preprocessing...")
+
+# weights test
+# weight = np.arange(1,20)
+# indices = []
+# for j in range(1000):
+#     if j % 10 == 0 and j != 0: print(j, weight[max(set(indices), key = indices.count)])
+#     env = Environment(0.3)
+#     all_steps = []
+#     for i,w in enumerate(weight):
+#         env.reset(w,i)
+#         astar = Astar(HEIGHT, WIDTH, env.grid)
+#         # print(env.grid)
+#         obstacles = env.exploration_grid.copy()
+#         steps = 0
+#         actions = []
+#         trajectory = [env.starting_pos]
+#         while not env.exploration_grid.all():
+#             closest = env.cost_function()
+#             path = astar.a_star(env.pos, closest)
+#             del path[0]
+#             while len(path) > 0:
+#                 trajectory.append(path[0])
+#                 steps += 1
+#                 env.move(path[0])
+#                 del path[0]
+#                 if env.prev_pos.x < env.pos.x: actions.append("right")
+#                 if env.prev_pos.x > env.pos.x: actions.append("left")
+#                 if env.prev_pos.y > env.pos.y: actions.append("up")
+#                 if env.prev_pos.y < env.pos.y: actions.append("down")
+#                 # print(actions[steps-1], env.pos)
+
+#         # print(w, " - ", steps)
+#         all_steps.append(steps)
+#         if save_trajectory:
+#             PATH = os.getcwd()
+#             PATH = os.path.join(PATH, 'SAR')
+#             PATH = os.path.join(PATH, 'Results')
+#             PATH = os.path.join(PATH, 'Astar')      
+
+#             date_and_time = datetime.now()
+#             dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+#             if not os.path.exists(dir_path): os.makedirs(dir_path)
+
+#             env.print_graph(trajectory, actions, env.starting_pos, obstacles, dir_path)
+
+#     indices.append(all_steps.index(min(all_steps)))
+# print(weight[max(set(indices), key = indices.count)])
+
+nr = 2
+env = Environment(nr, 0.3)
 weight = 19
 env.reset(weight,0)
 astar = Astar(HEIGHT, WIDTH, env.grid)
-
-print("Preprocessing...")
 
 distances = {}
 for dx in range(WIDTH):
     for dy in range(HEIGHT):
         if env.grid[dy,dx] == States.OBS.value: continue
-        paths = {}
+        temp_paths = {}
         for x in range(WIDTH):
             for y in range(HEIGHT):
                 if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
-                    path = astar.a_star(Point(dx, dy), Point(x,y))
-                    del path[0]
-                    paths[Point(x,y)] = path
-                    distances[Point(dx,dy)] = paths
+                    temp_path = astar.a_star(Point(dx, dy), Point(x,y))
+                    del temp_path[0]
+                    temp_paths[Point(x,y)] = temp_path
+                    distances[Point(dx,dy)] = temp_paths
 
-# weights test
-weight = np.arange(1,20)
-indices = []
-for j in range(1000):
-    if j % 10 == 0 and j != 0: print(j, weight[max(set(indices), key = indices.count)])
-    env = Environment(0)
-    all_steps = []
-    for i,w in enumerate(weight):
-        env.reset(w,i)
-        astar = Astar(HEIGHT, WIDTH, env.grid)
-        # print(env.grid)
-        obstacles = env.exploration_grid.copy()
-        steps = 0
-        actions = []
-        trajectory = [env.starting_pos]
-        while not env.exploration_grid.all():
-            closest = env.cost_function()
-            path = astar.a_star(env.pos, closest)
-            del path[0]
-            while len(path) > 0:
-                trajectory.append(path[0])
-                steps += 1
-                env.move(path[0])
-                del path[0]
-                if env.prev_pos.x < env.pos.x: actions.append("right")
-                if env.prev_pos.x > env.pos.x: actions.append("left")
-                if env.prev_pos.y > env.pos.y: actions.append("up")
-                if env.prev_pos.y < env.pos.y: actions.append("down")
-                # print(actions[steps-1], env.pos)
+print("Preprocessing done...")
+preprocessing = False
+# print(env.grid)
+obstacles = env.exploration_grid.copy()
+steps = 0
+actions = [[] for _ in range(nr)]
+trajectory = [[env.starting_pos[r]] for r in range(nr)]
+current_path = [[] for _ in range(nr)]
+occupied_cells = {}
+occupied_cells[steps] = []
+for r in range(nr):
+    occupied_cells[steps].append(env.starting_pos[r])
+while not env.exploration_grid.all():
+    steps += 1
+    if steps not in occupied_cells: occupied_cells[steps] = [None]*nr
+    for r in range(nr):
+        # if reached end of path
+        if len(current_path[r]) == 0:
+            closest = env.cost_function(r)
+            if closest == None: continue
+            current_path[r] = astar.a_star(env.pos[r], closest, r, steps, occupied_cells)
+            del current_path[r][0]
+            for i, pos in enumerate(current_path[r]):
+                if steps+i not in occupied_cells: occupied_cells[steps+i] = [None]*nr
+                occupied_cells[steps+i][r] = pos
+        
+        trajectory[r].append(current_path[r][0])
+        # occupied_cells[steps].append(current_path[r][0])
+        env.move(r, current_path[r][0])
+        del current_path[r][0]
+        if env.prev_pos[r].x < env.pos[r].x: actions[r].append("right")
+        if env.prev_pos[r].x > env.pos[r].x: actions[r].append("left")
+        if env.prev_pos[r].y > env.pos[r].y: actions[r].append("up")
+        if env.prev_pos[r].y < env.pos[r].y: actions[r].append("down")
 
-        # print(w, " - ", steps)
-        all_steps.append(steps)
+if save_trajectory:
+    PATH = os.getcwd()
+    PATH = os.path.join(PATH, 'SAR')
+    PATH = os.path.join(PATH, 'Results')
+    PATH = os.path.join(PATH, 'Astar')      
 
-    indices.append(all_steps.index(min(all_steps)))
-print(weight[max(set(indices), key = indices.count)])
+    date_and_time = datetime.now()
+    dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+    if not os.path.exists(dir_path): os.makedirs(dir_path)
 
-# env = Environment(0.3)
-# weight = 19
-# env.reset(weight,0)
-# astar = Astar(HEIGHT, WIDTH, env.grid)
+    for r in range(nr):
+        env.print_graph(r, steps, trajectory[r], actions[r], env.starting_pos[r], obstacles, dir_path)
 
-# distances = {}
-# for dx in range(WIDTH):
-#     for dy in range(HEIGHT):
-#         if env.grid[dy,dx] == States.OBS.value: continue
-#         paths = {}
-#         for x in range(WIDTH):
-#             for y in range(HEIGHT):
-#                 if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
-#                     path = astar.a_star(Point(dx, dy), Point(x,y))
-#                     del path[0]
-#                     paths[Point(x,y)] = path
-#                     distances[Point(dx,dy)] = paths
-
-# print("Preprocessing done...")
-# # print(env.grid)
-# obstacles = env.exploration_grid.copy()
-# steps = 0
-# actions = []
-# trajectory = [env.starting_pos]
-# while not env.exploration_grid.all():
-#     closest = env.cost_function()
-#     path = astar.a_star(env.pos, closest)
-#     del path[0]
-#     while len(path) > 0:
-#         trajectory.append(path[0])
-#         steps += 1
-#         env.move(path[0])
-#         del path[0]
-#         if env.prev_pos.x < env.pos.x: actions.append("right")
-#         if env.prev_pos.x > env.pos.x: actions.append("left")
-#         if env.prev_pos.y > env.pos.y: actions.append("up")
-#         if env.prev_pos.y < env.pos.y: actions.append("down")
-#         # print(actions[steps-1], env.pos)
-
-# if save_trajectory:
-#     PATH = os.getcwd()
-#     PATH = os.path.join(PATH, 'SAR')
-#     PATH = os.path.join(PATH, 'Results')
-#     PATH = os.path.join(PATH, 'Astar')      
-
-#     date_and_time = datetime.now()
-#     dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
-#     if not os.path.exists(dir_path): os.makedirs(dir_path)
-
-#     env.print_graph(steps, trajectory, actions, env.starting_pos, obstacles, dir_path)
+    breakpoint

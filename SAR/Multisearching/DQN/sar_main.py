@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
                     "n actions": 4,
                     "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
-                    "obstacles": False,
+                    "obstacles": True,
                     "obstacle density": 0.3,
                     "encoding": "local",
                     "stacked frames": False,

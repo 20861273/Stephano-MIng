@@ -122,7 +122,9 @@ class DeepQNetwork(nn.Module):
                 # nn.init.normal_(self.fc3.weight, mean=0, std=0.01)
         else:
             self.fc1 = nn.Linear(self.input_dims, self.fc_dims[0]) # * unpacking the input list
+            self.fc1_bn = nn.BatchNorm1d(self.fc_dims[0])
             self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
+            self.fc2_bn = nn.BatchNorm1d(self.fc_dims[1])
             # self.fc3 = nn.Linear(self.fc_dims[1], self.fc_dims[2])
             self.fc3 = nn.Linear(self.fc_dims[1], self.n_actions)
             
@@ -189,9 +191,8 @@ class DeepQNetwork(nn.Module):
                 # actions = self.fc3(flat2)
         else:
             # image_state = image_state.to(self.device)
-            x = F.relu(self.fc1(image_state))
-            x = F.relu(self.fc2(x))
-            # x = F.relu(self.fc3(x))
+            x = F.relu(self.fc1_bn(self.fc1(image_state)))
+            x = F.relu(self.fc2_bn(self.fc2(x)))
             actions = self.fc3(x)
 
         return actions

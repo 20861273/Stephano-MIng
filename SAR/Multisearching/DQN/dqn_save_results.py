@@ -159,22 +159,23 @@ class print_results:
                 if Point(x,y) in path:
                     for i in indices[Point(x,y)]:
                         if actions[i] == Direction.RIGHT.value: 
-                            clabel += "\u2192"
+                            clabel += "%02d\u2192"%(i)
                             breakpoint
                         elif actions[i] == Direction.LEFT.value: 
-                            clabel += "\u2190"
+                            clabel += "%02d\u2190"%(i)
                             breakpoint
                         elif actions[i] == Direction.UP.value: 
-                            clabel += "\u2193"
+                            clabel += "%02d\u2193"%(i)
                             breakpoint
                         elif actions[i] == Direction.DOWN.value: 
-                            clabel += "\u2191"
+                            clabel += "%02d\u2191"%(i)
                             breakpoint
 
                 temp_label = ""
                 if len(clabel) > 3:
-                    for j, c in enumerate(clabel):
-                        temp_label += clabel[j:j+8] + "\n"
+                    for j in range(0, len(clabel), 8):
+                        if len(clabel) > 8: temp_label += clabel[j:j+8] + "\n"
+                        else: temp_label += clabel[j::]
                     clabel = temp_label
                 
                 ax.text(x+1, y+1, clabel, ha="center", va="center", color="black", fontsize=8)
