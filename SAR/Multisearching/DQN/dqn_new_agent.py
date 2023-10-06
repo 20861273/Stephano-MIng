@@ -88,7 +88,9 @@ class DQNAgent(object):
                 else: non_image_state = T.tensor(np.array([non_image_observation]),dtype=T.float32).to(self.q_eval.device)
                 actions = self.q_eval.forward(image_state, non_image_state)
             else:
+                self.q_eval.eval()
                 actions = self.q_eval.forward(image_state)
+                self.q_eval.train()
             valid_actions = self.check_obstacles(env, i_r, other_actions, actions.tolist())
             if T.all(valid_actions == -float('inf')):
                 return T.argmax(actions).item(), True

@@ -191,9 +191,16 @@ class DeepQNetwork(nn.Module):
                 # actions = self.fc3(flat2)
         else:
             # image_state = image_state.to(self.device)
+
+            # batch norm
             x = F.relu(self.fc1_bn(self.fc1(image_state)))
             x = F.relu(self.fc2_bn(self.fc2(x)))
             actions = self.fc3(x)
+
+            # non batch norm
+            # x = F.relu(self.fc1(image_state))
+            # x = F.relu(self.fc2(x))
+            # actions = F.relu(self.fc3(x))
 
         return actions
 

@@ -96,8 +96,10 @@ class Environment:
         checks surrounding cells of drone r_i
     
     """
-    
-    def __init__(self, nr, obstacles, obstacle_density,\
+    # nr, obstacles, set_obstacles, obstacle_density, obstacle_path,\
+    #             reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
+    #             training_type, encoding, guide, lidar, refuel, curriculum_learning, total_episodes, total_steps, exp, ts, save_path, goal_spawning=False
+    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, obstacle_path,\
                 reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
                 training_type, encoding, guide, lidar, refuel, curriculum_learning, total_episodes, total_steps, exp, ts, save_path, goal_spawning=False):
         
@@ -124,9 +126,10 @@ class Environment:
         self.obstacles = obstacles
         self.obstacle_end_density = obstacle_density
         self.obstacle_density = obstacle_density
+        self.obstacle_path = obstacle_path
         
         if self.obstacles:
-            if exp == 0 and ts == 0:
+            if exp == 0 and ts == 0 and not set_obstacles:
                 self.generate_grid()
                 self.starting_grid = self.grid.copy()
                 # self.starting_grid = self.generate_maze(HEIGHT, WIDTH)
@@ -142,6 +145,11 @@ class Environment:
                 file_name = "grid.json"
                 file_name = os.path.join(save_path, file_name)
                 write_json(self.grid.tolist(), file_name)
+            elif set_obstacles:
+                file_name = "grid.json"
+                file_name = os.path.join(self.obstacle_path, file_name)
+                self.starting_grid = np.array(read_json(file_name))
+                self.grid = self.starting_grid
             else:
                 file_name = "grid.json"
                 file_name = os.path.join(save_path, file_name)
@@ -542,6 +550,128 @@ class Environment:
             return min(distances, key=distances.get) # returns position
             # return distances[min(distances, key=distances.get)] #returns distance
 
+    def cost_function(self, r_i, other_location):
+        distances = {}
+        temp_exploration_grid = self.exploration_grid.copy()
+        for i in range(self.nr): 
+            temp_exploration_grid[self.pos[i].y, self.pos[i].x] = True
+
+        # if only one unexplored cell left
+        if np.count_nonzero(temp_exploration_grid == False) == 1: other_location = None
+        elif other_location != None: temp_exploration_grid[other_location.y, other_location.x] = True
+        
+        # gets the distance to all unvisited blocks
+        for y in range(self.grid.shape[0]):
+            for x in range(self.grid.shape[1]):
+                if not temp_exploration_grid[y,x]:
+                    distance = self.get_distance(Point(x,y), self.pos[r_i])
+                    distances[Point(x,y)] = distance
+
+        if not distances:
+            return None
+        # if min(distances, key=distances.get) == 1:
+        #     return min(distances, key=distances.get)
+
+        # divid into different clusters of unexplored regions
+        cnter = 0
+        labels = []
+        for x in range(WIDTH):
+            for y in range(HEIGHT):
+                if temp_exploration_grid[y,x]:
+                    continue
+                if cnter == 0:
+                    labels.append([(x,y)])
+                    cnter += 1
+                
+                # checks if (x,y) is in region
+                # if not then add to new region
+                added = False
+                for i in range(len(labels)):
+                    if (x,y) in labels[i]:
+                        added = True
+                        index = i
+                if not added:
+                    labels.append([(x,y)])
+                    index = len(labels)-1
+
+                # checks if right is connected
+                if x != WIDTH-1:
+                    if temp_exploration_grid[y,x] == temp_exploration_grid[y,x+1]:
+                        # checks if (x+1,y) is in a label list already
+                        combined = False
+                        for i, l in enumerate(labels):
+                            if (x+1,y) in labels[i] and i != index:
+                                combine_lists = labels[i] + labels[index]
+                                labels[min(i, index)] = combine_lists
+                                del labels[max(i, index)]
+                                combined = True
+                        if not combined: 
+                            labels[index].append((x+1,y))
+
+                # checks if bottom is connected
+                if y != HEIGHT-1:
+                    if temp_exploration_grid[y,x] == temp_exploration_grid[y+1,x]:
+                        # checks if (x+1,y) is in a label list already
+                        combined = False
+                        for i, l in enumerate(labels):
+                            if (x,y+1) in labels[i] and i != index:
+                                combine_lists = labels[i] + labels[index]
+                                labels[min(i, index)] = combine_lists
+                                del labels[max(i, index)]
+                                combined = True
+                        if not combined:
+                            labels[index].append((x,y+1))
+        
+        clusters = {}
+        if len(labels) == 1:
+            min_distance = min(distances, key=distances.get)
+            if min_distance in labels[0]:
+                clusters[min_distance] = len(labels[0])
+        else:
+            for cluster in labels:
+                lowest_value = 1000
+                selected = False
+                for key in cluster:
+                    if key in distances and distances[key] < lowest_value:
+                        lowest_key = key
+                        lowest_value = distances[key]
+                    clusters[Point(lowest_key[0], lowest_key[1])] = len(cluster)
+
+        # costs = {}
+        # for point in clusters:
+        #     in_target = False
+        #     if distances[point] < 5:
+        #         for r in range(self.nr):
+        #             if r == r_i: continue
+        #             if point in self.target_cluster[r]:
+        #                 in_target = True
+        #         if not in_target:
+        #             costs[point] = 1000 / clusters[point]
+        #             in_target = True
+        #         else:
+        #             in_target = False
+        #     if not in_target:
+        #         # costs[point] = (1 - distances[point]/(WIDTH + HEIGHT - 1)) + (clusters[point] / (WIDTH*HEIGHT))
+        #         costs[point] = clusters[point] / distances[point]
+        #         # costs[point] = (clusters[point]) + 10/(distances[point])
+        
+        # target = max(costs, key=costs.get)
+        # for cluster in labels:
+        #     if target in cluster:
+        #         self.target_cluster[r_i] = cluster
+        #         break
+
+        costs = {}
+        for point in clusters:
+            # costs[point] = (1 - distances[point]/(WIDTH + HEIGHT - 1)) + (clusters[point] / (WIDTH*HEIGHT))
+            # costs[point] = (clusters[point] / (WIDTH*HEIGHT))/(distances[point])
+            # costs[point] = (clusters[point]) + 10/(distances[point])
+            costs[point] = (1  / distances[point])
+        
+        target = max(costs, key=costs.get)
+
+        return target
+
     def get_state(self, x1=None, y1=None, x2=None, y2=None):
         non_image_state = [None]*self.nr
         if self.guide:
@@ -806,10 +936,16 @@ class Environment:
         
         elif self.encoding == "local":
             closest_unexplored = [None]*self.nr
+            
             for r_i in range(self.nr):
-                if r_i == 0: other_location = None
-                else: other_location = closest_unexplored[r_i-1]
-                closest_unexplored[r_i] = self.get_closest_unexplored(r_i, other_location)
+                # checks if enough fuel to get home
+                if self.refuel and self.fuel-1 <= self.get_distance(self.pos[r_i], self.starting_pos[r_i]) and self.pos[r_i] != self.starting_pos[r_i]:
+                    closest_unexplored[r_i] = self.starting_pos[r_i]
+                    self.return_home = True
+                else:
+                    if r_i == 0: other_location = None
+                    else: other_location = closest_unexplored[r_i-1]
+                    closest_unexplored[r_i] = self.cost_function(r_i, other_location)
             closest_unexp_map = np.zeros((self.nr,) + self.grid.shape)
             if None not in closest_unexplored:
                 for r_i in range(self.nr):

@@ -16,66 +16,67 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-                        "training": True,
-                        "load checkpoint": False,
-                        "show rewards interval": 100,
-                        "show plot": False,
-                        "save plot": True,
-                        "policy number": [1],
-                        "session": [2],
-                        "test type": "grid", # test types: grid and iterative
-                        "testing iterations": 100,
-                        "goal spawning": False
+        "training": False,
+        "load checkpoint": False,
+        "show rewards interval": 100,
+        "show plot": False,
+        "save plot": False,
+        "policy number": [0,1,2],
+        "session": [],
+        "test type": "grid", # test types: grid and iterative
+        "testing iterations": 100,
+        "goal spawning": False
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
     # agent types: DQN, DDQN
     hp = {
-                    "number of drones": 1,
-                    "training type": "centralized", # centralized (turn based), centralized actions
-                    "agent type": "DQN",
-                    "learning rate": [0.0001],
-                    "discount rate": [0.7,0.8,0.9],
-                    "epsilon": [[0.1,0.1,0.1]],
+        "number of drones": 2,
+        "training type": "centralized", # centralized (turn based), centralized actions
+        "agent type": "DQN",
+        "learning rate": [0.0001],
+        "discount rate": [0.7,0.8,0.9],
+        "epsilon": [[0.1,0.1,0.1]],
 
-                    "training sessions": 3,
-                    "episodes": 10000,
-                    "positive rewards": [0],
-                    "positive exploration rewards": [1],
-                    "negative rewards": [1],
-                    "negative step rewards": [0.05],
-                    "max steps": [200],
+        "training sessions": 3,
+        "episodes": 10000,
+        "positive rewards": [0],
+        "positive exploration rewards": [1],
+        "negative rewards": [1],
+        "negative step rewards": [0.05],
+        "max steps": [200],
 
-                    "n actions": 4,
-                    "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
-                    "obstacles": True,
-                    "obstacle density": 0.3,
-                    "encoding": "local",
-                    "stacked frames": False,
-                    "input dims": (2,HEIGHT, WIDTH),
-                    "lidar": False,
-                    "guide": False,
-                    "fuel": True,
-                    "lstm": False,
+        "n actions": 4,
+        "env size": '%sx%s' %(str(WIDTH), str(HEIGHT)),
+        "obstacles": False,
+        "set obstacles": False,
+        "obstacle density": 0.3,
+        "encoding": "local",
+        "stacked frames": False,
+        "input dims": (2,HEIGHT, WIDTH),
+        "lidar": False,
+        "guide": False,
+        "fuel": False,
+        "lstm": False,
 
-                    "batch size": 64,
-                    "mem size": 100000,
-                    "replace": 1000,
-                    "channels": [32, 64],
-                    "kernel": [2, 2],
-                    "stride": [1, 1],
-                    "fc dims": [16,32],
+        "batch size": 64,
+        "mem size": 100000,
+        "replace": 1000,
+        "channels": [32, 64],
+        "kernel": [2, 2],
+        "stride": [1, 1],
+        "fc dims": [16,32],
 
-                    "nstep": False,
-                    "nstep N": 2,
-                    "prioritized": True,
-                    "starting beta": 0.5,
+        "nstep": True,
+        "nstep N": 2,
+        "prioritized": True,
+        "starting beta": 0.5,
 
-                    "device": 0,
+        "device": 0,
 
-                    "allow windowed revisiting": True,
-                    "curriculum learning": {"sparse reward": False, "collisions": False},
-                    "reward system": {"find goal": False, "coverage": True},
+        "allow windowed revisiting": True,
+        "curriculum learning": {"sparse reward": False, "collisions": False},
+        "reward system": {"find goal": False, "coverage": True},
     }
     
     if hp["number of drones"] < 2 and hp["training type"] == "decentralized":
@@ -92,7 +93,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "16-09-2023 09h47m05s")
+    load_checkpoint_path = os.path.join(PATH, "02-10-2023 16h10m37s")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -177,14 +178,14 @@ if __name__ == '__main__':
                                         if i_exp >= int(checkpoint['session']):
                                             if hp["training type"] == "centralized":
                                                 load_checkpoint = centralized_dqn(
-                                                            hp["number of drones"], hp["obstacles"], hp["obstacle density"] ,hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["agent type"], hp["encoding"],
+                                                            hp["number of drones"], hp["obstacles"], hp["set obstacles"], hp["obstacle density"] ,hp["training sessions"], hp["episodes"], testing_parameters["show rewards interval"], hp["training type"], hp["agent type"], hp["encoding"],
                                                             hp["curriculum learning"], hp["reward system"], hp["allow windowed revisiting"],
                                                             dr_i, lr_i, er_i[0], er_i[1], er_i[2],
                                                             pr_i, nr_i, per_i, nsr_i, ms_i, i_exp,
                                                             hp["n actions"], hp["starting beta"], hp["input dims"], hp["stacked frames"], hp["guide"], hp["lidar"], hp["fuel"],
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"], hp["nstep"], hp["nstep N"],
-                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"], hp["lstm"],
+                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, load_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"], hp["lstm"],
                                                             outliers)
                                             elif hp["training type"] == "centralized actions":
                                                 load_checkpoint = distributed_dqn(

@@ -9,8 +9,34 @@ import sys
 sys.path.append('\perlin_noise\perlin_noise')
 from perlin_noise import PerlinNoise
 
-HEIGHT = 50
-WIDTH = 50
+# Chosen values
+height = 100 # m
+
+# Sony RX1R II
+focal_length = 35.0 # mm
+V = 2
+H = 3
+aspect_ratio = V/H
+sensor_w = 35.9 # mm
+sensor_h = 24.0 # mm
+num_pixels = 42.4 * pow(10, 6)
+pixel_w = num_pixels / aspect_ratio
+pixel_h = num_pixels / pixel_w
+
+################################ CALCULATING FOV FROM HIEGHT ################################################################################################
+GSD_W = (height * sensor_w) / (focal_length * pixel_w) # m
+GSD_H = (height * sensor_h) / (focal_length * pixel_h) # m
+
+FOV_W = GSD_W * pixel_w
+FOV_H = GSD_H * pixel_h
+
+print(FOV_W, FOV_H)
+
+lat_size = 2000
+long_size = 2000
+
+HEIGHT = round(lat_size / FOV_W)
+WIDTH = round(long_size / FOV_H)
 
 largest = 0
 smallest = 0
@@ -55,14 +81,18 @@ for y in range(HEIGHT):
 
 print(value)
 
+# calculat heights
+
+
 # plot.imshow(value, cmap='gray')
 # plot.colorbar()
 
 # plot.show()
-
-lin_x = np.linspace(0,1,value.shape[0],endpoint=False)
-lin_y = np.linspace(0,1,value.shape[1],endpoint=False)
-x,y = np.meshgrid(lin_x,lin_y)
+# lin_y = np.linspace(0,FOV_H,lat_size,endpoint=False)
+# lin_x = np.linspace(0,FOV_W,long_size,endpoint=False)
+lin_y = np.linspace(0,1,value.shape[0],endpoint=False)
+lin_x = np.linspace(0,1,value.shape[1],endpoint=False)
+mesh_x,mesh_y = np.meshgrid(lin_x,lin_y)
 
 # fig = matplotlib.pyplot.figure()
 # ax = fig.add_subplot(111, projection="3d")
@@ -107,12 +137,12 @@ im1 = ax[0].imshow(value, cmap='gray')
 fig.colorbar(im1, ax=ax[0])
 ax[0].set_title('2D terrain')
 
-lin_x = np.linspace(0,1,value.shape[0],endpoint=False)
-lin_y = np.linspace(0,1,value.shape[1],endpoint=False)
-x,y = np.meshgrid(lin_x,lin_y)
+# lin_x = np.linspace(0,1,value.shape[0],endpoint=False)
+# lin_y = np.linspace(0,1,value.shape[1],endpoint=False)
+# x,y = np.meshgrid(lin_x,lin_y)
 
 ax2 = fig.add_subplot(132, projection='3d')
-ax2.plot_surface(x, y, value, cmap='gray')
+ax2.plot_surface(mesh_x,mesh_y, value, cmap='gray')
 ax2.set_zlim(0, 1)
 ax2.set_title('3D terrain')
 
@@ -120,6 +150,6 @@ im2 = ax[2].imshow(prob_dist)
 fig.colorbar(im2, ax=ax[2])
 ax[2].set_title('Probability distribution\nMean: %.2f' %(mean))
 
-# plot.show()
+plot.show()
 
 plot.savefig("fig.png")

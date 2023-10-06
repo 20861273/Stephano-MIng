@@ -17,6 +17,8 @@ class Enclosed_space_check:
 
         for x in range(self.width):
             for y in range(self.height):
+                if (5,0) == (x,y):
+                    breakpoint
                 if self.binary_grid[y,x] != self.States.UNEXP.value:
                     continue
                 if cnter == 0:
@@ -50,6 +52,8 @@ class Enclosed_space_check:
 
                 # checks if bottom is connected
                 if y != self.height-1:
+                    if y == 1:
+                        breakpoint
                     if self.binary_grid[y,x] == self.binary_grid[y+1,x]:
                         # checks if (x+1,y) is in a label list already
                         combined = False
@@ -72,7 +76,7 @@ class Enclosed_space_check:
         # del labels[index]
         save_index = []
         for i,l in enumerate(labels):
-            if len(l) > self.height*self.width*0.1:
+            if len(l) > 1:
                 save_index.append(i)
         self.spaces = [labels[save_index[0]]]
         if len(save_index) != 1:
@@ -88,17 +92,19 @@ class Enclosed_space_check:
     def combine_spaces(self):
         distances = {}
         
-        # select position in space
-        for i,p1 in enumerate(self.spaces[0]):
+        # select comparing space
+        for l2 in range(1, len(self.spaces)):
             shortest_distance = self.height*self.width
-            # select comparing space
-            for l2 in range(1, len(self.spaces)):
+            # select position in space
+            for i,p1 in enumerate(self.spaces[0]):
                 # select position in comparing space
                 for j,p2 in enumerate(self.spaces[l2]):
                     distance = self.get_distance(p1,p2)
                     if distance < shortest_distance:
                         shortest_distance = distance
-                        distances[l2] = [p1,p2]
+                        pos1 = p1
+                        pos2 = p2
+            distances[l2] = [pos1,pos2]
         
         for i,l in enumerate(distances):
             x_distance = abs(distances[l][0][0] - distances[l][1][0])

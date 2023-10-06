@@ -13,7 +13,7 @@ import torch as T
 import time
 import matplotlib.pyplot as plt
 
-def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes, print_interval, training_type, agent_type, encoding,
+def centralized_dqn(nr, obstacles, set_obstacles, obstacle_density, training_sessions, episodes, print_interval, training_type, agent_type, encoding,
                     curriculum_learning, reward_system, allow_windowed_revisiting,
                     discount_rate, learning_rate, epsilon, eps_min, eps_dec,
                     positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
@@ -21,11 +21,13 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                     n_actions, starting_beta, input_dims, stacked, guide, lidar, fuel,
                     c_dims, k_size, s_size, fc_dims,
                     batch_size, mem_size, replace, nstep, nstep_N,
-                    prioritized, models_path, save_path, load_checkpoint_path, env_size, load_checkpoint, device_num, lstm, outliers=None):
+                    prioritized, models_path, save_path, load_checkpoint_path, obstacle_path, env_size, load_checkpoint, device_num, lstm, outliers=None):
     
     if n_actions == 3:
         from dqn_new_agent import DQNAgent
         from dqn_new_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
+
+        input_dims = (5)
     else:
         from dqn_agent import DQNAgent
         from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
@@ -46,7 +48,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
         previous_avg_collisions = 0
 
         # initialize environment
-        env = Environment(nr, obstacles, obstacle_density, reward_system,
+        env = Environment(nr, obstacles, set_obstacles, obstacle_density, obstacle_path, reward_system,
                           positive_reward, negative_reward, positive_exploration_reward, negative_step_reward,
                           training_type, encoding, guide, lidar, fuel, curriculum_learning, episodes, max_steps, i_exp, i_ts, save_path)
         
@@ -102,7 +104,7 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                                     'epoch': 0,
                                     'episode': 0}     
 
-            if checkpoint['epoch'] == 0 and checkpoint['episode'] == 0:
+            if i_ts == 0 and checkpoint['epoch'] == 0 and checkpoint['episode'] == 0:
                 ts_rewards = []
                 rewards = []
             else:
@@ -112,11 +114,11 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
 
                 file_name = "ts_steps%s.json" %(str(checkpoint['session']))
                 file_name = os.path.join(load_checkpoint_path, file_name)
-                ts_rewards = read_json(file_name)
+                ts_steps = read_json(file_name)
 
-                file_name = "ts_losses%s.json" %(str(checkpoint['session']))
+                file_name = "ts_loss%s.json" %(str(checkpoint['session']))
                 file_name = os.path.join(load_checkpoint_path, file_name)
-                ts_rewards = read_json(file_name)
+                ts_losses = read_json(file_name)
 
                 file_name = "rewards%s_%s.json" %(str(checkpoint['session']), str(checkpoint['epoch']))
                 file_name = os.path.join(load_checkpoint_path, file_name)
@@ -326,9 +328,9 @@ def centralized_dqn(nr, obstacles, obstacle_density, training_sessions, episodes
                         'epsilon= %.2f' %(agent.epsilon), 
                         'loss=%f' % loss,
                         'success= %.4f' % (percentage))
-                for name, param in agent.q_eval.named_parameters():
-                    if param.grad is not None:
-                        print(f"Layer: {name}, Gradient Norm: {param.grad.norm().item()}")
+                # for name, param in agent.q_eval.named_parameters():
+                #     if param.grad is not None:
+                #         print(f"Layer: {name}, Gradient Norm: {param.grad.norm().item()}")
                 cntr = 0
                 previous_avg_collisions = avg_collisions
             

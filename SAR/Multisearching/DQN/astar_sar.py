@@ -280,14 +280,17 @@ class Environment:
 
         costs = {}
         for point in clusters:
-            # costs[point] = 1/len(distances[env.pos][point])
-            # costs[point] = (clusters[point] / (WIDTH*HEIGHT))/(distances[point])
-            costs[point] = (clusters[point]) + self.weight/len(distances[env.pos][point])
-            # costs[point] = (1 - distances[point]/(WIDTH + HEIGHT - 1)) + (clusters[point] / (WIDTH*HEIGHT))
+            if len(distances[point]) > 5:
+                costs[point] = (WIDTH*HEIGHT)/len(distances[env.pos][point])
+            else:
+                # costs[point] = 1/len(distances[env.pos][point])
+                costs[point] = clusters[point] / len(distances[point])
+                # costs[point] = (clusters[point]) + self.weight/len(distances[env.pos][point])
+                # costs[point] = (1 - len(distances[point])/(WIDTH + HEIGHT - 1)) + (clusters[point] / (WIDTH*HEIGHT))
 
         return max(costs, key=costs.get)
     
-    def print_graph(self, steps, path, actions, starting_pos, obstacles, dir_path):
+    def print_graph(self, steps, path, actions, starting_pos, obstacles, dir_path, index=0):
         """
         Prints the grid environment
         """
@@ -383,13 +386,14 @@ class Environment:
         plt_title = "A-star algorithm: Steps: %s" %(str(steps))
         plt.title(plt_title)
 
-        file_name = "traj.png"
+        
+        file_name = "traj%d.png"%(index)
         plt.savefig(os.path.join(dir_path, file_name))
         plt.close()
 
-save_trajectory = False
+save_trajectory = True
 env = Environment(0)
-weight = 19
+weight = 1
 env.reset(weight,0)
 astar = Astar(HEIGHT, WIDTH, env.grid)
 
@@ -408,44 +412,97 @@ for dx in range(WIDTH):
                     paths[Point(x,y)] = path
                     distances[Point(dx,dy)] = paths
 
+################################################################
 # weights test
-weight = np.arange(1,20)
-indices = []
+# weight = np.arange(1,20)
+# indices = []
+# for j in range(1000):
+#     if j % 10 == 0 and j != 0: print(j, weight[max(set(indices), key = indices.count)])
+#     env = Environment(0)
+#     all_steps = []
+#     for i,w in enumerate(weight):
+#         env.reset(w,i)
+#         astar = Astar(HEIGHT, WIDTH, env.grid)
+#         # print(env.grid)
+#         obstacles = env.exploration_grid.copy()
+#         steps = 0
+#         actions = []
+#         trajectory = [env.starting_pos]
+#         while not env.exploration_grid.all():
+#             closest = env.cost_function()
+#             path = astar.a_star(env.pos, closest)
+#             del path[0]
+#             while len(path) > 0:
+#                 trajectory.append(path[0])
+#                 steps += 1
+#                 env.move(path[0])
+#                 del path[0]
+#                 if env.prev_pos.x < env.pos.x: actions.append("right")
+#                 if env.prev_pos.x > env.pos.x: actions.append("left")
+#                 if env.prev_pos.y > env.pos.y: actions.append("up")
+#                 if env.prev_pos.y < env.pos.y: actions.append("down")
+#                 # print(actions[steps-1], env.pos)
+
+#         # print(w, " - ", steps)
+#         all_steps.append(steps)
+
+#     indices.append(all_steps.index(min(all_steps)))
+# print(weight[max(set(indices), key = indices.count)])
+
+
+################################################################
+# steps test
+if save_trajectory:
+    PATH = os.getcwd()
+    PATH = os.path.join(PATH, 'SAR')
+    PATH = os.path.join(PATH, 'Results')
+    PATH = os.path.join(PATH, 'Astar')      
+
+    date_and_time = datetime.now()
+    dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+    if not os.path.exists(dir_path): os.makedirs(dir_path)
+all_steps = []
 for j in range(1000):
-    if j % 10 == 0 and j != 0: print(j, weight[max(set(indices), key = indices.count)])
+    if j % 100 == 0 and j != 0: print(j)
     env = Environment(0)
-    all_steps = []
-    for i,w in enumerate(weight):
-        env.reset(w,i)
-        astar = Astar(HEIGHT, WIDTH, env.grid)
-        # print(env.grid)
-        obstacles = env.exploration_grid.copy()
-        steps = 0
-        actions = []
-        trajectory = [env.starting_pos]
-        while not env.exploration_grid.all():
-            closest = env.cost_function()
-            path = astar.a_star(env.pos, closest)
+    
+    env.reset(weight,0)
+    astar = Astar(HEIGHT, WIDTH, env.grid)
+    # print(env.grid)
+    obstacles = env.exploration_grid.copy()
+    steps = 0
+    actions = []
+    trajectory = [env.starting_pos]
+    while not env.exploration_grid.all():
+        if steps > 60:
+            breakpoint
+        closest = env.cost_function()
+        path = astar.a_star(env.pos, closest)
+        del path[0]
+        while len(path) > 0:
+            trajectory.append(path[0])
+            steps += 1
+            env.move(path[0])
             del path[0]
-            while len(path) > 0:
-                trajectory.append(path[0])
-                steps += 1
-                env.move(path[0])
-                del path[0]
-                if env.prev_pos.x < env.pos.x: actions.append("right")
-                if env.prev_pos.x > env.pos.x: actions.append("left")
-                if env.prev_pos.y > env.pos.y: actions.append("up")
-                if env.prev_pos.y < env.pos.y: actions.append("down")
-                # print(actions[steps-1], env.pos)
+            if env.prev_pos.x < env.pos.x: actions.append("right")
+            if env.prev_pos.x > env.pos.x: actions.append("left")
+            if env.prev_pos.y > env.pos.y: actions.append("up")
+            if env.prev_pos.y < env.pos.y: actions.append("down")
+            # print(actions[steps-1], env.pos)
 
         # print(w, " - ", steps)
-        all_steps.append(steps)
+    all_steps.append(steps)
+    if save_trajectory and steps > 60:
+        env.print_graph(steps, trajectory, actions, env.starting_pos, obstacles, dir_path, j)
 
-    indices.append(all_steps.index(min(all_steps)))
-print(weight[max(set(indices), key = indices.count)])
+print(np.mean(np.array(all_steps)))
 
-# env = Environment(0.3)
-# weight = 19
+    
+
+###############################################################
+# run simulations
+# env = Environment(0)
+# weight = 1
 # env.reset(weight,0)
 # astar = Astar(HEIGHT, WIDTH, env.grid)
 
@@ -483,14 +540,14 @@ print(weight[max(set(indices), key = indices.count)])
 #         if env.prev_pos.y < env.pos.y: actions.append("down")
 #         # print(actions[steps-1], env.pos)
 
-# if save_trajectory:
-#     PATH = os.getcwd()
-#     PATH = os.path.join(PATH, 'SAR')
-#     PATH = os.path.join(PATH, 'Results')
-#     PATH = os.path.join(PATH, 'Astar')      
+if save_trajectory:
+    PATH = os.getcwd()
+    PATH = os.path.join(PATH, 'SAR')
+    PATH = os.path.join(PATH, 'Results')
+    PATH = os.path.join(PATH, 'Astar')      
 
-#     date_and_time = datetime.now()
-#     dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
-#     if not os.path.exists(dir_path): os.makedirs(dir_path)
+    date_and_time = datetime.now()
+    dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+    if not os.path.exists(dir_path): os.makedirs(dir_path)
 
-#     env.print_graph(steps, trajectory, actions, env.starting_pos, obstacles, dir_path)
+    env.print_graph(steps, trajectory, actions, env.starting_pos, obstacles, dir_path)

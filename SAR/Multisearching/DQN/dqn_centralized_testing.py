@@ -97,10 +97,10 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
             checkpoint = agent.load_models()
             agent.q_eval.eval()
             agent.q_next.eval()
-                            #nr, obstacles, obstacle_density,\
-                    # reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
-                    # training_type, encoding, guide, lidar, refuel, curriculum_learning, total_episodes, total_steps, exp, ts, save_path
-            env = Environment(hp["number of drones"], hp["obstacles"], hp["obstacle density"],
+                            #nr, obstacles, set_obstacles, obstacle_density, obstacle_path,\
+                # reward_system, positive_reward, negative_reward, positive_exploration_reward, negative_step_reward, \
+                # training_type, encoding, guide, lidar, refuel, curriculum_learning, total_episodes, total_steps, exp, ts, save_path, goal_spawning=False
+            env = Environment(hp["number of drones"], hp["obstacles"], hp["set obstacles"], hp["obstacle density"], load_path,
                             hp["reward system"], hp["positive rewards"][0], hp["negative rewards"][0],
                             hp["positive exploration rewards"][0], hp["negative step rewards"][0],
                             hp["training type"], hp["encoding"], hp["guide"], hp["lidar"], hp["fuel"],
@@ -269,11 +269,10 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                     if save_plot:
                         for i in range(hp["number of drones"]):
                             for cntr, path in enumerate(paths):
-                                if not successes[cntr]:
-                                    PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
-                                                [sub_actions[i] for sub_actions in traj_actions[cntr]], 
-                                                [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
-                                                load_path, cntr, env)
+                                PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
+                                            [sub_actions[i] for sub_actions in traj_actions[cntr]], 
+                                            [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
+                                            load_path, cntr, env)
 
                     p = cnt/((WIDTH)*(HEIGHT))*100
                     print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, (WIDTH)*(HEIGHT), p))
@@ -569,7 +568,10 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                 print("Average steps: %.2f" %(np.mean(np.array(steps))))
                 print("Average backtracking: %.2f" %(average_backtracking))
 
-                file_name = "Results%s_%s_goal.json" %(str(policy), str(ts))
+                if goal_spawning:
+                    file_name = "Results%s_%s_goal.json" %(str(policy), str(ts))
+                else:
+                    file_name = "Results%s_%s.json" %(str(policy), str(ts))
                 file_name = os.path.join(load_path, file_name)
                 write_json("Success:%s, Average steps:%s, Average collisions:%s, Average timeouts:%s Average backtracking:%s" \
                         %(str(p), str(np.mean(np.array(steps))), \

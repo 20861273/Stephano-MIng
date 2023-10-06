@@ -561,7 +561,7 @@ class ReplayMemory:
                 if(len(self.nstep_buffer)<self.nstep_N*self.nr):
                     return
                 
-                R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
+                R = sum([self.nstep_buffer[i][2]*(gamma**i) for i in range(0,self.nstep_N*self.nr,self.nr)])
                 image_state, action, _, next_image_state, done = self.nstep_buffer.pop(0)
                 self.transitions.append((self.t, image_state, action, R, next_image_state, done), self.transitions.max)  # Store new transition with maximum priority
             else:
@@ -570,11 +570,12 @@ class ReplayMemory:
 
     def finish_nstep(self, gamma):
         while len(self.nstep_buffer) > 0:
-            R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0, len(self.nstep_buffer), self.nr)])
             if self.guide:
+                R = sum([self.nstep_buffer[i][3]*(gamma**i) for i in range(0, len(self.nstep_buffer), self.nr)])
                 state, other_state, action, _, state_, other_state_, done = self.nstep_buffer.pop(0)
                 self.transitions.append((self.t, state, other_state, action, R, state_, other_state_, done), self.transitions.max)
             else:
+                R = sum([self.nstep_buffer[i][2]*(gamma**i) for i in range(0, len(self.nstep_buffer), self.nr)])
                 state, action, _, state_, done = self.nstep_buffer.pop(0)
                 self.transitions.append((self.t, state, action, R, state_, done), self.transitions.max)
             
