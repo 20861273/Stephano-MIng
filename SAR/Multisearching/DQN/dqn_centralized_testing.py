@@ -333,7 +333,13 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                                         for r in range(env.nr):
                                             env.prev_pos[r] = Point(env.starting_pos[r].x-1, env.starting_pos[r].y)
                                     
-                                    image_observation, non_image_observation, _ = env.get_state()
+                                    # if env.starting_pos[0] == Point(2,0) and env.starting_pos[1] == Point(1,0):
+                                    #     env.grid[env.goal.y, env.goal.x] = States.UNEXP.value
+                                    #     env.goal = Point(3,2)
+                                    #     env.grid[env.goal.y, env.goal.x] = States.GOAL.value
+                                    
+                                    image_observation, non_image_observation, closest_unexplored = env.get_state()
+                                    env.prev_closest_unexplored = closest_unexplored.copy()
 
                                     if hp["stacked frames"]:
                                         # adds dimension for previous time steps
@@ -438,10 +444,11 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                     if save_plot:
                         for cntr, path in enumerate(paths):
                             for i in range(hp["number of drones"]):
-                                PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
-                                            [sub_actions[i] for sub_actions in traj_actions[cntr]], 
-                                            [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
-                                            load_path, cntr, env)
+                                if [sub_starting_position[0] for sub_starting_position in starting_positions][cntr] == Point(2,0) and [sub_starting_position[1] for sub_starting_position in starting_positions][cntr] == Point(1,0):
+                                    PR.print_graph(successes[cntr], policy, i, [sub_path[i] for sub_path in path], 
+                                                [sub_actions[i] for sub_actions in traj_actions[cntr]], 
+                                                [sub_starting_position[i] for sub_starting_position in starting_positions][cntr], obstacles[cntr], 
+                                                load_path, cntr, env)
 
                     p = cnt/(len(paths))*100
                     print("Percentage success: %d / %d x 100 = %.2f %%" %(cnt, len(paths), p))

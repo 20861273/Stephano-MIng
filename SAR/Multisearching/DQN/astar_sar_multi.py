@@ -9,10 +9,11 @@ import os
 from datetime import datetime
 import time
 import json
+from itertools import product
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 50
-WIDTH = 50
+HEIGHT = 20
+WIDTH = 20
 
 # Chosen values
 height = 100 # m
@@ -236,7 +237,8 @@ class Astar:
                             direction = "down"
                         elif current.y > next_node.y: # up
                             direction = "up"
-                    heapq.heappush(self.heap, (new_cost, next_node, direction))
+                    priority = new_cost + self.heuristic(next_node, end)
+                    heapq.heappush(self.heap, (priority, next_node, direction))
                     self.came_from[next_node] = current
         
         if current == end:
@@ -403,6 +405,20 @@ class Environment:
         else:
             return min(distances, key=distances.get) # returns position
         
+    def get_max_targets(self, costs):
+        # get max value of each dorne
+        max_targets_value = [None]*self.nr
+        for ri in range(self.nr):
+            if not costs[ri]: max_targets_value[ri] = []
+            else: max_targets_value[ri] = max(costs[ri].values())
+
+        # get all positions with max value
+        max_targets = [[] for i in range(self.nr)]
+        for ri in range(self.nr):
+            max_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == max_targets_value[ri] ]
+
+        return max_targets
+        
     def scheduler(self):
         # set current positions to explored
         temp_exploration_grid = self.exploration_grid.copy()
@@ -436,83 +452,126 @@ class Environment:
                             # costs[ri][Point(x,y)] = 1 / len(distances[self.pos[ri]][Point(x,y)])
                             costs[ri][Point(x,y)] = 1 / distances[self.pos[ri]][Point(x,y)]
 
-        # set targets based on costs
+        # set targets based on max costs
         targets = [None]*self.nr
         for ri in range(self.nr):
             targets[ri] = max(costs[ri], key=costs[ri].get)
         
-        # check if other drones will reach target first
-        # temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
+        max_targets = self.get_max_targets(costs)
 
-        # for ri in range(self.nr):
-        #     del temp_costs[ri][targets[ri]]
+        # check no targets equal
+        # find equal targets
+        indices = {}
+        for i, item in enumerate(targets):
+            if item in indices:
+                indices[item].append(i)
+            else:
+                indices[item] = [i]
+        equal_targets = {key: value for key, value in indices.items() if len(value) > 1}
 
-        # for ri in range(self.nr):
-        #     closest = False
-        #     while not closest:
-        #         # if (distance from other drone to other target) + (distance from other target to target) < (distance from drone to target)
-        #         # then get next best unexplored cell
-        #         # until the truly closest cell is found
-        #         for rj in range(self.nr):
-        #             if ri == rj: continue
-        #             closest = False
-        #             if temp_costs or targets[ri] == max(temp_costs[rj], key=costs[rj].get):
-        #                 if np.count_nonzero(temp_exploration_grid) == HEIGHT*WIDTH-1:
-        #                     closest = True
-        #                 else:
-        #                     if targets[rj] != targets[ri]:
-        #                         if len(distances[self.pos[rj]][targets[rj]]) + len(distances[targets[rj]][targets[ri]]) \
-        #                             < len(distances[self.pos[ri]][targets[ri]]):
-        #                             del costs[ri][targets[ri]]
-        #                             targets[ri] = max(costs[ri], key=costs[ri].get)
-        #                         else:
-        #                             closest = True
-        #                     else:
-        #                         if len(distances[self.pos[rj]][targets[rj]]) < len(distances[self.pos[ri]][targets[ri]]):
-        #                             del costs[ri][targets[ri]]
-        #                             targets[ri] = max(costs[ri], key=costs[ri].get)
-        #                         else:
-        #                             closest = True
-        #             else:
-        #                 closest = True
+        # check if any targets were equal
+        if equal_targets:
+            multiple_targets = [False]*self.nr
+            multiple_targets_condition = False
+            for ri in range(self.nr):
+                # check if drone has multiple targets of same value
+                if len(max_targets[ri]) > 1:
+                    multiple_targets[ri] = True
+                    multiple_targets_condition = True
 
+            # delete best targets from temp cost list
+            temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
+            for ri in range(self.nr):
+                for target in max_targets[ri]:
+                    del temp_costs[ri][target]
+
+            # check if drones have targets left
+            if not multiple_targets_condition:
+                if not temp_costs[0]: # if no unexplored cells left return home
+                    # get closest drone
+                    best_drone = None
+                    cost = 0
+                    for ri in range(self.nr):
+                        if cost < costs[ri][targets[ri]]:
+                            cost = costs[ri][targets[ri]]
+                            best_drone = ri
+                    for ri in range(self.nr):
+                        if ri != best_drone: 
+                            targets[ri] = self.starting_pos[ri]
+                    
+                    return targets
+
+            # find best targets
+            next_max_targets = self.get_max_targets(temp_costs)
+            for ri in range(self.nr):
+                if len(next_max_targets[ri]) == 0:
+                    breakpoint
+                max_targets[ri] += next_max_targets[ri]
+
+            # get all combinations of best targets
+            combinations = list(product(*max_targets))
+
+            # find invalid combinations
+            delete_indices = []
+            for i,combination in enumerate(combinations):
+                if len(combination) != len(set(combination)):
+                    delete_indices.append(i)
+            
+            # delete invalid combinations
+            modified_combinations = [combinations[i] for i in range(len(combinations)) if i not in delete_indices]
+            combinations = modified_combinations.copy()
+            
+            # find sum costs of combinations
+            sum_costs = []
+            for combination in combinations:
+                sum_cost = 0
+                for i, target in enumerate(combination):
+                    if target in costs[i]:
+                        sum_cost += costs[i][target]
+                sum_costs.append(sum_cost)
+            
+            # set targets to best combination
+            max_cost = max(sum_costs)
+            best_combination = combinations[sum_costs.index(max_cost)]
+            for ri in range(self.nr):
+                targets[ri] = best_combination[ri]
         
         # check no targets equal
-        all_selected = False
-        while not all_selected:
-            # find equal targets
-            indices = {}
-            for i, item in enumerate(targets):
-                if item in indices:
-                    indices[item].append(i)
-                else:
-                    indices[item] = [i]
-            equal_targets = {key: value for key, value in indices.items() if len(value) > 1}
+        # all_selected = False
+        # while not all_selected:
+        #     # find equal targets
+        #     indices = {}
+        #     for i, item in enumerate(targets):
+        #         if item in indices:
+        #             indices[item].append(i)
+        #         else:
+        #             indices[item] = [i]
+        #     equal_targets = {key: value for key, value in indices.items() if len(value) > 1}
             
-            # check if any targets were equal
-            if equal_targets:
-                for target, drones in equal_targets.items():
-                    # find best cost for cell
-                    max_cost = 0
-                    for ri in drones:
-                        if costs[ri][target] > max_cost:
-                            max_cost = costs[ri][target]
-                            best_drone = ri
+        #     # check if any targets were equal
+        #     if equal_targets:
+        #         for target, drones in equal_targets.items():
+        #             # find best cost for cell
+        #             max_cost = 0
+        #             for ri in drones:
+        #                 if costs[ri][target] > max_cost:
+        #                     max_cost = costs[ri][target]
+        #                     best_drone = ri
                     
-                    # delete target from other drones costs
-                    for ri in drones:
-                        if ri == best_drone: continue
-                        del costs[ri][target]
+        #             # delete target from other drones costs
+        #             for ri in drones:
+        #                 if ri == best_drone: continue
+        #                 del costs[ri][target]
 
-                    # get next best target from costs
-                    for ri in range(self.nr):
-                        if ri == best_drone: continue
-                        if not costs[ri]: # if no unexplored cells left return home
-                            targets[ri] = self.starting_pos[ri]
-                        else:
-                            targets[ri] = max(costs[ri], key=costs[ri].get)
-            else:
-                all_selected = True
+        #             # get next best target from costs
+        #             for ri in range(self.nr):
+        #                 if ri == best_drone: continue
+        #                 if not costs[ri]: # if no unexplored cells left return home
+        #                     targets[ri] = self.starting_pos[ri]
+        #                 else:
+        #                     targets[ri] = max(costs[ri], key=costs[ri].get)
+        #     else:
+        #         all_selected = True
         return targets
     
     def cost_function(self, r, occupied_cells):
@@ -859,7 +918,7 @@ class Environment:
         return frontiers
 
     
-    def print_graph(self, r, steps, path, actions, starting_pos, obstacles, dir_path, cnt, goal_pos=None):
+    def print_graph(self, r, steps, path, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None):
         """
         Prints the grid environment
         """
@@ -961,8 +1020,10 @@ class Environment:
         
         plt_title = "A-star algorithm drone %s: Steps: %s" %(str(r) ,str(steps))
         plt.title(plt_title)
-
-        file_name = "traj%d_%d.png"%(cnt, r)
+        if summary:
+            file_name = "trajectory%d_drone%d.png"%(cnt, r)
+        else:
+            file_name = "trajectory%d_drone%d_step%d.png"%(cnt, r, steps)
         plt.savefig(os.path.join(dir_path, file_name))
         plt.close()
 
@@ -1022,6 +1083,7 @@ PATH = os.path.join(PATH, 'SAR')
 # distances = read_json(file_path)
 # distances = convert_json_data(distances)
 save_trajectory = True
+in_loop_trajectory = False
 in_loop_dist = False
 preprocessing = True
 fixed_wing = False
@@ -1031,9 +1093,19 @@ goal_spawning = False
 nr = 2
 weight = 19
 obstacles = True
-obstacle_density = 0.4
-set_obstacles = False
+obstacle_density = 0.2
+set_obstacles = True
 env = Environment(nr, obstacles, set_obstacles, obstacle_density)
+
+if save_trajectory:
+    PATH = os.getcwd()
+    PATH = os.path.join(PATH, 'SAR')
+    PATH = os.path.join(PATH, 'Results')
+    PATH = os.path.join(PATH, 'Astar')      
+
+    date_and_time = datetime.now()
+    dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
+    if not os.path.exists(dir_path): os.makedirs(dir_path)
 
 # calculate distances
 if not in_loop_dist:
@@ -1061,10 +1133,12 @@ if not in_loop_dist:
                         distances[Point(dx,dy)] = temp_paths
     end_time = time.time()
     print("Preprocessing time: %.2fs" %(end_time - starting_time))
-    data_json = convert_data_to_json_format(distances)
-    file_name = "distances.json"
-    file_path = os.path.join(PATH, file_name)
-    write_json(data_json, file_path)
+
+    # write to file for later use
+    # data_json = convert_data_to_json_format(distances)
+    # file_name = "distances.json"
+    # file_path = os.path.join(PATH, file_name)
+    # write_json(data_json, file_path)
 preprocessing = False
 
 # testing loop
@@ -1076,7 +1150,7 @@ flight_times = []
 flight_distances = []
 schedule_times = []
 path_times = []
-for i in range(10):
+for i in range(5):
     planning_starting_time = time.time()
     if i % 100 == 0: print(i)
     env.reset(weight, i, goal_spawning)
@@ -1154,6 +1228,12 @@ for i in range(10):
             if env.prev_pos[r].y > env.pos[r].y: actions[r].append("up")
             if env.prev_pos[r].y < env.pos[r].y: actions[r].append("down")
 
+            if in_loop_trajectory and i < 5:
+                if goal_spawning:
+                    env.print_graph(r, steps-1, trajectory[r], actions[r], env.starting_pos[r], obstacles, dir_path, i, False, env.goal)
+                else:
+                    env.print_graph(r, steps-1, trajectory[r], actions[r], env.starting_pos[r], obstacles, dir_path, i, False)
+
             # exit condition
             if goal_spawning and np.array([True for j in range(0, nr) if env.pos[j] == env.goal]).any() == True:
                 exit_condition = True
@@ -1210,21 +1290,11 @@ for i in range(10):
 
 # save_trajectory = False
     if save_trajectory and i < 5:
-        if i == 0:
-            PATH = os.getcwd()
-            PATH = os.path.join(PATH, 'SAR')
-            PATH = os.path.join(PATH, 'Results')
-            PATH = os.path.join(PATH, 'Astar')      
-
-            date_and_time = datetime.now()
-            dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
-            if not os.path.exists(dir_path): os.makedirs(dir_path)
-
         for ri in range(nr):
             if goal_spawning:
-                env.print_graph(ri, steps, trajectory[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i, env.goal)
+                env.print_graph(ri, steps, trajectory[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i, True, env.goal)
             else:
-                env.print_graph(ri, steps, trajectory[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i)
+                env.print_graph(ri, steps, trajectory[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i, True)
 
     # calculate flight time
     flight_time = 0

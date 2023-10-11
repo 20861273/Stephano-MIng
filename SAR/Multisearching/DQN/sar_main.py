@@ -21,11 +21,11 @@ if __name__ == '__main__':
         "show rewards interval": 100,
         "show plot": False,
         "save plot": False,
-        "policy number": [0,1,2],
-        "session": [],
+        "policy number": [0],
+        "session": [2],
         "test type": "grid", # test types: grid and iterative
-        "testing iterations": 100,
-        "goal spawning": False
+        "testing iterations": 1000,
+        "goal spawning": True
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)

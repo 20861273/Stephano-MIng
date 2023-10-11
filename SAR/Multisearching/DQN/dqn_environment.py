@@ -311,7 +311,7 @@ class Environment:
                 self.grid[self.starting_pos[i].y, self.starting_pos[i].x] = States.ROBOT.value
             
         self.pos = self.starting_pos.copy()
-        self.prev_pos = self.starting_pos.copy()
+        self.prev_pos = self.starting_pos.copy()        
 
         for i in range(self.nr):
             self.exploration_grid[self.pos[i].y, self.pos[i].x] = True

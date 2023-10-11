@@ -76,7 +76,7 @@ class Enclosed_space_check:
         # del labels[index]
         save_index = []
         for i,l in enumerate(labels):
-            if len(l) > 1:
+            if len(l) > 5:
                 save_index.append(i)
         self.spaces = [labels[save_index[0]]]
         if len(save_index) != 1:
