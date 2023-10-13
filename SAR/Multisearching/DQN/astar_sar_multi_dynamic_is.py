@@ -12,8 +12,8 @@ import json
 from itertools import product
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 30
+WIDTH = 30
 
 # Chosen values
 height = 100 # m
@@ -211,7 +211,7 @@ class Astar:
                     new_cost = self.cost_so_far[current] + self.heuristic(current, next_node) + 2
                 else:
                     new_cost = self.cost_so_far[current] + self.heuristic(current, next_node) #+ self.heuristic(next_node, end)
-                if next_node not in self.cost_so_far or new_cost <= self.cost_so_far[next_node]: #self.grid[next_node.y, next_node.x] != self.States.OBS.value
+                if next_node not in self.cost_so_far or new_cost < self.cost_so_far[next_node]: #self.grid[next_node.y, next_node.x] != self.States.OBS.value
                     self.cost_so_far[next_node] = new_cost
                     if fixed_wing:
                         if current.x < next_node.x: # right
@@ -379,7 +379,7 @@ class Environment:
         max_targets_value = [None]*self.nr
         for ri in range(self.nr):
             if not costs[ri]: max_targets_value[ri] = []
-            else: max_targets_value[ri] = max(costs[ri].values())
+            else: max_targets_value[ri] = min(costs[ri].values())
 
         # get all positions with max value
         max_targets = [[] for i in range(self.nr)]
@@ -417,64 +417,10 @@ class Environment:
             for y in range(self.grid.shape[0]):
                 for x in range(self.grid.shape[1]):
                     if not temp_exploration_grid[y,x]:
-                        costs[ri][Point(x,y)] = 1 / distances[self.pos[ri]][Point(x,y)]
+                        costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
 
-        # set targets based on max costs
-        targets = [None]*self.nr
-        for ri in range(self.nr):
-            # if the drone does not have an on going frontiers or the on going frontier has already been explored
-            # then reselect targets
-            if ongoing_frontiers[ri] == None or (temp_exploration_grid[ongoing_frontiers[ri].y, ongoing_frontiers[ri].x] and ongoing_frontiers[ri] != env.starting_pos[ri]): #or HEIGHT*WIDTH - np.count_nonzero(temp_exploration_grid) < self.nr:
-                if ongoing_frontiers[ri] != None and temp_exploration_grid[ongoing_frontiers[ri].y, ongoing_frontiers[ri].x]:
-                    breakpoint
-                targets[ri] = max(costs[ri], key=costs[ri].get)
-            else:
-                targets[ri] = ongoing_frontiers[ri]
-
-        # check targets equal
-        # find equal targets
-        indices = {}
-        for i, item in enumerate(targets):
-            if item in indices:
-                indices[item].append(i)
-            else:
-                indices[item] = [i]
-        equal_targets = {key: value for key, value in indices.items() if len(value) > 1}
-
-        # if no equal targets
-        if not equal_targets:
-            return targets
-
-        # check if drones have targets left
-        if HEIGHT*WIDTH - np.count_nonzero(temp_exploration_grid) < self.nr:
-            # # check if any ongoing frontiers equal to last cell
-            # for ri in range(self.nr):
-            #     if ongoing_frontiers[ri] != None:
-            #         targets[ri] = ongoing_frontiers[ri]
-            #         for rj in range(self.nr):
-            #             if ongoing_frontiers[rj] == None:
-            #                 targets[rj] = self.starting_pos[rj]
-            #         return targets
-            # get closest drone
-            best_drone = None
-            cost = 0
-            for ri in range(self.nr):
-                if ongoing_frontiers[ri] == env.starting_pos[ri]: continue
-                if cost < costs[ri][targets[ri]]:
-                    cost = costs[ri][targets[ri]]
-                    best_drone = ri
-            done[best_drone] = False
-            for ri in range(self.nr):
-                if ri != best_drone: 
-                    targets[ri] = self.starting_pos[ri]
-                    if self.pos[ri] == self.starting_pos[ri]:
-                        breakpoint
-            
-            return targets
-
-        # get all max targets
+        # set maximum targets
         max_targets = self.get_max_targets(costs)
-
         temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
@@ -502,367 +448,68 @@ class Environment:
         # delete invalid combinations
         modified_combinations = [combinations[i] for i in range(len(combinations)) if i not in delete_indices]
         combinations = modified_combinations.copy()
+
+        # if no equal targets
+        targets = [None]*self.nr
+        if len(combinations) > 0:
+            # find sum costs of combinations
+            sum_costs = []
+            for combination in combinations:
+                sum_cost = 0
+                for ri, target in enumerate(combination):
+                    if target in costs[ri]:
+                        sum_cost += costs[ri][target]
+                sum_costs.append(sum_cost)
+            
+            # set targets to best combination
+            max_cost = min(sum_costs)
+            best_combination = combinations[sum_costs.index(max_cost)]
+            for ri in range(self.nr):
+                targets[ri] = best_combination[ri]
+
+            return targets
+        
+        # add starting positions to maximum targets with lower value
+        for ri in range(self.nr):
+            max_targets[ri].append(env.starting_pos[ri])
+
+        # get all combinations of best targets
+        combinations = list(product(*max_targets))
+
+        # find invalid combinations
+        delete_indices = []
+        for i,combination in enumerate(combinations):
+            if len(combination) != len(set(combination)):
+                delete_indices.append(i)
+        
+        # delete invalid combinations
+        modified_combinations = [combinations[i] for i in range(len(combinations)) if i not in delete_indices]
+        combinations = modified_combinations.copy()
         
         # find sum costs of combinations
         sum_costs = []
+        penalty = WIDTH+HEIGHT
         for combination in combinations:
             sum_cost = 0
-            for cnt, target in enumerate(combination):
-                if target in costs[cnt]:
-                    sum_cost += costs[cnt][target]
+            for ri, target in enumerate(combination):
+                if target in costs[ri]:
+                    if target == env.starting_pos[ri]:
+                        sum_cost += costs[ri][target]-penalty
+                    else:
+                        sum_cost += costs[ri][target]
             sum_costs.append(sum_cost)
         
         # set targets to best combination
-        max_cost = max(sum_costs)
+        max_cost = min(sum_costs)
         best_combination = combinations[sum_costs.index(max_cost)]
         for ri in range(self.nr):
             targets[ri] = best_combination[ri]
+            if self.pos[ri] != self.starting_pos[ri]:
+                done[ri] = False
+            if targets[ri] != self.starting_pos[ri]:
+                done[ri] = False
 
         return targets
-    
-    def cost_function(self, r, occupied_cells):
-        # distances = {}
-        temp_exploration_grid = self.exploration_grid.copy()
-
-        if len(np.argwhere(temp_exploration_grid == False).tolist()) != 1:
-            # could make loop go from current step (save on computations)
-            # makes all steps of drone explored
-            # for step in occupied_cells:
-            #     for ri in range(self.nr):
-            #         if occupied_cells[step][ri] != None:
-            #             if ri != r:
-            #                 temp_exploration_grid[occupied_cells[step][ri].y, occupied_cells[step][ri].x] = True
-            
-            # makes last step of drone explored
-            indices = [None]*self.nr
-            for ri in range(self.nr):
-                last = False
-                if ri == r: continue
-                for step, positions in occupied_cells.items():
-                    if last: continue
-                    if positions[ri] is None:
-                        indices[ri] = step-1
-                        temp_exploration_grid[occupied_cells[step-1][ri].y, occupied_cells[step-1][ri].x] = True
-                        last = True
-        else: # if only one cell left to explored return that cell
-            index = np.argwhere(temp_exploration_grid == False)[0]
-            return Point(index[1], index[0])
-        
-        # if no more cells left to explore
-        # check if selected drone closer to target of other drones
-        # if not then return None
-        if temp_exploration_grid.all():
-            for ri in range(self.nr):
-                if ri == r or indices[r] == None: continue
-                if distances[env.pos[r]][occupied_cells[indices[r]]] < distances[env.pos[ri]][occupied_cells[indices[ri]]]:
-                    return occupied_cells[indices[r]]
-            return None
-            
-        
-        # gets the distance to all unvisited blocks
-        # for y in range(self.grid.shape[0]):
-        #     for x in range(self.grid.shape[1]):
-        #         if not temp_exploration_grid[y,x]:
-        #             distance = self.get_distance(Point(x,y), self.pos)
-        #             distances[Point(x,y)] = distance
-
-        # if not distances:
-        #     return None
-
-        # divid into different clusters of unexplored regions
-        cnter = 0
-        labels = []
-        for x in range(WIDTH):
-            for y in range(HEIGHT):
-                if temp_exploration_grid[y,x]:
-                    continue
-                if cnter == 0:
-                    labels.append([(x,y)])
-                    cnter += 1
-                
-                # checks if (x,y) is in region
-                # if not then add to new region
-                added = False
-                for i in range(len(labels)):
-                    if (x,y) in labels[i]:
-                        added = True
-                        index = i
-                if not added:
-                    labels.append([(x,y)])
-                    index = len(labels)-1
-
-                # checks if right is connected
-                if x != WIDTH-1:
-                    if temp_exploration_grid[y,x] == temp_exploration_grid[y,x+1]:
-                        # checks if (x+1,y) is in a label list already
-                        combined = False
-                        for i, l in enumerate(labels):
-                            if (x+1,y) in labels[i] and i != index:
-                                combine_lists = labels[i] + labels[index]
-                                labels[min(i, index)] = combine_lists
-                                del labels[max(i, index)]
-                                combined = True
-                        if not combined: 
-                            labels[index].append((x+1,y))
-
-                # checks if bottom is connected
-                if y != HEIGHT-1:
-                    if temp_exploration_grid[y,x] == temp_exploration_grid[y+1,x]:
-                        # checks if (x+1,y) is in a label list already
-                        combined = False
-                        for i, l in enumerate(labels):
-                            if (x,y+1) in labels[i] and i != index:
-                                combine_lists = labels[i] + labels[index]
-                                labels[min(i, index)] = combine_lists
-                                del labels[max(i, index)]
-                                combined = True
-                        if not combined:
-                            labels[index].append((x,y+1))
-        
-        # find shorest distance to clusters
-        clusters = {}
-        # if len(labels) == 1:
-        #     # Access the nested dictionary for drone position
-        #     point_paths = distances[env.pos[r]]
-            
-        #     # remove points that have been explored
-        #     pop_points = []
-        #     for point in point_paths:
-        #         if temp_exploration_grid[point.y, point.x]:
-        #             pop_points.append(point)
-        #     for point in pop_points:
-        #         point_paths.pop(point)
-
-        #     # # Find the shortest path in the nested dictionary
-        #     # min_distance = min(point_paths.values(), key=len)
-
-        #     # Find the key with the shortest path in the nested dictionary
-        #     min_point = min(point_paths, key=lambda k: len(point_paths[k]))
-
-        #     if (min_point.x, min_point.y) in labels[0]:
-        #         clusters[min_point] = len(labels[0])
-        # else:
-        for cluster in labels:
-            lowest_value = 1000
-            for key in cluster:
-                if Point(key[0],key[1]) in distances[env.pos[r]] and len(distances[env.pos[r]][Point(key[0],key[1])]) < lowest_value:
-                    lowest_key = key
-                    lowest_value = len(distances[env.pos[r]][Point(key[0],key[1])])
-            clusters[Point(lowest_key[0], lowest_key[1])] = len(cluster)
-        
-        costs = {}
-        for point in clusters:
-            in_target = False
-            # if distance to point smaller than threshold
-            # and point not in any other target cluster
-            # add to costs
-            # else check for different cluster
-            if len(distances[env.pos[r]][point]) < 5:
-                for ri in range(self.nr):
-                    if ri == r: continue
-                    if point in self.target_cluster[ri]:
-                        in_target = True
-                if not in_target:
-                    costs[point] = 1000 / clusters[point]
-                    in_target = True
-                else:
-                    in_target = False
-            if not in_target:
-                # costs[point] = (1 - distances[point]/(WIDTH + HEIGHT - 1)) + (clusters[point] / (WIDTH*HEIGHT))
-                costs[point] = clusters[point] / len(distances[point])
-                # costs[point] = (clusters[point]) + self.weight/len(distances[env.pos][point])
-                # costs[point] = 1/len(distances[env.pos[r]][point])
-
-        target = max(costs, key=costs.get)
-        for cluster in labels:
-            if target in cluster:
-                self.target_cluster[r] = cluster
-                break
-
-        return target
-    
-    def get_frontier(self, clusters, selected_frontiers, invalid_clusters=None, invalid_frontiers=None):
-        final_frontiers = [None]*self.nr
-        final_cluster_indices = [None]*self.nr
-        final_costs = [None]*self.nr
-
-        for drone in range(self.nr):
-            closest_points = {}
-            if drone in selected_frontiers: continue
-            
-            # get closest cells in each cluster
-            for cluster_index, cluster in enumerate(clusters):
-                if cluster_index in invalid_clusters: continue
-                lowest_value = float("inf")
-                for key in cluster:
-                    if Point(key[0],key[1]) in distances[env.pos[drone]] and len(distances[env.pos[drone]][Point(key[0],key[1])]) < lowest_value and Point(key[0],key[1]) not in invalid_frontiers:
-                        lowest_key = key
-                        lowest_value = len(distances[env.pos[r]][Point(key[0],key[1])])
-                closest_points[Point(lowest_key[0], lowest_key[1])] = [len(cluster), cluster_index]
-        
-            # get costs of clusters
-            costs = {}
-            for point in closest_points:
-                # if distance to point smaller than threshold
-                # and point not in any other target cluster
-                # add to costs
-                # else check for different cluster
-                if len(distances[env.pos[r]][point]) < 2:
-                    # costs[point] = 1000 / closest_points[point][0]
-                    costs[point] = 1000 / len(distances[env.pos[r]][point])
-                else:
-                    # costs[point] = (1 - distances[point]/(WIDTH + HEIGHT - 1)) + (clusters[point] / (WIDTH*HEIGHT))
-                    costs[point] = closest_points[point][0] / len(distances[env.pos[r]][point])
-                    # costs[point] = (clusters[point]) + self.weight/len(distances[env.pos][point])
-                    # costs[point] = 1/len(distances[env.pos[r]][point])
-            
-            final_frontiers[drone] = max(costs, key=costs.get)
-            final_cluster_indices[drone] = closest_points[final_frontiers[drone]][1]
-            final_costs[drone] = costs[final_frontiers[drone]]
-        
-        return final_frontiers, final_cluster_indices, final_costs
-
-    def get_clusters(self):
-        # divid into different clusters of unexplored regions
-        cnter = 0
-        labels = []
-        for x in range(WIDTH):
-            for y in range(HEIGHT):
-                if env.exploration_grid[y,x]:
-                    continue
-                if cnter == 0:
-                    labels.append([(x,y)])
-                    cnter += 1
-                
-                # checks if (x,y) is in region
-                # if not then add to new region
-                added = False
-                for i in range(len(labels)):
-                    if (x,y) in labels[i]:
-                        added = True
-                        index = i
-                if not added:
-                    labels.append([(x,y)])
-                    index = len(labels)-1
-
-                # checks if right is connected
-                if x != WIDTH-1:
-                    if env.exploration_grid[y,x] == env.exploration_grid[y,x+1]:
-                        # checks if (x+1,y) is in a label list already
-                        combined = False
-                        for i, l in enumerate(labels):
-                            if (x+1,y) in labels[i] and i != index:
-                                combine_lists = labels[i] + labels[index]
-                                labels[min(i, index)] = combine_lists
-                                del labels[max(i, index)]
-                                combined = True
-                        if not combined: 
-                            labels[index].append((x+1,y))
-
-                # checks if bottom is connected
-                if y != HEIGHT-1:
-                    if env.exploration_grid[y,x] == env.exploration_grid[y+1,x]:
-                        # checks if (x+1,y) is in a label list already
-                        combined = False
-                        for i, l in enumerate(labels):
-                            if (x,y+1) in labels[i] and i != index:
-                                combine_lists = labels[i] + labels[index]
-                                labels[min(i, index)] = combine_lists
-                                del labels[max(i, index)]
-                                combined = True
-                        if not combined:
-                            labels[index].append((x,y+1))
-
-        return labels
-    
-    def fontier_selector(self, ongoing_frontiers):
-        all_selected = False
-        invalid_clusters = []
-        invalid_frontiers = []
-        selected_frontiers = []
-        perm_frontiers = ongoing_frontiers.copy()
-        clusters = self.get_clusters()
-        # select frontiers until all drones have been assigned frontiers
-        while not all_selected:
-            frontiers, frontier_cluster_index, costs = self.get_frontier(clusters, selected_frontiers, invalid_clusters, invalid_frontiers)
-            
-            # override selected frontiers
-            if len(selected_frontiers) != 0:
-                for drone in range(self.nr):
-                    if perm_frontiers[drone] != None:
-                        frontiers[drone] = perm_frontiers[drone]
-                        frontier_cluster_index[drone] = perm_frontiers_cluster_index[drone]
-                        costs[drone] = perm_costs[drone]
-
-
-            # if number of drones smaller or equal to number of clusters
-            if self.nr <= len(clusters):
-                # check if any frontiers in the same cluster
-                same_cluster_drone_indices = []
-                same_cluster = False
-                for ri in range(self.nr):
-                    indices = [i for i, x in enumerate(frontier_cluster_index) if x == frontier_cluster_index[ri]]
-                    if len(indices) > 1:
-                        same_cluster_drone_indices.append(indices)
-                        same_cluster = True
-                # if any frontiers in the same cluster
-                if same_cluster:
-                    # check which drones have better cost,
-                    # mark cluster as invalid and
-                    # delete other frontiers
-                    for cluster_indices in same_cluster_drone_indices:
-                        cost = 0
-                        for index in cluster_indices:
-                            if costs[index] != None and costs[index] > cost:
-                                cost = costs[index]
-                                best_cost_index = index
-                        invalid_clusters.append(frontier_cluster_index[best_cost_index])
-                        del cluster_indices[best_cost_index]
-                        for index in cluster_indices:
-                            frontiers[index] = None
-                            frontier_cluster_index[index] = None
-                            costs[index] = None
-            else:
-                # check if any frontiers equal
-                same_frontier_drone_indices = []
-                same_frontier = False
-                for ri in range(self.nr):
-                    indices = [i for i, x in enumerate(frontiers) if x == frontiers[ri]]
-                    if len(indices) > 1:
-                        same_frontier_drone_indices.append(indices)
-                        same_frontier = True
-                # if any frontiers equal
-                if same_frontier:
-                    # check which drones have better cost,
-                    # mark frontier as invalid and
-                    # delete other frontiers
-                    for frontier_indices in same_frontier_drone_indices:
-                        cost = 0
-                        for index in frontier_indices:
-                            if costs[index] != None and costs[index] > cost:
-                                cost = costs[index]
-                                best_cost_index = index
-                        invalid_frontiers.append(frontiers[best_cost_index])
-                        del frontier_indices[best_cost_index]
-                        for index in frontier_indices:
-                            frontiers[index] = None
-                            frontier_cluster_index[index] = None
-                            costs[index] = None
-
-            # check if all selected
-            if None not in frontiers:
-                all_selected = True
-            else:
-                # save selected frontiers
-                selected_frontiers = []
-                for i,frontier in enumerate(frontiers):
-                    if frontier != None: selected_frontiers.append(i)
-                perm_frontiers = frontiers
-                perm_frontiers_cluster_index = frontier_cluster_index
-                perm_costs = costs
-        
-        return frontiers
-
     
     def print_graph(self, r, steps, path, maneuvers, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
         """
@@ -1055,14 +702,14 @@ in_loop_trajectory = False
 in_loop_dist = False
 preprocessing = True
 fixed_wing = False
-test_iterations = 10000
+test_iterations = 1
 saved_iterations = 5
 
 # environment initialisations
 goal_spawning = False
-nr = 2
+nr = 4
 weight = 19
-obstacles = True
+obstacles = False
 obstacle_density = 0.4
 set_obstacles = False
 env = Environment(nr, obstacles, set_obstacles, obstacle_density)
@@ -1206,8 +853,11 @@ for i in range(test_iterations):
             else:
                 ongoing_frontiers[r] = frontiers[r]
 
+            # remove step from current path
             del current_path[r][0]
             del current_maneuvers[r][0]
+
+            # add on going frontiers if required
             if len(current_path[r]) != 0:
                 ongoing_frontiers[r] = frontiers[r]
             else:
@@ -1219,6 +869,7 @@ for i in range(test_iterations):
             if env.prev_pos[r].y > env.pos[r].y: actions[r].append("up")
             if env.prev_pos[r].y < env.pos[r].y: actions[r].append("down")
 
+            # in loop trajectory drawing
             if in_loop_trajectory and i < saved_iterations:
                 if goal_spawning:
                     env.print_graph(r, steps-1, trajectory[r], maneuvers[r], actions[r], env.starting_pos[r], obstacles, dir_path, i, False, env.goal)
@@ -1234,6 +885,7 @@ for i in range(test_iterations):
         schedule_times.append(end_scheduler_time-start_scheduler_time)
         path_times.append(path_time)
         
+        # catch maneuvers and save to draw trajectories
         if counter < 20 and not save and env.pos[0] == env.pos[1] and all([not done[ri] for ri in range(nr)]) and any([maneuvers[ri][steps-1] for ri in range(nr)]):
             save = True
             step = steps
