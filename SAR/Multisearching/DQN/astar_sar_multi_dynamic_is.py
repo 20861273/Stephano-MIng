@@ -10,10 +10,11 @@ from datetime import datetime
 import time
 import json
 from itertools import product
+import pickle
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 30
-WIDTH = 30
+HEIGHT = 6
+WIDTH = 6
 
 # Chosen values
 height = 100 # m
@@ -145,22 +146,33 @@ class Astar:
         return abs(current.x - end.x) + abs(current.y - end.y)
     
     # Path reconstruction
-    def reconstruct_path(self, start, end): #: dict[Location, Location], : Location, : Location
+    def reconstruct_path(self, start, end, id=None): #: dict[Location, Location], : Location, : Location
         current = end
         path = [current]
-        reconstructed_maneuvers = [maneuvers[r][steps-1]]
+        if maneuvering: reconstructed_maneuvers = [maneuvers[r][steps-1]]
         while current != start:
-            if current not in self.came_from: print(self.grid, self.start, end)
-            new_current = self.came_from[current]
-            maneuver = self.came_from_maneuvers[current][1]
+            if maneuvering and current not in self.came_from:
+                print(self.grid, self.start, end)
+                breakpoint
+            if not maneuvering and (id,current) not in self.came_from:
+                print((id,current) ,self.came_from)
+                print(self.grid, self.start, end, "this one")
+                
+            if maneuvering:
+                new_current = self.came_from[current]
+                maneuver = self.came_from_maneuvers[current][1]
+            else:
+                new_id, new_current = self.came_from[(id, current)]
             current = new_current
+            if not maneuvering: id = new_id
             path.append(current)
-            reconstructed_maneuvers.append(maneuver)
+            if maneuvering: reconstructed_maneuvers.append(maneuver)
         path.reverse()
-        reconstructed_maneuvers.reverse()
-        if True in reconstructed_maneuvers and end == frontiers[r]:
-            breakpoint
-        return path, reconstructed_maneuvers
+        if maneuvering:
+            reconstructed_maneuvers.reverse()
+            return path, reconstructed_maneuvers
+        else:
+            return path
 
     # A* algorithm
     def a_star(self, start, end, grid, dynamic_obstacles, direction=None):
@@ -169,95 +181,152 @@ class Astar:
         self.graph = Grid(HEIGHT, WIDTH, grid, direction)
         self.start = start
         self.came_from = {}
-        self.came_from_maneuvers = {start:(env.prev_pos[r], maneuvers[r][steps-1])}
         self.cost_so_far = {}
-        self.heap = [(0, start, direction)]
-        self.cost_so_far[start] = 0
+        self.heap = [(0, 0, start, direction)]
+        if maneuvering:
+            self.came_from_maneuvers = {start:(env.prev_pos[r], maneuvers[r][steps-1])}
+            self.cost_so_far[start] = 0
+        else:
+            self.cost_so_far[(0,start)] = 0
         current = start
         found = False
+        id = 0
         
         while len(self.heap) > 0:
-            _, current, direction = heapq.heappop(self.heap)
+            _, id, current, direction = heapq.heappop(self.heap)
+            path_step = id
             if current == end:
                 found = True
                 break
-            path, _ = self.reconstruct_path(start, current)
-            path_step = len(path)-1
+            
             self.neighbors = self.graph.neighbors(current, path_step)
             for next_node in self.neighbors:
-                maneuver = False
-                # on location collision
-                # if a drone has planned thus far
-                # AND a drone is on next_node location
-                # AND current is not a maneuver action
-                if steps+path_step in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step]:
-                    # if steps+path_step-2 in self.dynamic_obstacles and current not in self.dynamic_obstacles[steps+path_step-2]:
-                    if current in self.came_from_maneuvers and self.came_from_maneuvers[current][1]:
-                        continue
-                    # continue
-                    if r == 0:
-                        breakpoint
-                    else:
-                        breakpoint
-                    maneuver = True
-                # cross location collision
-                # current is in dynamic obstacles on next step
-                if steps+path_step in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step]:
-                    # next node is in dynamic obstacles on previous step
-                    if steps+path_step-1 in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step-1]:
-                        # continue
+                if maneuvering:
+                    maneuver = False
+                    # on location collision
+                    # if a drone has planned thus far
+                    # AND a drone is on next_node location
+                    # AND current is not a maneuver action
+                    if steps+path_step in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step]:
+                        # if steps+path_step-2 in self.dynamic_obstacles and current not in self.dynamic_obstacles[steps+path_step-2]:
+                        if current in self.came_from_maneuvers and self.came_from_maneuvers[current][1]:
+                            continue
                         maneuver = True
-                if maneuver:
-                    new_cost = self.cost_so_far[current] + self.heuristic(current, next_node) + 2
+                    # cross location collision
+                    # current is in dynamic obstacles on next step
+                    if steps+path_step in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step]:
+                        # next node is in dynamic obstacles on previous step
+                        if steps+path_step-1 in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step-1]:
+                            # continue
+                            maneuver = True
+
+                    if maneuver:
+                        new_cost = self.cost_so_far[current] + self.heuristic(current, next_node) + 3
+                    else:
+                        new_cost = self.cost_so_far[current] + self.heuristic(current, next_node)
+                
+                    if next_node not in self.cost_so_far or new_cost < self.cost_so_far[next_node]:
+                        self.cost_so_far[next_node] = new_cost
+                        if fixed_wing:
+                            if current.x < next_node.x: # right
+                                direction = "right"
+                            elif current.x > next_node.x: # left
+                                direction = "left"
+                            elif current.y < next_node.y: # down
+                                direction = "down"
+                            elif current.y > next_node.y: # up
+                                direction = "up"
+                        priority = new_cost + self.heuristic(next_node, end)
+                        heapq.heappush(self.heap, (priority, id+1, next_node, direction))
+                        self.came_from[next_node] = current
+                        self.came_from_maneuvers[next_node] = (current, maneuver)
+
                 else:
-                    new_cost = self.cost_so_far[current] + self.heuristic(current, next_node) #+ self.heuristic(next_node, end)
-                if next_node not in self.cost_so_far or new_cost < self.cost_so_far[next_node]: #self.grid[next_node.y, next_node.x] != self.States.OBS.value
-                    self.cost_so_far[next_node] = new_cost
-                    if fixed_wing:
-                        if current.x < next_node.x: # right
-                            direction = "right"
-                        elif current.x > next_node.x: # left
-                            direction = "left"
-                        elif current.y < next_node.y: # down
-                            direction = "down"
-                        elif current.y > next_node.y: # up
-                            direction = "up"
-                    priority = new_cost + self.heuristic(next_node, end)
-                    heapq.heappush(self.heap, (priority, next_node, direction))
-                    self.came_from[next_node] = current
-                    self.came_from_maneuvers[next_node] = (current, maneuver)
+                    # on location collision
+                    # if a drone has planned thus far
+                    # AND a drone is on next_node location
+                    # AND current is not a maneuver action
+                    if steps+path_step in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step]:
+                        continue
+
+                    # cross location collision
+                    # current is in dynamic obstacles on next step
+                    if steps+path_step in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step]:
+                        # next node is in dynamic obstacles on previous step
+                        if steps+path_step-1 in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step-1]:
+                            continue
+
+                    new_cost = self.cost_so_far[(id,current)] + self.heuristic(current, next_node)
+
+                    if (id+1,next_node) not in self.cost_so_far:
+                        self.cost_so_far[(id+1,next_node)] = new_cost
+                        if fixed_wing:
+                            if current.x < next_node.x: # right
+                                direction = "right"
+                            elif current.x > next_node.x: # left
+                                direction = "left"
+                            elif current.y < next_node.y: # down
+                                direction = "down"
+                            elif current.y > next_node.y: # up
+                                direction = "up"
+                        priority = new_cost + self.heuristic(next_node, end)
+                        heapq.heappush(self.heap, (priority, id+1, next_node, direction))
+                        self.came_from[(id+1,next_node)] = (id, current)
         
         if current == end:
             found = True
         # if current != end:
         #     print("bugga%d"%(i))
         if found:
-            return self.reconstruct_path(start, end)
+            if maneuvering:
+                return self.reconstruct_path(start, end)
+            else:
+                self.which = 1
+                return self.reconstruct_path(start, end, id), []
         else:
-            breakpoint
+            return None
     
 class Environment:
-    def __init__(self, nr, obstacles, set_obstacles, obstacle_density):
+    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir):
         # initalise variables
         self.nr = nr
         self.obstacles = obstacles
         self.set_obstacles = set_obstacles
         self.obstacle_density = obstacle_density
+        self.save_obstacles = save_obstacles
+        self.save_dir = save_dir
+        self.load_obstacles = load_obstacles
+        self.load_dir = load_dir
         
         # spawn grid
         self.starting_grid = np.zeros((HEIGHT, WIDTH))
         self.grid = self.starting_grid.copy()
+        self.grids = []
         
         # initialise drone
         self.starting_pos = [None]*nr
         self.pos = self.starting_pos.copy()
         self.prev_pos = self.starting_pos.copy()
+        self.starting_positions = [[] for _ in range(test_iterations)]
 
         # initialise exploration grid
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
         for x in range(WIDTH):
             for y in range(HEIGHT):
                 if self.starting_grid[y,x] != States.UNEXP.value: self.exploration_grid[y, x] = True
+        
+        if self.load_obstacles:
+            file_name = "positions.pkl"
+            file_path = os.path.join(self.load_dir, file_name)
+            with open(file_path, 'rb') as file:
+                # Deserialize and read the sublists using pickle.load()
+                self.starting_positions = pickle.load(file)
+            
+            file_name = "grid.json"
+            file_name = os.path.join(self.load_dir, file_name)
+            self.grids = np.array(read_json(file_name))
+
+        breakpoint
 
     def reset(self, weight, i, goal_spawning):
         # spawn grid
@@ -268,7 +337,10 @@ class Environment:
         self.weight = weight
         # obstacles
         if self.obstacles:
-            if i == 0 or not self.set_obstacles:
+            if self.load_obstacles:
+                self.starting_grid = np.array(self.grids[i])
+                self.grid = self.starting_grid.copy()
+            elif i == 0 or not self.set_obstacles:
                 self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
                 
                     # Calculate the number of elements to be filled with 1's
@@ -291,18 +363,31 @@ class Environment:
                 ES = Enclosed_space_check(int(HEIGHT/2)*2, int(WIDTH/2)*2, self.starting_grid, States)
                 self.starting_grid = ES.enclosed_space_handler()
         self.grid = self.starting_grid.copy()
+
+        if self.save_obstacles:
+            self.grids.append(self.grid.tolist())
         
         # spawn drone
-        indices = np.argwhere(self.grid == States.UNEXP.value)
-        np.random.shuffle(indices)
-        for ri in range(self.nr):
-            self.starting_pos[ri] = Point(indices[0,1], indices[0,0])
-            self.pos[ri] = self.starting_pos[ri]
-            self.prev_pos[ri] = self.starting_pos[ri]
-            self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
-            indices_list = indices.tolist()
-            del indices_list[0]
-            indices = np.array(indices_list)
+        if self.load_obstacles:
+            self.starting_pos = self.starting_positions[i]
+            for ri in range(self.nr):
+                self.pos[ri] = self.starting_pos[ri]
+                self.prev_pos[ri] = self.starting_pos[ri]
+                self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
+        else:
+            indices = np.argwhere(self.grid == States.UNEXP.value)
+            np.random.shuffle(indices)
+            for ri in range(self.nr):
+                self.starting_pos[ri] = Point(indices[0,1], indices[0,0])
+                self.pos[ri] = self.starting_pos[ri]
+                self.prev_pos[ri] = self.starting_pos[ri]
+                self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
+                indices_list = indices.tolist()
+                del indices_list[0]
+                indices = np.array(indices_list)
+        
+        if self.save_obstacles:
+            self.starting_positions[i] = self.starting_pos.copy()
 
         # set directions
         self.direction = [None]*self.nr
@@ -374,19 +459,19 @@ class Environment:
         else:
             return min(distances, key=distances.get) # returns position
         
-    def get_max_targets(self, costs):
+    def get_min_targets(self, costs):
         # get max value of each dorne
-        max_targets_value = [None]*self.nr
+        min_targets_value = [None]*self.nr
         for ri in range(self.nr):
-            if not costs[ri]: max_targets_value[ri] = []
-            else: max_targets_value[ri] = min(costs[ri].values())
+            if not costs[ri]: min_targets_value[ri] = []
+            else: min_targets_value[ri] = min(costs[ri].values())
 
         # get all positions with max value
-        max_targets = [[] for i in range(self.nr)]
+        min_targets = [[] for i in range(self.nr)]
         for ri in range(self.nr):
-            max_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == max_targets_value[ri] ]
+            min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
 
-        return max_targets
+        return min_targets
         
     def scheduler(self, ongoing_frontiers):
         # set current positions to explored
@@ -420,24 +505,24 @@ class Environment:
                         costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
 
         # set maximum targets
-        max_targets = self.get_max_targets(costs)
+        min_targets = self.get_min_targets(costs)
         temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
             for ri in range(self.nr):
-                for target in max_targets[ri]:
+                for target in min_targets[ri]:
                     if target in temp_costs[ri]: del temp_costs[ri][target]
 
             # find next best targets
-            next_max_targets = self.get_max_targets(temp_costs)
+            next_min_targets = self.get_min_targets(temp_costs)
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
-                    max_targets[ri] = [ongoing_frontiers[ri]]
+                    min_targets[ri] = [ongoing_frontiers[ri]]
                 else:
-                    max_targets[ri] += next_max_targets[ri]
+                    min_targets[ri] += next_min_targets[ri]
 
         # get all combinations of best targets
-        combinations = list(product(*max_targets))
+        combinations = list(product(*min_targets))
 
         # find invalid combinations
         delete_indices = []
@@ -462,8 +547,8 @@ class Environment:
                 sum_costs.append(sum_cost)
             
             # set targets to best combination
-            max_cost = min(sum_costs)
-            best_combination = combinations[sum_costs.index(max_cost)]
+            min_cost = min(sum_costs)
+            best_combination = combinations[sum_costs.index(min_cost)]
             for ri in range(self.nr):
                 targets[ri] = best_combination[ri]
 
@@ -471,10 +556,10 @@ class Environment:
         
         # add starting positions to maximum targets with lower value
         for ri in range(self.nr):
-            max_targets[ri].append(env.starting_pos[ri])
+            min_targets[ri].append(env.starting_pos[ri])
 
         # get all combinations of best targets
-        combinations = list(product(*max_targets))
+        combinations = list(product(*min_targets))
 
         # find invalid combinations
         delete_indices = []
@@ -493,21 +578,23 @@ class Environment:
             sum_cost = 0
             for ri, target in enumerate(combination):
                 if target in costs[ri]:
-                    if target == env.starting_pos[ri]:
-                        sum_cost += costs[ri][target]-penalty
-                    else:
-                        sum_cost += costs[ri][target]
+                    sum_cost += costs[ri][target]
+                if target == env.starting_pos[ri]:
+                    sum_cost += penalty
             sum_costs.append(sum_cost)
         
         # set targets to best combination
-        max_cost = min(sum_costs)
-        best_combination = combinations[sum_costs.index(max_cost)]
+        min_cost = min(sum_costs)
+        best_combination = combinations[sum_costs.index(min_cost)]
         for ri in range(self.nr):
             targets[ri] = best_combination[ri]
             if self.pos[ri] != self.starting_pos[ri]:
                 done[ri] = False
             if targets[ri] != self.starting_pos[ri]:
                 done[ri] = False
+
+        if not self.exploration_grid.all() and all([targets[ri] == self.starting_pos[ri] for ri in range(self.nr)]):
+            breakpoint
 
         return targets
     
@@ -594,30 +681,44 @@ class Environment:
                 if Point(x,y) in path:
                     for i in indices[Point(x,y)]:
                         if i == len(actions): break
-                        if actions[i] == "right":
-                            clabel += "%02d\u2192 "%(i)
-                            breakpoint
-                        elif actions[i] == "left" and not maneuvers[i]: 
-                            clabel += "%02d\u2190 "%(i)
-                            breakpoint
-                        elif actions[i] == "up" and not maneuvers[i]: 
-                            clabel += "%02d\u2193 "%(i)
-                            breakpoint
-                        elif actions[i] == "down" and not maneuvers[i]: 
-                            clabel += "%02d\u2191 "%(i)
-                            breakpoint
-                        elif actions[i] == "right" and maneuvers[i]: 
-                            clabel += "%02d\u21D2 "%(i)
-                            breakpoint
-                        elif actions[i] == "left" and maneuvers[i]: 
-                            clabel += "%02d\u21D0 "%(i)
-                            breakpoint
-                        elif actions[i] == "up" and maneuvers[i]: 
-                            clabel += "%02d\u21D3 "%(i)
-                            breakpoint
-                        elif actions[i] == "down" and maneuvers[i]: 
-                            clabel += "%02d\u21D1 "%(i)
-                            breakpoint
+                        if maneuvering:
+                            if actions[i] == "right":
+                                clabel += "%02d\u2192 "%(i)
+                                breakpoint
+                            elif actions[i] == "left" and not maneuvers[i]: 
+                                clabel += "%02d\u2190 "%(i)
+                                breakpoint
+                            elif actions[i] == "up" and not maneuvers[i]: 
+                                clabel += "%02d\u2193 "%(i)
+                                breakpoint
+                            elif actions[i] == "down" and not maneuvers[i]: 
+                                clabel += "%02d\u2191 "%(i)
+                                breakpoint
+                            elif actions[i] == "right" and maneuvers[i]: 
+                                clabel += "%02d\u21D2 "%(i)
+                                breakpoint
+                            elif actions[i] == "left" and maneuvers[i]: 
+                                clabel += "%02d\u21D0 "%(i)
+                                breakpoint
+                            elif actions[i] == "up" and maneuvers[i]: 
+                                clabel += "%02d\u21D3 "%(i)
+                                breakpoint
+                            elif actions[i] == "down" and maneuvers[i]: 
+                                clabel += "%02d\u21D1 "%(i)
+                                breakpoint
+                        else:
+                            if actions[i] == "right":
+                                clabel += "%02d\u2192 "%(i)
+                                breakpoint
+                            elif actions[i] == "left": 
+                                clabel += "%02d\u2190 "%(i)
+                                breakpoint
+                            elif actions[i] == "up": 
+                                clabel += "%02d\u2193 "%(i)
+                                breakpoint
+                            elif actions[i] == "down": 
+                                clabel += "%02d\u2191 "%(i)
+                                breakpoint
 
                 temp_label = ""
                 if len(clabel) > 3:
@@ -701,19 +802,13 @@ save_trajectory = True
 in_loop_trajectory = False
 in_loop_dist = False
 preprocessing = True
+maneuvering = True
 fixed_wing = False
-test_iterations = 1
-saved_iterations = 5
+test_iterations = 100000
+saved_iterations = 1
+saves = []
 
-# environment initialisations
-goal_spawning = False
-nr = 4
-weight = 19
-obstacles = False
-obstacle_density = 0.4
-set_obstacles = False
-env = Environment(nr, obstacles, set_obstacles, obstacle_density)
-
+# set directory path
 if save_trajectory:
     PATH = os.getcwd()
     PATH = os.path.join(PATH, 'SAR')
@@ -723,6 +818,21 @@ if save_trajectory:
     date_and_time = datetime.now()
     dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
     if not os.path.exists(dir_path): os.makedirs(dir_path)
+
+# environment initialisations
+goal_spawning = False
+nr = 2
+weight = 19
+obstacles = True
+obstacle_density = 0.4
+set_obstacles = False
+save_obstacles = False
+save_dir = os.path.join(dir_path, 'Save')
+if not os.path.exists(save_dir): os.makedirs(save_dir)
+load_obstacles = True
+load_dir = os.path.join(PATH, 'Load') 
+if not os.path.exists(load_dir): os.makedirs(load_dir)
+env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
 
 # calculate distances
 if not in_loop_dist:
@@ -773,7 +883,7 @@ counter = 0
 for i in range(test_iterations):
     save = False
     planning_starting_time = time.time()
-    if i % 100 == 0: print(i)
+    if i % 1000 == 0: print(i)
     env.reset(weight, i, goal_spawning)
     obstacles = env.exploration_grid.copy()
     steps = 0
@@ -783,6 +893,7 @@ for i in range(test_iterations):
     current_path = [[] for _ in range(nr)]
     current_maneuvers = [[] for _ in range(nr)]
     done = [False]*nr
+    which = [False]*nr
     occupied_cells = {}
     occupied_cells[steps] = []
     explorations = [0]*nr
@@ -792,6 +903,8 @@ for i in range(test_iterations):
     ongoing_frontiers = [None]*nr
     exit_condition = False
     while not env.exploration_grid.all() and not exit_condition:
+        if not env.exploration_grid.all() and all([done[ri] for ri in range(nr)]):
+            breakpoint
         steps += 1
         if steps not in occupied_cells: occupied_cells[steps] = []
 
@@ -808,10 +921,13 @@ for i in range(test_iterations):
         # plan paths
         path_time = 0
         for r in range(nr):
-            if env.pos[r] == frontiers[r] or done[r]:
+            if env.pos[r] == frontiers[r]:# or done[r]:
                 if env.pos[r] == env.starting_pos[r]:
                     ongoing_frontiers[r] = frontiers[r]
                     done[r] = True
+                    which[r] = 0
+                    if not env.exploration_grid.all() and all([done[ri] for ri in range(nr)]):
+                        save = True
                     if all([done[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT:
                         breakpoint
                 continue
@@ -821,19 +937,22 @@ for i in range(test_iterations):
                 current_path[r], current_maneuvers[r] = astar.a_star(env.pos[r], frontiers[r], env.grid, occupied_cells, env.direction[r])
                 end_path_time = time.time()
                 del current_path[r][0]
-                del current_maneuvers[r][0]
+                if maneuvering: del current_maneuvers[r][0]
             
                 # add path to occupied cells
                 for path_step, pos in enumerate(current_path[r]):
                     if steps+path_step not in occupied_cells: occupied_cells[steps+path_step] = []
                     occupied_cells[steps+path_step].append(pos)
             
+        for r in range(nr):
+            if done[r]: continue
             # execute move 
             trajectory[r].append(current_path[r][0])
-            maneuvers[r].append(current_maneuvers[r][0])
-            if current_maneuvers[r][0] and counter < 20:
-                counter += 1
-                save = True
+            if maneuvering:
+                maneuvers[r].append(current_maneuvers[r][0])
+                if current_maneuvers[r][0] and counter < 20:
+                    counter += 1
+                    save = True
 
             # new exploration
             if not env.exploration_grid[current_path[r][0].y, current_path[r][0].x]:
@@ -846,6 +965,9 @@ for i in range(test_iterations):
                 if env.pos[r] == env.starting_pos[r]:
                     ongoing_frontiers[r] = frontiers[r]
                     done[r] = True
+                    which[r] = 1
+                    if not env.exploration_grid.all() and all([done[ri] for ri in range(nr)]):
+                        save = True
                     if all([done[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT:
                         breakpoint
                 else:
@@ -855,7 +977,7 @@ for i in range(test_iterations):
 
             # remove step from current path
             del current_path[r][0]
-            del current_maneuvers[r][0]
+            if maneuvering: del current_maneuvers[r][0]
 
             # add on going frontiers if required
             if len(current_path[r]) != 0:
@@ -886,16 +1008,19 @@ for i in range(test_iterations):
         path_times.append(path_time)
         
         # catch maneuvers and save to draw trajectories
-        if counter < 20 and not save and env.pos[0] == env.pos[1] and all([not done[ri] for ri in range(nr)]) and any([maneuvers[ri][steps-1] for ri in range(nr)]):
-            save = True
-            step = steps
-            counter += 1
-            breakpoint
-        if counter < 20 and not save and env.prev_pos[0] == env.pos[1] and env.prev_pos[1] == env.pos[0] and all([not done[ri] for ri in range(nr)]) and any([maneuvers[ri][steps-1] for ri in range(nr)]):
-            save = True
-            step = steps
-            counter += 1
-            breakpoint
+        if maneuvering:
+            if counter < 20 and not save and env.pos[0] == env.pos[1] and all([not done[ri] for ri in range(nr)]) and any([maneuvers[ri][steps-1] for ri in range(nr)]):
+                save = True
+                step = steps
+                counter += 1
+                breakpoint
+            if counter < 20 and not save and env.prev_pos[0] == env.pos[1] and env.prev_pos[1] == env.pos[0] and all([not done[ri] for ri in range(nr)]) and any([maneuvers[ri][steps-1] for ri in range(nr)]):
+                save = True
+                step = steps
+                counter += 1
+                breakpoint
+        else:
+            if i in saves: save = True
 
     steps_list.append(steps)
     for ri in range(nr):
@@ -951,7 +1076,8 @@ for drone_explorations in explorations_list:
     average_explorations.append(drone_average)
 
 print_string = ""
-print_string += "FOV width: %dm\nFOV height: %dm" %(FOV_W, FOV_H)
+print_string += "Maneuvering: %s"%(str(maneuvering))
+print_string += "\nFOV width: %dm\nFOV height: %dm" %(FOV_W, FOV_H)
 print_string += "\nTesting iterations: %d"%(test_iterations)
 print_string += "\nTesting time: %.2fh%.2fm%.2fs" %(th,tm,ts)
 print_string += "\nAverage planning time: %.2fh%.2fm%.2fs" %(ph,pm,ps)
@@ -988,3 +1114,14 @@ with open(file_path, 'w') as file:
         sublist_str = ','.join(map(str, sublist))
         # Write the sublist string followed by a newline character
         file.write(sublist_str + '\n')
+
+if save_obstacles:
+    file_name = "positions.pkl"
+    file_path = os.path.join(save_dir, file_name)
+    with open(file_path, 'wb') as file:
+        # Serialize and write the sublists using pickle.dump()
+        pickle.dump(env.starting_positions, file)
+
+    file_name = "grid.json"
+    file_name = os.path.join(save_dir, file_name)
+    write_json(env.grids, file_name)
