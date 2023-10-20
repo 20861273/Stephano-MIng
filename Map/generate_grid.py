@@ -13,6 +13,10 @@ from haversine import haversine, Unit
 
 from shapely.geometry import Point, Polygon
 
+def write_json(lst, file_name):
+    with open(file_name, "w") as f:
+        json.dump(lst, f)
+
 # Chosen values
 height = 100 # m
 
@@ -35,6 +39,8 @@ FOV_W = GSD_W * pixel_w
 FOV_H = GSD_H * pixel_h
 
 print(FOV_W, FOV_H)
+
+path = r"E:\Stephano\Documents\Stephano-MIng"
 
 src_file = r"E:\Stephano\Downloads\search_area.geojson"
 dst_file = r"E:\Stephano\Documents\Stephano-MIng\search_area.geojson"
@@ -127,5 +133,9 @@ for i in range(0, grid_height):
 file_name = title + '.html'
 
 m.save(file_name)
+
+file_name = "grid.json"
+file_name = os.path.join(path, file_name)
+write_json([grid.tolist()], file_name)
 
 print("Grid shape: ",grid.shape, "\n", grid)

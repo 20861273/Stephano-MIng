@@ -13,8 +13,8 @@ from itertools import product
 import pickle
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 50
+WIDTH = 50
 
 # Chosen values
 height = 100 # m
@@ -54,6 +54,12 @@ class Direction(Enum):
     UP = 2
     DOWN = 3
 
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.int64):
+            return int(obj)  # Convert numpy int64 to Python int
+        return json.JSONEncoder.default(self, obj)
+
 def convert_data_to_json_format(data):
     # Convert namedtuple keys to strings for JSON serialization
     data_json = {str(str(key.x)+","+str(key.y)): item for key, item in data.items()}
@@ -74,6 +80,27 @@ def write_json(lst, file_name):
 def read_json(file_name):
     with open(file_name, "r") as f:
         return json.load(f)
+    
+def convert_grid_to_obstacle_positions(grids):
+    obstacle_positions = [[] for _ in range(len(grids))]
+    for i, grid in enumerate(grids):
+        for x in range(len(grid)):
+            for y in range(len(grid[x])):
+                if grid[y][x] == States.OBS.value:
+                    obstacle_positions[i].append(int(WIDTH/2*y+x))
+    return obstacle_positions
+
+def convert_coordinates_to_cells(starting_positions):
+    positions = [[] for _ in range(len(starting_positions))]
+    for i, starting_position in enumerate(starting_positions):
+        for r in range(nr):
+            x = starting_position[r].x
+            y = starting_position[r].y
+            # if y / 2 % 2 != 0: y -= 1
+            # if x / 2 % 2 != 0: x -= 1
+            positions[i].append(int(WIDTH/2*y+x))
+    return positions
+
 
 class Grid(object):
     def __init__(self, height, width, grid, direction): ########################################### change
@@ -199,6 +226,9 @@ class Astar:
                 found = True
                 break
             
+            if id > HEIGHT*WIDTH:
+                breakpoint
+            
             self.neighbors = self.graph.neighbors(current, path_step)
             for next_node in self.neighbors:
                 if maneuvering:
@@ -284,7 +314,7 @@ class Astar:
                 self.which = 1
                 return self.reconstruct_path(start, end, id), []
         else:
-            return None
+            return None, None
     
 class Environment:
     def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir):
@@ -318,9 +348,10 @@ class Environment:
         if self.load_obstacles:
             file_name = "positions.pkl"
             file_path = os.path.join(self.load_dir, file_name)
-            with open(file_path, 'rb') as file:
-                # Deserialize and read the sublists using pickle.load()
-                self.starting_positions = pickle.load(file)
+            if file_name in os.listdir():
+                with open(file_path, 'rb') as file:
+                    # Deserialize and read the sublists using pickle.load()
+                    self.starting_positions = pickle.load(file)
             
             file_name = "grid.json"
             file_name = os.path.join(self.load_dir, file_name)
@@ -355,30 +386,36 @@ class Environment:
                     # Set the elements at the random indices to 1
                 self.starting_grid[indexes[:, 0], indexes[:, 1]] = States.OBS.value
 
-                self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
+                # self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
 
                 WIDTH = int(WIDTH/2)*2
                 HEIGHT = int(HEIGHT/2)*2
 
-                ES = Enclosed_space_check(int(HEIGHT/2)*2, int(WIDTH/2)*2, self.starting_grid, States)
+                ES = Enclosed_space_check(int(HEIGHT/2), int(WIDTH/2), self.starting_grid, States)
                 self.starting_grid = ES.enclosed_space_handler()
-        self.grid = self.starting_grid.copy()
 
-        if self.save_obstacles:
-            self.grids.append(self.grid.tolist())
+                if self.save_obstacles:
+                    self.grids.append(self.starting_grid.tolist())
+
+                self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
+                self.grid = self.starting_grid.copy()
+
+        self.grid = self.starting_grid.copy()
         
         # spawn drone
-        if self.load_obstacles:
+        if self.load_obstacles and self.starting_positions[0] != []:
             self.starting_pos = self.starting_positions[i]
             for ri in range(self.nr):
                 self.pos[ri] = self.starting_pos[ri]
                 self.prev_pos[ri] = self.starting_pos[ri]
                 self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
         else:
-            indices = np.argwhere(self.grid == States.UNEXP.value)
+            indices = np.argwhere(np.array(self.grids[i]) == States.UNEXP.value)
             np.random.shuffle(indices)
+            save_starting_pos = [None]*nr
             for ri in range(self.nr):
-                self.starting_pos[ri] = Point(indices[0,1], indices[0,0])
+                save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
+                self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
                 self.pos[ri] = self.starting_pos[ri]
                 self.prev_pos[ri] = self.starting_pos[ri]
                 self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
@@ -387,7 +424,7 @@ class Environment:
                 indices = np.array(indices_list)
         
         if self.save_obstacles:
-            self.starting_positions[i] = self.starting_pos.copy()
+            self.starting_positions[i] = save_starting_pos.copy()
 
         # set directions
         self.direction = [None]*self.nr
@@ -804,8 +841,8 @@ in_loop_dist = False
 preprocessing = True
 maneuvering = True
 fixed_wing = False
-test_iterations = 100000
-saved_iterations = 1
+test_iterations = 1
+saved_iterations = 0
 saves = []
 
 # set directory path
@@ -821,51 +858,69 @@ if save_trajectory:
 
 # environment initialisations
 goal_spawning = False
-nr = 2
+nr = 5
 weight = 19
 obstacles = True
-obstacle_density = 0.4
-set_obstacles = False
-save_obstacles = False
+obstacle_density = 0.2
+set_obstacles = True
+save_obstacles = True
 save_dir = os.path.join(dir_path, 'Save')
 if not os.path.exists(save_dir): os.makedirs(save_dir)
-load_obstacles = True
+load_obstacles = False
 load_dir = os.path.join(PATH, 'Load') 
 if not os.path.exists(load_dir): os.makedirs(load_dir)
 env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
 
 # calculate distances
 if not in_loop_dist:
-    distances = {}
-    print("Preprocessing...")
-    starting_time = time.time()
-    for dx in range(WIDTH):
-        print(dx)
-        for dy in range(HEIGHT):
-            if env.grid[dy,dx] == States.OBS.value: continue
-            temp_paths = {}
-            for x in range(WIDTH):
-                for y in range(HEIGHT):
-                    if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
-                        # A* distances
-                        # astar = Astar(env.grid)
-                        # temp_path = astar.a_star(Point(dx, dy), Point(x,y), env.grid)
-                        # del temp_path[0]
-                        # temp_paths[Point(x,y)] = temp_path
-                        # distances[Point(dx,dy)] = temp_paths
+    # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
+    file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
+    if file_name in os.listdir(load_dir):
+    #     file_path = os.path.join(load_dir, file_name)
+    #     with open(file_path, 'rb') as file:
+    #         distances = file.read()
+        file_path = os.path.join(load_dir, file_name)
+        distances = read_json(file_path)
 
-                        # Mannhattan distances
-                        distance = env.get_distance(Point(dx, dy), Point(x,y))
-                        temp_paths[Point(x,y)] = distance
-                        distances[Point(dx,dy)] = temp_paths
+        distances = convert_json_data(distances)
+    else:
+        distances = {}
+        print("Preprocessing...")
+        starting_time = time.time()
+        for dx in range(WIDTH):
+            print(dx)
+            for dy in range(HEIGHT):
+                if env.grid[dy,dx] == States.OBS.value: continue
+                temp_paths = {}
+                for x in range(WIDTH):
+                    for y in range(HEIGHT):
+                        if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
+                            # A* distances
+                            # astar = Astar(env.grid)
+                            # temp_path = astar.a_star(Point(dx, dy), Point(x,y), env.grid)
+                            # del temp_path[0]
+                            # temp_paths[Point(x,y)] = temp_path
+                            # distances[Point(dx,dy)] = temp_paths
+
+                            # Mannhattan distances
+                            distance = env.get_distance(Point(dx, dy), Point(x,y))
+                            temp_paths[Point(x,y)] = distance
+                            distances[Point(dx,dy)] = temp_paths
+
+        # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
+        # file_path = os.path.join(load_dir, file_name)
+        # with open(file_path, 'wb') as file:
+        #     file.write(distances)
+
+        # write to file for later use
+        # data_json = convert_data_to_json_format(distances)
+        # file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
+        # file_path = os.path.join(load_dir, file_name)
+        # write_json(data_json, file_path)
+
     end_time = time.time()
     print("Preprocessing time: %.2fs" %(end_time - starting_time))
-
-    # write to file for later use
-    # data_json = convert_data_to_json_format(distances)
-    # file_name = "distances.json"
-    # file_path = os.path.join(PATH, file_name)
-    # write_json(data_json, file_path)
+    
 preprocessing = False
 
 # testing loop
@@ -920,6 +975,7 @@ for i in range(test_iterations):
 
         # plan paths
         path_time = 0
+        # if maneuvering:
         for r in range(nr):
             if env.pos[r] == frontiers[r]:# or done[r]:
                 if env.pos[r] == env.starting_pos[r]:
@@ -931,6 +987,7 @@ for i in range(test_iterations):
                     if all([done[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT:
                         breakpoint
                 continue
+            
             if ongoing_frontiers[r] == None:
                 start_path_time = time.time()
                 astar = Astar(env.grid)
@@ -943,6 +1000,68 @@ for i in range(test_iterations):
                 for path_step, pos in enumerate(current_path[r]):
                     if steps+path_step not in occupied_cells: occupied_cells[steps+path_step] = []
                     occupied_cells[steps+path_step].append(pos)
+        
+        # replan paths if drones get stuck
+        # else:
+        #     for r in range(nr):
+        #         if env.pos[r] == frontiers[r]:# or done[r]:
+        #             if env.pos[r] == env.starting_pos[r]:
+        #                 ongoing_frontiers[r] = frontiers[r]
+        #                 done[r] = True
+        #                 which[r] = 0
+        #                 if not env.exploration_grid.all() and all([done[ri] for ri in range(nr)]):
+        #                     save = True
+        #                 if all([done[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT:
+        #                     breakpoint
+        #             continue
+                
+        #     planning = True
+        #     prior_r = 0
+        #     r = prior_r
+        #     cntr = 0
+        #     n_plans = 0
+        #     temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()}
+        #     while planning:
+        #         if cntr != 0 and cntr % nr == 0:
+        #             cntr = 0
+        #             r = prior_r
+        #         if r != 0 and r % nr == 0: r = 0
+
+        #         # if ongoing_frontiers[r] == None:
+        #         start_path_time = time.time()
+        #         astar = Astar(env.grid)
+        #         current_path[r], current_maneuvers[r] = astar.a_star(env.pos[r], frontiers[r], env.grid, temp_occupied_cells, env.direction[r])
+        #         end_path_time = time.time()
+        #         if current_path[r] != None:
+        #             del current_path[r][0]
+            
+        #             # add path to occupied cells
+        #             for path_step, pos in enumerate(current_path[r]):
+        #                 if steps+path_step not in temp_occupied_cells: temp_occupied_cells[steps+path_step] = []
+        #                 temp_occupied_cells[steps+path_step].append(pos)
+        #         else:
+        #             breakpoint
+                
+        #         cntr += 1
+        #         r += 1
+
+        #         if cntr == nr and all([current_path[ri] != None for ri in range(nr)]):
+        #             planning = False
+        #             occupied_cells = temp_occupied_cells.copy()
+        #         else:
+        #             planning = True
+                
+        #         if any([current_path[ri] == None for ri in range(nr)]):
+        #             prior_r += 1
+        #             if prior_r % nr == 0: prior_r = 0
+        #             n_plans += 1
+        #             cntr = 0
+        #             r = prior_r
+        #             temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()}
+                
+        #         if n_plans == nr:
+        #             print("No route")
+        #             quit()
             
         for r in range(nr):
             if done[r]: continue
@@ -1116,12 +1235,28 @@ with open(file_path, 'w') as file:
         file.write(sublist_str + '\n')
 
 if save_obstacles:
+    # save starting positions
+    # for my solution
     file_name = "positions.pkl"
     file_path = os.path.join(save_dir, file_name)
     with open(file_path, 'wb') as file:
         # Serialize and write the sublists using pickle.dump()
         pickle.dump(env.starting_positions, file)
 
+    # for DARP
+    starting_positions = convert_coordinates_to_cells(env.starting_positions)
+    file_name = "positions.json"
+    file_name = os.path.join(save_dir, file_name)
+    write_json(starting_positions, file_name)
+
+    # save grids
+    # for my solution
     file_name = "grid.json"
     file_name = os.path.join(save_dir, file_name)
     write_json(env.grids, file_name)
+
+    # for DARP
+    obstacle_positions = convert_grid_to_obstacle_positions(env.grids)
+    file_name = "obstacles.json"
+    file_name = os.path.join(save_dir, file_name)
+    write_json(obstacle_positions, file_name)
