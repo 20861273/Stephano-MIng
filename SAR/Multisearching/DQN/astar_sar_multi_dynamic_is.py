@@ -11,10 +11,11 @@ import time
 import json
 from itertools import product
 import pickle
+from collections import deque
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 50
-WIDTH = 50
+HEIGHT = 10
+WIDTH = 10
 
 # Chosen values
 height = 100 # m
@@ -348,10 +349,9 @@ class Environment:
         if self.load_obstacles:
             file_name = "positions.pkl"
             file_path = os.path.join(self.load_dir, file_name)
-            if file_name in os.listdir():
-                with open(file_path, 'rb') as file:
-                    # Deserialize and read the sublists using pickle.load()
-                    self.starting_positions = pickle.load(file)
+            with open(file_path, 'rb') as file:
+                # Deserialize and read the sublists using pickle.load()
+                self.starting_positions = pickle.load(file)
             
             file_name = "grid.json"
             file_name = os.path.join(self.load_dir, file_name)
@@ -370,8 +370,9 @@ class Environment:
         if self.obstacles:
             if self.load_obstacles:
                 self.starting_grid = np.array(self.grids[i])
+                self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
-            elif i == 0 or not self.set_obstacles:
+            elif preprocessing or not self.set_obstacles:
                 self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
                 
                     # Calculate the number of elements to be filled with 1's
@@ -394,8 +395,7 @@ class Environment:
                 ES = Enclosed_space_check(int(HEIGHT/2), int(WIDTH/2), self.starting_grid, States)
                 self.starting_grid = ES.enclosed_space_handler()
 
-                if self.save_obstacles:
-                    self.grids.append(self.starting_grid.tolist())
+                self.grids.append(self.starting_grid.tolist())
 
                 self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
@@ -497,17 +497,26 @@ class Environment:
             return min(distances, key=distances.get) # returns position
         
     def get_min_targets(self, costs):
-        # get max value of each dorne
+        # get min value of each dorne
         min_targets_value = [None]*self.nr
         for ri in range(self.nr):
             if not costs[ri]: min_targets_value[ri] = []
             else: min_targets_value[ri] = min(costs[ri].values())
 
-        # get all positions with max value
+        # min_targets_value = [None]*self.nr
+        # for ri in range(self.nr):
+        #     min_targets_value[ri] = np.min(np.ma.masked_equal(dists[self.pos[ri].y*HEIGHT+self.pos[ri].x], 0, copy=False))
+
+        # get all positions with min value
         min_targets = [[] for i in range(self.nr)]
         for ri in range(self.nr):
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
 
+        # min_targets = [[] for i in range(self.nr)]
+        # for ri in range(self.nr):
+        #     cells = np.argwhere(dists[self.pos[ri].y*HEIGHT+self.pos[ri].x] == min_targets_value[ri])
+        #     min_targets[ri] = [Point(c // WIDTH, c % WIDTH) for c in cells[0]]
+        
         return min_targets
         
     def scheduler(self, ongoing_frontiers):
@@ -539,9 +548,10 @@ class Environment:
             for y in range(self.grid.shape[0]):
                 for x in range(self.grid.shape[1]):
                     if not temp_exploration_grid[y,x]:
-                        costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
+                        # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
+                        costs[ri][Point(x,y)] = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][y*HEIGHT + x]
 
-        # set maximum targets
+        # set minimum targets
         min_targets = self.get_min_targets(costs)
         temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
         for rj in range(self.nr-1):
@@ -557,6 +567,24 @@ class Environment:
                     min_targets[ri] = [ongoing_frontiers[ri]]
                 else:
                     min_targets[ri] += next_min_targets[ri]
+        
+        # # set minimum targets (if working would be faster, excludes costs for loops)
+        # min_targets = self.get_min_targets(distances)
+        # temp_distances = np.array(distances)
+        # for rj in range(self.nr-1):
+        #     # delete best targets from temp cost list
+        #     for ri in range(self.nr):
+        #         for target in min_targets[ri]:
+        #             cells = np.argwhere(temp_distances[self.pos[ri].y*HEIGHT+self.pos[ri].x] == target)
+        #             temp_distances[cells] = HEIGHT*WIDTH
+
+        #     # find next best targets
+        #     next_min_targets = self.get_min_targets(temp_distances)
+        #     for ri in range(self.nr):
+        #         if ongoing_frontiers[ri] != None:
+        #             min_targets[ri] = [ongoing_frontiers[ri]]
+        #         else:
+        #             min_targets[ri] += next_min_targets[ri]
 
         # get all combinations of best targets
         combinations = list(product(*min_targets))
@@ -581,6 +609,7 @@ class Environment:
                 for ri, target in enumerate(combination):
                     if target in costs[ri]:
                         sum_cost += costs[ri][target]
+                    # sum_cost += distances[self.pos[ri].y*HEIGHT+self.pos[ri].x][target.y*HEIGHT+target.x]
                 sum_costs.append(sum_cost)
             
             # set targets to best combination
@@ -616,6 +645,7 @@ class Environment:
             for ri, target in enumerate(combination):
                 if target in costs[ri]:
                     sum_cost += costs[ri][target]
+                # sum_cost += distances[self.pos[ri].y*HEIGHT+self.pos[ri].x][target.y*HEIGHT+target.x]
                 if target == env.starting_pos[ri]:
                     sum_cost += penalty
             sum_costs.append(sum_cost)
@@ -634,6 +664,36 @@ class Environment:
             breakpoint
 
         return targets
+    
+    def calculate_distances(self):
+        num_cells = HEIGHT * WIDTH
+        distances = np.full((num_cells, num_cells), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+
+        # Define movements (up, down, left, right)
+        moves = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+
+        for start_cell in range(num_cells):
+            if self.starting_grid[start_cell // HEIGHT, start_cell % HEIGHT] == States.UNEXP.value:
+                queue = deque([(start_cell, 0)])  # Initialize queue with the starting cell and distance 0
+                visited = np.zeros(num_cells, dtype=bool)  # Mark all cells as not visited
+                visited[start_cell] = True  # Mark the starting cell as visited
+
+                while queue:
+                    current_cell, distance = queue.popleft()
+                    distances[start_cell, current_cell] = distance
+
+                    # Explore neighbors
+                    row, col = current_cell // HEIGHT, current_cell % HEIGHT
+                    for move_row, move_col in moves:
+                        new_row, new_col = row + move_row, col + move_col
+                        neighbor_cell = new_row * HEIGHT + new_col
+
+                        if 0 <= new_row < WIDTH and 0 <= new_col < HEIGHT \
+                            and not visited[neighbor_cell] and self.starting_grid[new_row, new_col] == States.UNEXP.value:
+                            queue.append((neighbor_cell, distance + 1))
+                            visited[neighbor_cell] = True
+
+        return distances
     
     def print_graph(self, r, steps, path, maneuvers, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
         """
@@ -840,9 +900,9 @@ in_loop_trajectory = False
 in_loop_dist = False
 preprocessing = True
 maneuvering = True
-fixed_wing = False
+fixed_wing = True
 test_iterations = 1
-saved_iterations = 0
+saved_iterations = 1
 saves = []
 
 # set directory path
@@ -858,18 +918,19 @@ if save_trajectory:
 
 # environment initialisations
 goal_spawning = False
-nr = 5
+nr = 2
 weight = 19
 obstacles = True
-obstacle_density = 0.2
+obstacle_density = 0.3
 set_obstacles = True
-save_obstacles = True
+save_obstacles = False
 save_dir = os.path.join(dir_path, 'Save')
 if not os.path.exists(save_dir): os.makedirs(save_dir)
 load_obstacles = False
 load_dir = os.path.join(PATH, 'Load') 
 if not os.path.exists(load_dir): os.makedirs(load_dir)
 env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
+env.reset(weight, 0, goal_spawning)
 
 # calculate distances
 if not in_loop_dist:
@@ -887,36 +948,38 @@ if not in_loop_dist:
         distances = {}
         print("Preprocessing...")
         starting_time = time.time()
-        for dx in range(WIDTH):
-            print(dx)
-            for dy in range(HEIGHT):
-                if env.grid[dy,dx] == States.OBS.value: continue
-                temp_paths = {}
-                for x in range(WIDTH):
-                    for y in range(HEIGHT):
-                        if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
-                            # A* distances
-                            # astar = Astar(env.grid)
-                            # temp_path = astar.a_star(Point(dx, dy), Point(x,y), env.grid)
-                            # del temp_path[0]
-                            # temp_paths[Point(x,y)] = temp_path
-                            # distances[Point(dx,dy)] = temp_paths
+        # for dx in range(WIDTH):
+        #     print(dx)
+        #     for dy in range(HEIGHT):
+        #         if env.grid[dy,dx] == States.OBS.value: continue
+        #         temp_paths = {}
+        #         for x in range(WIDTH):
+        #             for y in range(HEIGHT):
+        #                 if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
+        #                     # A* distances
+        #                     # astar = Astar(env.grid)
+        #                     # temp_path = astar.a_star(Point(dx, dy), Point(x,y), env.grid)
+        #                     # del temp_path[0]
+        #                     # temp_paths[Point(x,y)] = temp_path
+        #                     # distances[Point(dx,dy)] = temp_paths
 
-                            # Mannhattan distances
-                            distance = env.get_distance(Point(dx, dy), Point(x,y))
-                            temp_paths[Point(x,y)] = distance
-                            distances[Point(dx,dy)] = temp_paths
+        #                     # Mannhattan distances
+        #                     distance = env.get_distance(Point(dx, dy), Point(x,y))
+        #                     temp_paths[Point(x,y)] = distance
+        #                     distances[Point(dx,dy)] = temp_paths
 
-        # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
-        # file_path = os.path.join(load_dir, file_name)
-        # with open(file_path, 'wb') as file:
-        #     file.write(distances)
+        # # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
+        # # file_path = os.path.join(load_dir, file_name)
+        # # with open(file_path, 'wb') as file:
+        # #     file.write(distances)
 
-        # write to file for later use
-        # data_json = convert_data_to_json_format(distances)
-        # file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
-        # file_path = os.path.join(load_dir, file_name)
-        # write_json(data_json, file_path)
+        # # write to file for later use
+        # # data_json = convert_data_to_json_format(distances)
+        # # file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
+        # # file_path = os.path.join(load_dir, file_name)
+        # # write_json(data_json, file_path)
+
+        distances = env.calculate_distances()
 
     end_time = time.time()
     print("Preprocessing time: %.2fs" %(end_time - starting_time))
