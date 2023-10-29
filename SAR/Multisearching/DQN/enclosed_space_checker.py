@@ -7,13 +7,13 @@ class Enclosed_space_check:
         self.height = HIGHT
         self.States = States
         self.spaces = []
+        self.EnvironmentGrid = EnvironmentGrid
         self.binary_grid = np.copy(EnvironmentGrid)
         self.final_labels = self.labeling()
 
-
     def labeling(self):
-        cnter = 0
-        labels = []
+        added_first = False
+        self.labels = []
 
         for x in range(self.width):
             for y in range(self.height):
@@ -21,76 +21,79 @@ class Enclosed_space_check:
                     breakpoint
                 if self.binary_grid[y,x] != self.States.UNEXP.value:
                     continue
-                if cnter == 0:
-                    labels.append([(x,y)])
-                    cnter += 1
+                if not added_first:
+                    self.labels.append([(x,y)])
+                    added_first = True
                 
                 # checks if (x,y) is in region
                 # if not then add to new region
                 added = False
-                for i in range(len(labels)):
-                    if (x,y) in labels[i]:
+                for i in range(len(self.labels)):
+                    if (x,y) in self.labels[i]:
                         added = True
                         index = i
                 if not added:
-                    labels.append([(x,y)])
-                    index = len(labels)-1
+                    self.labels.append([(x,y)])
+                    index = len(self.labels)-1
 
                 # checks if right is connected
-                if x != self.width-1:
+                if x < self.width-1:
+                    if x == 8:
+                        breakpoint
                     if self.binary_grid[y,x] == self.binary_grid[y,x+1]:
                         # checks if (x+1,y) is in a label list already
                         combined = False
-                        for i, l in enumerate(labels):
-                            if (x+1,y) in labels[i] and i != index:
-                                combine_lists = labels[i] + labels[index]
-                                labels[min(i, index)] = combine_lists
-                                del labels[max(i, index)]
+                        for i, l in enumerate(self.labels):
+                            if (x+1,y) in self.labels[i] and i != index:
+                                combine_lists = self.labels[i] + self.labels[index]
+                                self.labels[min(i, index)] = combine_lists
+                                del self.labels[max(i, index)]
                                 combined = True
                         if not combined: 
-                            labels[index].append((x+1,y))
+                            self.labels[index].append((x+1,y))
 
                 # checks if bottom is connected
-                if y != self.height-1:
+                if y < self.height-1:
                     if y == 1:
                         breakpoint
                     if self.binary_grid[y,x] == self.binary_grid[y+1,x]:
                         # checks if (x+1,y) is in a label list already
                         combined = False
-                        for i, l in enumerate(labels):
-                            if (x,y+1) in labels[i] and i != index:
-                                combine_lists = labels[i] + labels[index]
-                                labels[min(i, index)] = combine_lists
-                                del labels[max(i, index)]
+                        for i, l in enumerate(self.labels):
+                            if (x,y+1) in self.labels[i] and i != index:
+                                combine_lists = self.labels[i] + self.labels[index]
+                                self.labels[min(i, index)] = combine_lists
+                                del self.labels[max(i, index)]
                                 combined = True
                         if not combined:
-                            labels[index].append((x,y+1))
+                            self.labels[index].append((x,y+1))
         
-        if len(labels) == 1:
+        if len(self.labels) == 1:
             return []
         
         # save largest spaces
-        # index = max(range(len(labels)), key=lambda i: len(labels[i]))
+        # index = max(range(len(self.labels)), key=lambda i: len(self.labels[i]))
         # self.spaces = []
-        # labels.extend(index)
-        # del labels[index]
+        # self.labels.extend(index)
+        # del self.labels[index]
         save_index = []
-        for i,l in enumerate(labels):
-            if len(l) > 5:
+        for i,l in enumerate(self.labels):
+            if len(l) >= 2:
                 save_index.append(i)
-        self.spaces = [labels[save_index[0]]]
+        self.spaces = [self.labels[save_index[0]]]
         if len(save_index) != 1:
             for i in range(1, len(save_index)):
-                self.spaces.append(labels[save_index[i]])
+                self.spaces.append(self.labels[save_index[i]])
         # delete saved indices
-        labels = [labels[i] for i in range(len(labels)) if i not in save_index]
+        self.labels = [self.labels[i] for i in range(len(self.labels)) if i not in save_index]
 
         combined_labels = []
-        for l in labels: combined_labels.extend(l)
+        for l in self.labels: combined_labels.extend(l)
         return combined_labels
 
     def combine_spaces(self):
         distances = {}
+        self.filled = []
         
         # select comparing space
         for l2 in range(1, len(self.spaces)):
@@ -116,23 +119,38 @@ class Enclosed_space_check:
             step = 0
             condition = True
             while condition:
-                if step % 2 == 0: # x direction
+                # selection process
+                # select x or y direction
+                select_x = False
+                if step % 2 == 0:
+                    if x_distance != 0: select_x = True
+                    else: select_x = False
+                else:
+                    if y_distance != 0: select_x = False
+                    else: select_x = True
+
+                if select_x: # x direction
+                    # right
                     if x1 < x2:
                         x1 += 1
+                    # left
                     else:
-                        x1-= 1
-                    if x_distance != 0: x_distance -= 1
+                        x1 -= 1
+                    x_distance -= 1
                 else: # y direction
+                    # down
                     if y1 < y2:
                         y1 += 1
+                    # up
                     else:
-                        y1-= 1
-                    if y_distance != 0: y_distance -= 1
+                        y1 -= 1
+                    y_distance -= 1
+                
                 self.binary_grid[y1, x1] = self.States.UNEXP.value
+                self.filled.append((x1,y1))
                 step += 1
-                if x_distance == 0 and y_distance == 0:
+                if x_distance < 1 and y_distance < 1:
                     condition = False
-        breakpoint
     
     def get_distance(self, start, end):
         return abs(start[0] - end[0]) + abs(start[1] - end[1])
@@ -140,11 +158,13 @@ class Enclosed_space_check:
     def enclosed_space_handler(self):
         for p in self.final_labels:
             self.binary_grid[p[1], p[0]] = self.States.OBS.value
-
+        
+        for p in self.final_labels:
+            if self.binary_grid[p[1], p[0]] != self.States.OBS.value:
+                print("WTH")
+            
         if len(self.spaces) > 1:
-            # print("\n\n",self.binary_grid)
             self.combine_spaces()
-            # print("\n",self.binary_grid)
 
         return self.binary_grid
     
