@@ -39,7 +39,7 @@ if __name__ == '__main__':
         "epsilon": [[0.1,0.1,0.1]],
 
         "training sessions": 3,
-        "episodes": 10000,
+        "episodes": 1000,
         "positive rewards": [0],
         "positive exploration rewards": [1],
         "negative rewards": [1],
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         "stride": [1, 1],
         "fc dims": [16,32],
 
-        "nstep": True,
+        "nstep": False,
         "nstep N": 2,
         "prioritized": True,
         "starting beta": 0.5,

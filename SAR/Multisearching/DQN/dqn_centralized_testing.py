@@ -140,6 +140,7 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                             # if y == 0 or y == HEIGHT-1:
                             #     continue
                             image_observation, non_image_observation = env.reset(10000, 99)
+                            env.calculate_distances()
 
                             for i in range(hp["number of drones"]): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = False
 
@@ -306,6 +307,7 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                                     # if y == 0 or y == HEIGHT-1:
                                     #     continue
                                     image_observation, non_image_observation = env.reset(10000, 99)
+                                    env.calculate_distances()
 
                                     for i in range(hp["number of drones"]): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = False
 

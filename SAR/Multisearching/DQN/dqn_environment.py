@@ -6,6 +6,9 @@ import math
 import os
 from dqn_utils import write_json, read_json
 
+from collections import deque
+from itertools import product
+
 from astar_class import Astar
 from enclosed_space_checker import Enclosed_space_check
 
@@ -166,6 +169,7 @@ class Environment:
                 self.grid = self.starting_grid
         else:
             self.generate_grid()
+            self.starting_grid = self.grid.copy()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
         self.goal_state = np.ones((HEIGHT, WIDTH), dtype=np.bool_)
 
@@ -190,6 +194,8 @@ class Environment:
                             'drone'    :   [False]*self.nr,
                             'trapped'  :   [False]*self.nr}
         self.collision_state = [False]*self.nr
+
+        self.done = [False]*self.nr
 
         self.training_type = training_type
         self.encoding = encoding
@@ -324,6 +330,8 @@ class Environment:
 
         # set target cluster
         self.target_cluster = [[None]]*self.nr
+
+        self.done = [False]*self.nr
         
         image_state, non_image_state, closest_unexplored = self.get_state()
 
@@ -350,6 +358,7 @@ class Environment:
         self._update_env()
 
         image_state, non_image_state, closest_unexplored = self.get_state()
+        # self.ongoing_frontier = closest_unexplored.copy()
 
         self.score += self.calc_reward_centralized(closest_unexplored)
         self.score -= self.negative_step_reward
@@ -484,6 +493,8 @@ class Environment:
         for i in range(0, self.nr):
             if self.pos[i] == self.prev_closest_unexplored[i]: 
                 score += self.positive_exploration_reward
+                if self.pos[i] == self.starting_pos[i]:
+                    self.done[i] = True
 
         self.prev_closest_unexplored = closest_unexplored.copy()
         return score
@@ -546,82 +557,254 @@ class Environment:
             return min(distances, key=distances.get) # returns position
             # return distances[min(distances, key=distances.get)] #returns distance
 
+    def calculate_distances(self):
+        num_cells = HEIGHT * WIDTH
+        self.distances = np.full((num_cells, num_cells), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+
+        # Define movements (up, down, left, right)
+        moves = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+
+        for start_cell in range(num_cells):
+            if self.starting_grid[start_cell // HEIGHT, start_cell % HEIGHT] == States.UNEXP.value:
+                queue = deque([(start_cell, 0)])  # Initialize queue with the starting cell and distance 0
+                visited = np.zeros(num_cells, dtype=bool)  # Mark all cells as not visited
+                visited[start_cell] = True  # Mark the starting cell as visited
+
+                while queue:
+                    current_cell, distance = queue.popleft()
+                    self.distances[start_cell, current_cell] = distance
+
+                    # Explore neighbors
+                    row, col = current_cell // HEIGHT, current_cell % HEIGHT
+                    for move_row, move_col in moves:
+                        new_row, new_col = row + move_row, col + move_col
+                        neighbor_cell = new_row * HEIGHT + new_col
+
+                        if 0 <= new_row < WIDTH and 0 <= new_col < HEIGHT \
+                            and not visited[neighbor_cell] and self.starting_grid[new_row, new_col] == States.UNEXP.value:
+                            queue.append((neighbor_cell, distance + 1))
+                            visited[neighbor_cell] = True
+    
+    def get_min_targets(self, costs):
+        # get min value of each dorne
+        min_targets_value = [None]*self.nr
+        for ri in range(self.nr):
+            if not costs[ri]: min_targets_value[ri] = []
+            else: min_targets_value[ri] = min(costs[ri].values())
+
+        # min_targets_value = [None]*self.nr
+        # for ri in range(self.nr):
+        #     min_targets_value[ri] = np.min(np.ma.masked_equal(dists[self.pos[ri].y*HEIGHT+self.pos[ri].x], 0, copy=False))
+
+        # get all positions with min value
+        min_targets = [[] for i in range(self.nr)]
+        for ri in range(self.nr):
+            min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
+
+        # min_targets = [[] for i in range(self.nr)]
+        # for ri in range(self.nr):
+        #     cells = np.argwhere(dists[self.pos[ri].y*HEIGHT+self.pos[ri].x] == min_targets_value[ri])
+        #     min_targets[ri] = [Point(c // WIDTH, c % WIDTH) for c in cells[0]]
+        
+        return min_targets
+    
     def scheduler(self):
         # set current positions to explored
         temp_exploration_grid = self.exploration_grid.copy()
-        for r in range(self.nr): 
-            temp_exploration_grid[self.pos[r].y, self.pos[r].x] = True
+        for ri in range(self.nr): 
+            temp_exploration_grid[self.pos[ri].y, self.pos[ri].x] = True
 
         # if no more unexplored cells return to home
         if np.count_nonzero(temp_exploration_grid) == HEIGHT*WIDTH:
-            return [self.starting_pos[r] for r in range(self.nr)]
+            return [self.starting_pos[ri] for ri in range(self.nr)]
 
-        # gets the distance to all unvisited blocks
-        distances = [{} for _ in range(self.nr)]
-        for r in range(self.nr):
-            for y in range(self.grid.shape[0]):
-                for x in range(self.grid.shape[1]):
-                    if not temp_exploration_grid[y,x]:
-                        distance = self.get_distance(Point(x,y), self.pos[r])
-                        distances[r][Point(x,y)] = distance
-
+        # get neighbours
+        neighbours = [[] for _ in range(self.nr)]
+        
         # get costs of unexplored cells
         costs = [{} for _ in range(self.nr)]
-        for r in range(self.nr):
+        for ri in range(self.nr):
+            # if ongoing_frontiers[ri] != None: continue
             for y in range(self.grid.shape[0]):
                 for x in range(self.grid.shape[1]):
-                    if not temp_exploration_grid[y,x]:
-                        costs[r][Point(x,y)] = 1 / distances[r][Point(x,y)]
+                    if not temp_exploration_grid[y,x] and True not in [Point(x,y) in neighbours[ri] for ri in range(self.nr)]:
+                        # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
+                        costs[ri][Point(x,y)] = self.distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][y*HEIGHT + x]
 
-        # set targets based on costs
-        targets = [None]*self.nr
-        for r in range(self.nr):
-            targets[r] = max(costs[r], key=costs[r].get)
+        # set minimum targets
+        min_targets = self.get_min_targets(costs)
+        temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
+        for rj in range(self.nr-1):
+            # delete best targets from temp cost list
+            for ri in range(self.nr):
+                for target in min_targets[ri]:
+                    if target in temp_costs[ri]: del temp_costs[ri][target]
+
+            # find next best targets
+            next_min_targets = self.get_min_targets(temp_costs)
+            for ri in range(self.nr):
+                min_targets[ri] += next_min_targets[ri]
+
+        # get all combinations of best targets
+        combinations = list(product(*min_targets))
+
+        # find invalid combinations
+        delete_indices = []
+        for i,combination in enumerate(combinations):
+            if len(combination) != len(set(combination)):
+                delete_indices.append(i)
+            # check drone neighbours
+            # if drone only has 1 valid neighbour mark node as invalid for other drones
         
-        # check no targets equal
-        all_selected = False
-        while not all_selected:
-            # find equal targets
-            indices = {}
-            for i, item in enumerate(targets):
-                if item in indices:
-                    indices[item].append(i)
-                else:
-                    indices[item] = [i]
-            equal_targets = {key: value for key, value in indices.items() if len(value) > 1}
+        # delete invalid combinations
+        modified_combinations = [combinations[i] for i in range(len(combinations)) if i not in delete_indices]
+        combinations = modified_combinations.copy()
+
+        # if no equal targets
+        targets = [None]*self.nr
+        if len(combinations) > 0:
+            # find sum costs of combinations
+            sum_costs = []
+            for combination in combinations:
+                sum_cost = 0
+                for ri, target in enumerate(combination):
+                    if target in costs[ri]:
+                        sum_cost += costs[ri][target]
+                    # sum_cost += distances[self.pos[ri].y*HEIGHT+self.pos[ri].x][target.y*HEIGHT+target.x]
+                sum_costs.append(sum_cost)
             
-            # check if any targets were equal
-            # equal and more than unexplored cells than number of drones 
-            if equal_targets: 
-                for target, drones in equal_targets.items():
-                    # find best cost for cell
-                    max_cost = 0
-                    for r in drones:
-                        if costs[r][target] > max_cost:
-                            max_cost = costs[r][target]
-                            best_drone = r
-                    
-                    # delete target from other drones costs
-                    for r in drones:
-                        if r == best_drone: continue
-                        del costs[r][target]
+            # set targets to best combination
+            min_cost = min(sum_costs)
+            best_combination = combinations[sum_costs.index(min_cost)]
+            for ri in range(self.nr):
+                targets[ri] = best_combination[ri]
 
-                    # check if no cells left
-                    if not costs[r]:
-                        targets[r] = self.starting_pos[r]
-                        all_selected = True
-                        break
+            if not self.exploration_grid.all() and all([targets[ri] == self.starting_pos[ri] for ri in range(self.nr)]) and targets[0] == self.starting_pos[0]:
+                breakpoint
 
-                    # get next best target from costs
-                    for r in range(self.nr):
-                        if r == best_drone: continue
-                        if not costs[r]: # if no unexplored cells left return home
-                            targets[r] = self.starting_pos[r]
-                        else:
-                            targets[r] = max(costs[r], key=costs[r].get)
-            else:
-                all_selected = True
+            return targets
+        
+        # add starting positions to maximum targets with lower value
+        for ri in range(self.nr):
+            min_targets[ri].append(self.starting_pos[ri])
+
+        # get all combinations of best targets
+        combinations = list(product(*min_targets))
+
+        # find invalid combinations
+        delete_indices = []
+        for i,combination in enumerate(combinations):
+            if len(combination) != len(set(combination)):
+                delete_indices.append(i)
+        
+        # delete invalid combinations
+        modified_combinations = [combinations[i] for i in range(len(combinations)) if i not in delete_indices]
+        combinations = modified_combinations.copy()
+        
+        # find sum costs of combinations
+        sum_costs = []
+        penalty = WIDTH+HEIGHT
+        for combination in combinations:
+            sum_cost = 0
+            for ri, target in enumerate(combination):
+                if target in costs[ri]:
+                    sum_cost += costs[ri][target]
+                # sum_cost += distances[self.pos[ri].y*HEIGHT+self.pos[ri].x][target.y*HEIGHT+target.x]
+                if target == self.starting_pos[ri]:
+                    sum_cost += penalty
+            sum_costs.append(sum_cost)
+        
+        # set targets to best combination
+        min_cost = min(sum_costs)
+        best_combination = combinations[sum_costs.index(min_cost)]
+        for ri in range(self.nr):
+            targets[ri] = best_combination[ri]
+            if self.pos[ri] != self.starting_pos[ri]:
+                self.done[ri] = False
+            if targets[ri] != self.starting_pos[ri]:
+                self.done[ri] = False
+
+        if not self.exploration_grid.all() and all([targets[ri] == self.starting_pos[ri] for ri in range(self.nr)]) and targets[0] == self.starting_pos[0]:
+            breakpoint
+
         return targets
+
+    # def scheduler(self):
+    #     # set current positions to explored
+    #     temp_exploration_grid = self.exploration_grid.copy()
+    #     for r in range(self.nr): 
+    #         temp_exploration_grid[self.pos[r].y, self.pos[r].x] = True
+
+    #     # if no more unexplored cells return to home
+    #     if np.count_nonzero(temp_exploration_grid) == HEIGHT*WIDTH:
+    #         return [self.starting_pos[r] for r in range(self.nr)]
+
+    #     # gets the distance to all unvisited blocks
+    #     distances = [{} for _ in range(self.nr)]
+    #     for r in range(self.nr):
+    #         for y in range(self.grid.shape[0]):
+    #             for x in range(self.grid.shape[1]):
+    #                 if not temp_exploration_grid[y,x]:
+    #                     distance = self.get_distance(Point(x,y), self.pos[r])
+    #                     distances[r][Point(x,y)] = distance
+
+    #     # get costs of unexplored cells
+    #     costs = [{} for _ in range(self.nr)]
+    #     for r in range(self.nr):
+    #         for y in range(self.grid.shape[0]):
+    #             for x in range(self.grid.shape[1]):
+    #                 if not temp_exploration_grid[y,x]:
+    #                     costs[r][Point(x,y)] = 1 / distances[r][Point(x,y)]
+
+    #     # set targets based on costs
+    #     targets = [None]*self.nr
+    #     for r in range(self.nr):
+    #         targets[r] = max(costs[r], key=costs[r].get)
+        
+    #     # check no targets equal
+    #     all_selected = False
+    #     while not all_selected:
+    #         # find equal targets
+    #         indices = {}
+    #         for i, item in enumerate(targets):
+    #             if item in indices:
+    #                 indices[item].append(i)
+    #             else:
+    #                 indices[item] = [i]
+    #         equal_targets = {key: value for key, value in indices.items() if len(value) > 1}
+            
+    #         # check if any targets were equal
+    #         # equal and more than unexplored cells than number of drones 
+    #         if equal_targets: 
+    #             for target, drones in equal_targets.items():
+    #                 # find best cost for cell
+    #                 max_cost = 0
+    #                 for r in drones:
+    #                     if costs[r][target] > max_cost:
+    #                         max_cost = costs[r][target]
+    #                         best_drone = r
+                    
+    #                 # delete target from other drones costs
+    #                 for r in drones:
+    #                     if r == best_drone: continue
+    #                     del costs[r][target]
+
+    #                 # check if no cells left
+    #                 if not costs[r]:
+    #                     targets[r] = self.starting_pos[r]
+    #                     all_selected = True
+    #                     break
+
+    #                 # get next best target from costs
+    #                 for r in range(self.nr):
+    #                     if r == best_drone: continue
+    #                     if not costs[r]: # if no unexplored cells left return home
+    #                         targets[r] = self.starting_pos[r]
+    #                     else:
+    #                         targets[r] = max(costs[r], key=costs[r].get)
+    #         else:
+    #             all_selected = True
+    #     return targets
 
     def cost_function(self, r_i, other_location):
         distances = {}
@@ -1017,6 +1200,7 @@ class Environment:
         
         elif self.encoding == "local":
             closest_unexplored = [None]*self.nr
+
             closest_unexplored = self.scheduler()
             # for r_i in range(self.nr):
             #     # checks if enough fuel to get home

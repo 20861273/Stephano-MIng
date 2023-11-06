@@ -144,6 +144,7 @@ def centralized_dqn(nr, obstacles, set_obstacles, obstacle_density, training_ses
 
         # epochs loop (multiple episodes are called an epoch)
         for i_episode in range(episodes):
+            env.calculate_distances()
             # if i_episode > 101 and i_ts == 1:
             #     quit()
             # if i_episode == 201:
