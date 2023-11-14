@@ -21,7 +21,7 @@ def centralized_dqn(nr, obstacles, set_obstacles, obstacle_density, training_ses
                     n_actions, starting_beta, input_dims, stacked, guide, lidar, fuel,
                     c_dims, k_size, s_size, fc_dims,
                     batch_size, mem_size, replace, nstep, nstep_N,
-                    prioritized, models_path, save_path, load_checkpoint_path, obstacle_path, env_size, load_checkpoint, device_num, lstm, outliers=None):
+                    prioritized, models_path, save_path, load_checkpoint_path, obstacle_path, env_size, load_checkpoint, from_start, device_num, lstm, outliers=None):
     
     if n_actions == 3:
         from dqn_new_agent import DQNAgent
@@ -93,16 +93,20 @@ def centralized_dqn(nr, obstacles, set_obstacles, obstacle_density, training_ses
         
         # load agent experiences and rewards
         if load_checkpoint:
-            if int(os.listdir(models_path)[-1][0]) == i_exp and int(os.listdir(models_path)[-1][2]) == i_ts:
+            if from_start:
                 checkpoint = agent.load_models()
+                breakpoint
             else:
-                if i_ts < int(os.listdir(models_path)[-1][2]):
-                    breakpoint
-                    continue
+                if int(os.listdir(models_path)[-1][0]) == i_exp and int(os.listdir(models_path)[-1][2]) == i_ts:
+                    checkpoint = agent.load_models()
                 else:
-                    checkpoint = {  'session': 1,
-                                    'epoch': 0,
-                                    'episode': 0}     
+                    if i_ts < int(os.listdir(models_path)[-1][2]):
+                        breakpoint
+                        continue
+                    else:
+                        checkpoint = {  'session': 1,
+                                        'epoch': 0,
+                                        'episode': 0}     
 
             if i_ts == 0 and checkpoint['epoch'] == 0 and checkpoint['episode'] == 0:
                 ts_rewards = []
@@ -144,7 +148,7 @@ def centralized_dqn(nr, obstacles, set_obstacles, obstacle_density, training_ses
 
         # epochs loop (multiple episodes are called an epoch)
         for i_episode in range(episodes):
-            env.calculate_distances()
+            
             # if i_episode > 101 and i_ts == 1:
             #     quit()
             # if i_episode == 201:
@@ -157,6 +161,8 @@ def centralized_dqn(nr, obstacles, set_obstacles, obstacle_density, training_ses
                 else:
                     load_checkpoint = False
                     print('episode', i_episode)
+            
+            env.calculate_distances()
             
             # initialize episodic variables
             episode_reward = 0

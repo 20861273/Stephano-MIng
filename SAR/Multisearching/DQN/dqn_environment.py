@@ -15,8 +15,8 @@ from enclosed_space_checker import Enclosed_space_check
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 6
-WIDTH = 6
+HEIGHT = 10
+WIDTH = 10
 
 # DENSITY = 30 # percentage
 
@@ -132,7 +132,8 @@ class Environment:
         self.obstacle_path = obstacle_path
         
         if self.obstacles:
-            if exp == 0 and ts == 0 and not set_obstacles:
+            if not set_obstacles:
+            # if exp == 0 and ts == 0 and not set_obstacles:
                 self.generate_grid()
                 self.starting_grid = self.grid.copy()
                 # self.starting_grid = self.generate_maze(HEIGHT, WIDTH)
@@ -229,7 +230,17 @@ class Environment:
         # Clear all visited blocks
         if self.obstacles: # and current_episode/self.total_episodes > 0.5:
 
+            self.generate_grid()
+            self.starting_grid = self.grid.copy()
+            self.set_obstacles()
+
+            self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
+                
+            ES = Enclosed_space_check(HEIGHT, WIDTH, self.starting_grid, States)
+            self.starting_grid = ES.enclosed_space_handler()
             self.grid = self.starting_grid.copy()
+
+            # self.grid = self.starting_grid.copy()
 
             # random grid
             # self.generate_grid()
@@ -248,6 +259,8 @@ class Environment:
         # self.draw_edges()
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
 
+        self.calculate_distances()
+        
         if self.curriculum_learning['collisions']:
             self.draw_bounds(current_episode, percentage)
 
@@ -514,22 +527,24 @@ class Environment:
         return abs(start.x - end.x) + abs(start.y - end.y)
     
     def get_direction(self, goal, r_i):
-        if goal.x == self.pos[r_i].x+1:
-            direction = Direction.RIGHT.value
-            # direction = [1,0,0,0]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x+1, self.pos[r_i].y)
-        elif goal.x == self.pos[r_i].x-1:
-            direction = Direction.LEFT.value
-            # direction = [0,1,0,0]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x-1, self.pos[r_i].y)
-        elif goal.y == self.pos[r_i].y+1:
-            direction = Direction.DOWN.value
-            # direction = [0,0,1,0]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x, self.pos[r_i].y+1)
-        elif goal.y == self.pos[r_i].y-1:
-            direction = Direction.UP.value
-            # direction = [0,0,0,1]
-            self.return_home_cell[r_i] = Point(self.pos[r_i].x, self.pos[r_i].y-1)
+        if goal.x > self.pos[r_i].x:
+            # direction = Direction.RIGHT.value
+            direction = [1,0,0,0]
+            # self.return_home_cell[r_i] = Point(self.pos[r_i].x+1, self.pos[r_i].y)
+        elif goal.x < self.pos[r_i].x:
+            # direction = Direction.LEFT.value
+            direction = [0,1,0,0]
+            # self.return_home_cell[r_i] = Point(self.pos[r_i].x-1, self.pos[r_i].y)
+        elif goal.y > self.pos[r_i].y:
+            # direction = Direction.DOWN.value
+            direction = [0,0,1,0]
+            # self.return_home_cell[r_i] = Point(self.pos[r_i].x, self.pos[r_i].y+1)
+        elif goal.y < self.pos[r_i].y:
+            # direction = Direction.UP.value
+            direction = [0,0,0,1]
+            # self.return_home_cell[r_i] = Point(self.pos[r_i].x, self.pos[r_i].y-1)
+        else:
+            direction = [0,0,0,0]
 
         return direction
     
@@ -1230,6 +1245,20 @@ class Environment:
             
             
             return state, [None]*self.nr, closest_unexplored
+        elif self.encoding == "local_drone":
+            closest_unexplored = [None]*self.nr
+            closest_unexplored_dir = [None]*self.nr
+
+            closest_unexplored = self.scheduler()
+            for ri in range(self.nr):
+                closest_unexplored_dir[ri] = self.get_direction(closest_unexplored[ri], ri)
+            
+            state = [None]*self.nr
+            for r_i in range(self.nr):
+                state[r_i] = closest_unexplored_dir[r_i] + self.check_surrounding_cells(r_i)
+            
+            
+            return state, [None]*self.nr, closest_unexplored
 
         # Goal state
         # goal_grid = np.zeros(self.grid.shape, dtype=np.float32)
@@ -1576,10 +1605,10 @@ class Environment:
         top_is_boundary = self.pos[r_i].y == 0
         bottom_is_boundary = self.pos[r_i].y == HEIGHT - 1
 
-        surroundings.append(right_is_boundary or (self.grid[self.pos[r_i].y][self.pos[r_i].x+1] == States.OBS.value if not right_is_boundary else True))
-        surroundings.append(left_is_boundary or (self.grid[self.pos[r_i].y][self.pos[r_i].x-1] == States.OBS.value if not left_is_boundary else True))
-        surroundings.append(top_is_boundary or (self.grid[self.pos[r_i].y-1][self.pos[r_i].x] == States.OBS.value if not top_is_boundary else True))
-        surroundings.append(bottom_is_boundary or (self.grid[self.pos[r_i].y+1][self.pos[r_i].x] == States.OBS.value if not bottom_is_boundary else True))
+        surroundings.append(right_is_boundary or self.grid[self.pos[r_i].y][self.pos[r_i].x+1] == States.OBS.value or self.grid[self.pos[r_i].y][self.pos[r_i].x+1] == States.ROBOT.value)
+        surroundings.append(left_is_boundary or self.grid[self.pos[r_i].y][self.pos[r_i].x-1] == States.OBS.value or self.grid[self.pos[r_i].y][self.pos[r_i].x-1] == States.ROBOT.value)
+        surroundings.append(top_is_boundary or self.grid[self.pos[r_i].y-1][self.pos[r_i].x] == States.OBS.value or self.grid[self.pos[r_i].y-1][self.pos[r_i].x] == States.ROBOT.value)
+        surroundings.append(bottom_is_boundary or self.grid[self.pos[r_i].y+1][self.pos[r_i].x] == States.OBS.value or self.grid[self.pos[r_i].y+1][self.pos[r_i].x] == States.ROBOT.value)
 
         return surroundings
     

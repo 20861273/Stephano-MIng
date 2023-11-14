@@ -509,41 +509,6 @@ class Environment:
         #     min_targets[ri] = [Point(c // WIDTH, c % WIDTH) for c in cells[0]]
         
         return min_targets
-
-    def in_bounds(self, id):
-        (x, y) = id
-        return 0 <= x < WIDTH and 0 <= y < HEIGHT
-    
-    def is_obstacle(self, id):
-        (x, y) = id
-
-        return self.grid[y,x] != States.OBS.value and self.grid[y,x] != States.ROBOT.value
-    
-    def get_neighbours(self):
-        neighbours = [[] for _ in range(self.nr)]
-        valid = []
-        for ri in range(self.nr):
-            x = self.pos[ri].x
-            y = self.pos[ri].y
-
-            if self.direction[ri] == "right":
-                neighbours[ri] = [Point(x+1, y), Point(x, y-1), Point(x, y+1)]
-            elif self.direction[ri] == "left":
-                neighbours[ri] = [Point(x, y-1), Point(x-1, y), Point(x, y+1)]
-            elif self.direction[ri] == "up":
-                neighbours[ri] = [Point(x+1, y), Point(x, y-1), Point(x-1, y)]
-            elif self.direction[ri] == "down":
-                neighbours[ri] = [Point(x+1, y), Point(x-1, y), Point(x, y+1)]
-
-            neighbours[ri] = list(filter(self.in_bounds, neighbours[ri]))
-            neighbours[ri] = list(filter(self.is_obstacle, neighbours[ri]))
-        
-            # checks if drone has more than 1 valid neighbour
-            if len(neighbours[ri]) > 1:
-                neighbours[ri] = []
-
-        return neighbours
-
         
     def scheduler(self, ongoing_frontiers):
         # set current positions to explored
@@ -554,6 +519,12 @@ class Environment:
         # if no more unexplored cells return to home
         if np.count_nonzero(temp_exploration_grid) == HEIGHT*WIDTH:
             return [self.starting_pos[ri] for ri in range(self.nr)]
+
+        # if on going frontier already searched
+        for ri in range(nr):
+            if ongoing_frontiers[ri] == None: continue
+            if temp_exploration_grid[ongoing_frontiers[ri].y, ongoing_frontiers[ri].x]:
+                ongoing_frontiers[ri] = None
         
         # gets the distance to all unvisited blocks
         if in_loop_dist:
@@ -567,17 +538,13 @@ class Environment:
                             temp_dist[Point(x,y)] = distance
                             distances[self.pos[ri]] = temp_dist
 
-        # get neighbours
-        neighbours = [[] for _ in range(self.nr)]
-        if fixed_wing: neigbours = self.get_neighbours()
-        
         # get costs of unexplored cells
         costs = [{} for _ in range(self.nr)]
         for ri in range(self.nr):
             # if ongoing_frontiers[ri] != None: continue
             for y in range(self.grid.shape[0]):
                 for x in range(self.grid.shape[1]):
-                    if not temp_exploration_grid[y,x] and True not in [Point(x,y) in neighbours[ri] for ri in range(self.nr)]:
+                    if not temp_exploration_grid[y,x]:
                         # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
                         costs[ri][Point(x,y)] = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][y*HEIGHT + x]
 
@@ -1089,7 +1056,7 @@ in_loop_dist = False
 preprocessing = True
 maneuvering = False
 fixed_wing = True
-test_iterations = 1000
+test_iterations = 10000
 saved_iterations = 10
 saves = []
 
@@ -1110,7 +1077,7 @@ nr = 3
 weight = 19
 obstacles = True
 obstacle_density = 0
-set_obstacles = True
+set_obstacles = False
 save_obstacles = False
 save_dir = os.path.join(dir_path, 'Save')
 if not os.path.exists(save_dir): os.makedirs(save_dir)
@@ -1191,7 +1158,7 @@ for i in range(test_iterations):
     successful_condition = True
     save = False
     planning_starting_time = time.time()
-    if i % 50 == 0: print(i)
+    if i % 500 == 0: print(i)
     if i != 0:
         env.reset(weight, i, goal_spawning)
         if not set_obstacles: distances = env.calculate_distances()
@@ -1510,6 +1477,7 @@ for drone_explorations in explorations_list:
 
 print_string = ""
 print_string += "Maneuvering: %s"%(str(maneuvering))
+print_string += "\nFixed wing: %s"%(str(fixed_wing))
 print_string += "\nFOV width: %dm\nFOV height: %dm" %(FOV_W, FOV_H)
 print_string += "\nTesting iterations: %d"%(test_iterations)
 print_string += "\nTesting time: %.2fh%.2fm%.2fs" %(th,tm,ts)
@@ -1522,6 +1490,7 @@ for ri in range(nr):
 print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_times)))
 print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times)))
 print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
+print_string += "\nObstacles: %.2f"%(obstacle_density)
 print(print_string)
 
 file_name = "results.txt"

@@ -16,15 +16,16 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-        "training": False,
-        "load checkpoint": False,
+        "training": True,
+        "load checkpoint": True,
+        "from start": True,
         "show rewards interval": 100,
         "show plot": False,
         "save plot": False,
-        "policy number": [0],
-        "session": [2],
-        "test type": "grid", # test types: grid and iterative
-        "testing iterations": 1000,
+        "policy number": [0,1,2],
+        "session": [0,1,2],
+        "test type": "iterative", # test types: grid and iterative
+        "testing iterations": 300,
         "goal spawning": True
     }
 
@@ -51,7 +52,7 @@ if __name__ == '__main__':
         "obstacles": False,
         "set obstacles": False,
         "obstacle density": 0.3,
-        "encoding": "local",
+        "encoding": "local_drone", #local
         "stacked frames": False,
         "input dims": (2,HEIGHT, WIDTH),
         "lidar": False,
@@ -93,7 +94,7 @@ if __name__ == '__main__':
     load_path = os.path.join(PATH, 'Saved_data')
     if not os.path.exists(load_path): os.makedirs(load_path)        
 
-    load_checkpoint_path = os.path.join(PATH, "02-10-2023 16h10m37s")
+    load_checkpoint_path = os.path.join(PATH, "drone_local_cont")
     if testing_parameters["load checkpoint"]:
         save_path = load_checkpoint_path
         models_path = os.path.join(save_path, 'models')
@@ -107,11 +108,18 @@ if __name__ == '__main__':
     env_size = '%sx%s' %(str(WIDTH), str(HEIGHT))
 
     if testing_parameters["load checkpoint"] and testing_parameters["training"]:
-        file_name = "hyperparameters.json"
-        file_name = os.path.join(load_checkpoint_path, file_name)
-        hp = read_json(file_name)
-        checkpoint = {'session':os.listdir(models_path)[-1][0]}
-        outliers = [[Point(0,2),Point(3,4)],[Point(1,0),Point(2,4)],[Point(2,4),Point(1,0)],[Point(3,4),Point(0,2)],[Point(5,5),Point(5,1)]]
+        if testing_parameters["from start"]:
+            file_name = "hyperparameters.json"
+            file_name = os.path.join(load_checkpoint_path, file_name)
+            hp = read_json(file_name)
+            checkpoint = {'session':0}
+            outliers = [[Point(0,2),Point(3,4)],[Point(1,0),Point(2,4)],[Point(2,4),Point(1,0)],[Point(3,4),Point(0,2)],[Point(5,5),Point(5,1)]]
+        else:
+            file_name = "hyperparameters.json"
+            file_name = os.path.join(load_checkpoint_path, file_name)
+            hp = read_json(file_name)
+            checkpoint = {'session':os.listdir(models_path)[-1][0]}
+            outliers = [[Point(0,2),Point(3,4)],[Point(1,0),Point(2,4)],[Point(2,4),Point(1,0)],[Point(3,4),Point(0,2)],[Point(5,5),Point(5,1)]]
     else:
         checkpoint = {'session':0}
         outliers = None
@@ -154,6 +162,8 @@ if __name__ == '__main__':
         else: hp["input dims"] = (1,HEIGHT, WIDTH)
     elif hp["encoding"] == "local":
         hp["input dims"] = (4)#+2*(hp["number of drones"]-1))
+    elif hp["encoding"] == "local_drone":
+        hp["input dims"] = (8)
 
     if hp["lidar"] and "image" not in hp["encoding"]:
         hp["input dims"][0] += 4
@@ -185,7 +195,7 @@ if __name__ == '__main__':
                                                             hp["n actions"], hp["starting beta"], hp["input dims"], hp["stacked frames"], hp["guide"], hp["lidar"], hp["fuel"],
                                                             hp["channels"], hp["kernel"], hp["stride"], hp["fc dims"],
                                                             hp["batch size"], hp["mem size"], hp["replace"], hp["nstep"], hp["nstep N"],
-                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, load_path, hp["env size"], testing_parameters["load checkpoint"], hp["device"], hp["lstm"],
+                                                            hp["prioritized"], models_path, save_path, load_checkpoint_path, load_path, hp["env size"], testing_parameters["load checkpoint"], testing_parameters["from start"], hp["device"], hp["lstm"],
                                                             outliers)
                                             elif hp["training type"] == "centralized actions":
                                                 load_checkpoint = distributed_dqn(

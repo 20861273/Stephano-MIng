@@ -26,6 +26,8 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
             from dqn_agent import DQNAgent
             from dqn_environment import Environment, HEIGHT, WIDTH, Point, States, Direction
 
+        max_steps = HEIGHT*WIDTH*3
+        
         for ts in range(hp["training sessions"]):
             if len(session) > 0:
                 if ts not in session: continue
@@ -140,7 +142,6 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                             # if y == 0 or y == HEIGHT-1:
                             #     continue
                             image_observation, non_image_observation = env.reset(10000, 99)
-                            env.calculate_distances()
 
                             for i in range(hp["number of drones"]): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = False
 
@@ -307,7 +308,6 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                                     # if y == 0 or y == HEIGHT-1:
                                     #     continue
                                     image_observation, non_image_observation = env.reset(10000, 99)
-                                    env.calculate_distances()
 
                                     for i in range(hp["number of drones"]): env.exploration_grid[env.starting_pos[i].y, env.starting_pos[i].x] = False
 
@@ -468,7 +468,7 @@ def test_centralized_dqn(policy_num, session, load_path, save_path, models_path,
                     print("Timed out: ", timeout_cntr)
             elif test == "iterative":
                 for i in range(0, testing_iterations):
-                    if i % 100 == 0 and i != 0:
+                    if i % 10 == 0 and i != 0:
                         print("%d: %.2f %%, %.2f steps" %(int(i), float(cnt)/float(i)*100, np.mean(np.array(steps))))
                     image_observation, non_image_observation = env.reset(10000, 99)
 
