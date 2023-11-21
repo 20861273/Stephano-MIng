@@ -291,7 +291,7 @@ class Astar:
             return None, None
     
 class Environment:
-    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir):
+    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, radius_spawning, spawning_radius_length, save_dir, load_obstacles, load_dir):
         # initalise variables
         self.nr = nr
         self.obstacles = obstacles
@@ -301,6 +301,9 @@ class Environment:
         self.save_dir = save_dir
         self.load_obstacles = load_obstacles
         self.load_dir = load_dir
+        self.distances = []
+        self.radius_spawning = radius_spawning
+        self.spawning_radius_length = spawning_radius_length
         
         # spawn grid
         self.starting_grid = np.zeros((HEIGHT, WIDTH))
@@ -373,38 +376,57 @@ class Environment:
                 HEIGHT = int(HEIGHT/2)*2
 
                 self.ES = Enclosed_space_check(int(HEIGHT/2), int(WIDTH/2), self.starting_grid, States)
-                self.starting_grid = self.ES.enclosed_space_handler()
+                self.ES_starting_grid = self.ES.enclosed_space_handler()
 
-                self.grids.append(self.starting_grid.tolist())
-
-                self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
+                self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
 
         self.grid = self.starting_grid.copy()
         
         # spawn drone
-        if self.load_obstacles and self.starting_positions[0] != []:
+        if self.load_obstacles and self.starting_positions[0] != []: # load existing positions
             self.starting_pos = [Point(self.starting_positions[i][ri].x*2, self.starting_positions[i][ri].y*2) for ri in range(nr)]
             for ri in range(self.nr):
                 self.pos[ri] = self.starting_pos[ri]
                 self.prev_pos[ri] = self.starting_pos[ri]
                 self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
-        else:
+        else: # generate new positions
             if self.set_obstacles:
-                indices = np.argwhere(np.array(self.grids[0]) == States.UNEXP.value)
+                indices = np.argwhere(np.array(self.ES_starting_grid) == States.UNEXP.value)
             else:
-                indices = np.argwhere(np.array(self.grids[i]) == States.UNEXP.value)
+                indices = np.argwhere(np.array(self.ES_starting_grid) == States.UNEXP.value)
             np.random.shuffle(indices)
-            save_starting_pos = [None]*nr
-            for ri in range(self.nr):
-                save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
-                self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
-                self.pos[ri] = self.starting_pos[ri]
-                self.prev_pos[ri] = self.starting_pos[ri]
-                self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
-                indices_list = indices.tolist()
-                del indices_list[0]
-                indices = np.array(indices_list)
+            if self.radius_spawning:
+                radius_center = Point(indices[0,1], indices[0,0])
+                spawning_radius = []
+                for x in range(radius_center.x - self.spawning_radius_length, radius_center.x + self.spawning_radius_length + 1):
+                    for y in range(radius_center.y - self.spawning_radius_length, radius_center.y + self.spawning_radius_length + 1):
+                        distance = math.sqrt((x - radius_center.x)**2 + (y - radius_center.y)**2)
+                        # if distance is equal or smaller than radius
+                        # AND within bounds
+                        # AND the state is unexplored
+                        if distance <= self.spawning_radius_length and 0 <= x < WIDTH/2 and 0 <= y < HEIGHT/2 and self.ES_starting_grid[y][x] == States.UNEXP.value:
+                            spawning_radius.append(Point(x, y))
+
+                save_starting_pos = [None]*nr
+                for ri in range(self.nr):
+                    save_starting_pos[ri] = spawning_radius[0]
+                    self.starting_pos[ri] = Point(spawning_radius[0].x*2, spawning_radius[0].y*2)
+                    self.pos[ri] = self.starting_pos[ri]
+                    self.prev_pos[ri] = self.starting_pos[ri]
+                    self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
+                    del spawning_radius[0]
+            else:
+                save_starting_pos = [None]*nr
+                for ri in range(self.nr):
+                    save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
+                    self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
+                    self.pos[ri] = self.starting_pos[ri]
+                    self.prev_pos[ri] = self.starting_pos[ri]
+                    self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
+                    indices_list = indices.tolist()
+                    del indices_list[0]
+                    indices = np.array(indices_list)
 
         # set directions
         self.direction = [None]*self.nr
@@ -424,9 +446,9 @@ class Environment:
                 self.goal = Point(self.goals[i].x*2, self.goals[i].y*2)
             else:
                 if self.set_obstacles:
-                    indices = np.argwhere(np.array(self.grids[0]) == States.UNEXP.value)
+                    indices = np.argwhere(np.array(self.ES_starting_grid) == States.UNEXP.value)
                 else:
-                    indices = np.argwhere(np.array(self.grids[i]) == States.UNEXP.value)
+                    indices = np.argwhere(np.array(self.ES_starting_grid) == States.UNEXP.value)
                 np.random.shuffle(indices)
                 save_goal_pos = Point(indices[0,1], indices[0,0])
                 self.goal = Point(indices[0,1]*2, indices[0,0]*2)
@@ -434,6 +456,7 @@ class Environment:
         if self.save_obstacles:
             self.starting_positions[i] = save_starting_pos.copy()
             self.goals[i] = save_goal_pos
+            self.grids.append(self.ES_starting_grid.tolist())
 
         # initialise exploration grid
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
@@ -525,6 +548,13 @@ class Environment:
             if ongoing_frontiers[ri] == None: continue
             if temp_exploration_grid[ongoing_frontiers[ri].y, ongoing_frontiers[ri].x]:
                 ongoing_frontiers[ri] = None
+                # delete on going path from dynamic obstacles
+                count = list(occupied_cells)[-1]
+                for c in range(steps, count+1):
+                    occupied_cells[c].remove(current_path[ri][c-steps])
+                    if len(occupied_cells[c]) == 0:
+                        del occupied_cells[c]
+                breakpoint
         
         # gets the distance to all unvisited blocks
         if in_loop_dist:
@@ -657,6 +687,7 @@ class Environment:
         best_combination = combinations[sum_costs.index(min_cost)]
         for ri in range(self.nr):
             targets[ri] = best_combination[ri]
+            # self.distances.append(costs[ri][targets[ri]])
             if self.pos[ri] != self.starting_pos[ri]:
                 done[ri] = False
             if targets[ri] != self.starting_pos[ri]:
@@ -1055,9 +1086,10 @@ each_drone = False
 in_loop_dist = False
 preprocessing = True
 maneuvering = False
-fixed_wing = True
-test_iterations = 10000
-saved_iterations = 10
+fixed_wing = False
+refuelling = False
+test_iterations = 100
+saved_iterations = 0
 saves = []
 
 # set directory path
@@ -1073,18 +1105,20 @@ if save_trajectory:
 
 # environment initialisations
 goal_spawning = True
+radius_spawning = True
+spawning_radius_length = 2
 nr = 3
 weight = 19
 obstacles = True
-obstacle_density = 0
-set_obstacles = False
-save_obstacles = False
+obstacle_density = 0.2
+set_obstacles = True
+save_obstacles = True
 save_dir = os.path.join(dir_path, 'Save')
 if not os.path.exists(save_dir): os.makedirs(save_dir)
-load_obstacles = True
+load_obstacles = False
 load_dir = os.path.join(PATH, 'Load') 
 if not os.path.exists(load_dir): os.makedirs(load_dir)
-env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
+env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, radius_spawning, spawning_radius_length, save_dir, load_obstacles, load_dir)
 env.reset(weight, 0, goal_spawning)
 
 # calculate distances
@@ -1154,6 +1188,7 @@ path_times = []
 frontier_list = [[] for _ in range(test_iterations)]
 counter = 0
 unsuccessful = 0
+sheduled_distances = []
 for i in range(test_iterations):
     successful_condition = True
     save = False
@@ -1165,6 +1200,9 @@ for i in range(test_iterations):
     obstacles = env.exploration_grid.copy()
     steps = 0
     actions = [[] for _ in range(nr)]
+    return_home = [False for _ in range(nr)]
+    fuel = [WIDTH*2 + HEIGHT*2 for _ in range(nr)]
+    refuel = [False for _ in range(nr)]
     trajectory = [[env.starting_pos[r]] for r in range(nr)]
     maneuvers = [[False] for r in range(nr)]
     current_path = [[] for _ in range(nr)]
@@ -1194,22 +1232,26 @@ for i in range(test_iterations):
             start_scheduler_time = time.time()
             frontiers = env.scheduler(ongoing_frontiers)
             end_scheduler_time = time.time()
-            k = 0
+            
             for ri in range(nr):
                 if frontiers[ri] == env.starting_pos[ri]:
-                    k += 1
-
-            if k == nr:
-                breakpoint
+                    return_home[ri] = True
         
         frontier_list[i].append(frontiers)
+
+        if refuelling:
+            for r in range(nr):
+                if done[r]: continue
+                if fuel[r] < distances[env.pos[ri].y*HEIGHT + env.pos[ri].x][env.starting_pos[r].y*HEIGHT + env.starting_pos[r].x]:
+                    refuel[r] = True
+                    frontiers[r] = env.starting_pos[r]
 
         # plan paths
         path_time = 0
         if maneuvering:
             for r in range(nr):
                 if env.pos[r] == frontiers[r]:# or done[r]:
-                    if env.pos[r] == env.starting_pos[r]:
+                    if return_home[r] and not refuel[r]:
                         ongoing_frontiers[r] = frontiers[r]
                         done[r] = True
                         which[r] = 0
@@ -1240,7 +1282,7 @@ for i in range(test_iterations):
         else:
             for r in range(nr):
                 if env.pos[r] == frontiers[r]:# or done[r]:
-                    if env.pos[r] == env.starting_pos[r]:
+                    if return_home[r]:
                         ongoing_frontiers[r] = frontiers[r]
                         done[r] = True
                         which[r] = 0
@@ -1325,7 +1367,7 @@ for i in range(test_iterations):
                         cntr = 0
                         n_plans = 0
 
-                        # delete on oing path fron dynamic obstacles
+                        # delete on oing path from dynamic obstacles
                         count = 0
                         for key, lst in temp_occupied_cells.items():
                             if len(lst) == 0 or lst[r] is not None:
@@ -1339,6 +1381,9 @@ for i in range(test_iterations):
                 if done[r]:
                     maneuvers[r].append(False)
                     continue
+                # count distance
+                sheduled_distances.append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][frontiers[r].y*HEIGHT + frontiers[r].x])
+
                 # execute move 
                 trajectory[r].append(current_path[r][0])
                 if maneuvering:
@@ -1491,6 +1536,7 @@ print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_ti
 print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times)))
 print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
 print_string += "\nObstacles: %.2f"%(obstacle_density)
+print_string += "\nDistances: %.2f"%(np.mean(np.array(sheduled_distances)))
 print(print_string)
 
 file_name = "results.txt"
