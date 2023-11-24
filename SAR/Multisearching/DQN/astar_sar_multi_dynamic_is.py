@@ -304,6 +304,17 @@ class Environment:
         self.distances = []
         self.radius_spawning = radius_spawning
         self.spawning_radius_length = spawning_radius_length
+        self.first = []
+        self.second = []
+        self.third = []
+        self.fourth = []
+        self.fifth = []
+        self.fifth_a = []
+        self.fifth_b = []
+        self.fifth_b_1 = []
+        self.fifth_b_2 = []
+        self.sixth = []
+        self.seventh = []
         
         # spawn grid
         self.starting_grid = np.zeros((HEIGHT, WIDTH))
@@ -534,6 +545,7 @@ class Environment:
         return min_targets
         
     def scheduler(self, ongoing_frontiers):
+        start = time.time()
         # set current positions to explored
         temp_exploration_grid = self.exploration_grid.copy()
         for ri in range(self.nr): 
@@ -542,6 +554,11 @@ class Environment:
         # if no more unexplored cells return to home
         if np.count_nonzero(temp_exploration_grid) == HEIGHT*WIDTH:
             return [self.starting_pos[ri] for ri in range(self.nr)]
+        
+        end = time.time()
+        self.first.append(end-start)
+
+        start = time.time()
 
         # if on going frontier already searched
         for ri in range(nr):
@@ -551,10 +568,14 @@ class Environment:
                 # delete on going path from dynamic obstacles
                 count = list(occupied_cells)[-1]
                 for c in range(steps, count+1):
+                    # checks that the current path of the drone is not shorter than the occupied cells dictionary
+                    if len(current_path[ri]) == c-steps: break
                     occupied_cells[c].remove(current_path[ri][c-steps])
                     if len(occupied_cells[c]) == 0:
                         del occupied_cells[c]
                 breakpoint
+        end = time.time()
+        self.second.append(end-start)
         
         # gets the distance to all unvisited blocks
         if in_loop_dist:
@@ -567,8 +588,11 @@ class Environment:
                             distance = self.get_distance(Point(x,y), self.pos[ri])
                             temp_dist[Point(x,y)] = distance
                             distances[self.pos[ri]] = temp_dist
+        
+        start = time.time()
 
         # get costs of unexplored cells
+        # TODO do without for loops
         costs = [{} for _ in range(self.nr)]
         for ri in range(self.nr):
             # if ongoing_frontiers[ri] != None: continue
@@ -577,6 +601,11 @@ class Environment:
                     if not temp_exploration_grid[y,x]:
                         # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
                         costs[ri][Point(x,y)] = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][y*HEIGHT + x]
+
+        end = time.time()
+        self.third.append(end-start)
+
+        start = time.time()
 
         # set minimum targets
         min_targets = self.get_min_targets(costs)
@@ -594,6 +623,11 @@ class Environment:
                     min_targets[ri] = [ongoing_frontiers[ri]]
                 else:
                     min_targets[ri] += next_min_targets[ri]
+        
+        end = time.time()
+        self.fourth.append(end-start)
+
+        start = time.time()
         
         # # set minimum targets (if working would be faster, excludes costs for loops)
         # min_targets = self.get_min_targets(distances)
@@ -616,6 +650,11 @@ class Environment:
         # get all combinations of best targets
         combinations = list(product(*min_targets))
 
+        end_a = time.time()
+        self.fifth_a.append(end_a-start)
+        start_b_1 = time.time()
+
+
         # find invalid combinations
         delete_indices = []
         for i,combination in enumerate(combinations):
@@ -623,14 +662,24 @@ class Environment:
                 delete_indices.append(i)
             # check drone neighbours
             # if drone only has 1 valid neighbour mark node as invalid for other drones
+        end_b_1 = time.time()
+        self.fifth_b_1.append(end_b_1-start_b_1)
+        start_b_2 = time.time()
         
         # delete invalid combinations
-        modified_combinations = [combinations[i] for i in range(len(combinations)) if i not in delete_indices]
+        delete_indices_set = set(delete_indices)
+        modified_combinations = [combination for i, combination in enumerate(combinations) if i not in delete_indices_set]
         combinations = modified_combinations.copy()
+
+        end = time.time()
+        self.fifth.append(end-start)
+        self.fifth_b.append(end-start_b_1)
+        self.fifth_b_2.append(end-start_b_2)
 
         # if no equal targets
         targets = [None]*self.nr
         if len(combinations) > 0:
+            start = time.time()
             # find sum costs of combinations
             sum_costs = []
             for combination in combinations:
@@ -650,7 +699,12 @@ class Environment:
             if not self.exploration_grid.all() and all([targets[ri] == self.starting_pos[ri] for ri in range(self.nr)]) and targets[0] == self.starting_pos[0]:
                 breakpoint
 
+            end = time.time()
+            self.sixth.append(end-start)
+
             return targets
+
+        start = time.time()
         
         # add starting positions to maximum targets with lower value
         for ri in range(self.nr):
@@ -695,6 +749,9 @@ class Environment:
 
         if not self.exploration_grid.all() and all([targets[ri] == self.starting_pos[ri] for ri in range(self.nr)]) and targets[0] == self.starting_pos[0]:
             breakpoint
+
+        end = time.time()
+        self.seventh.append(end-start)
 
         return targets
     
@@ -1088,7 +1145,7 @@ preprocessing = True
 maneuvering = False
 fixed_wing = False
 refuelling = False
-test_iterations = 100
+test_iterations = 3
 saved_iterations = 0
 saves = []
 
@@ -1107,7 +1164,7 @@ if save_trajectory:
 goal_spawning = True
 radius_spawning = True
 spawning_radius_length = 2
-nr = 3
+nr = 4
 weight = 19
 obstacles = True
 obstacle_density = 0.2
@@ -1537,6 +1594,7 @@ print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_tim
 print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
 print_string += "\nObstacles: %.2f"%(obstacle_density)
 print_string += "\nDistances: %.2f"%(np.mean(np.array(sheduled_distances)))
+print_string += "\nFirst: %.8f, Second: %.8f, Third: %.8f, Fourth: %.8f, Fifth: %.8f, Fifth A: %.8f, Fifth B: %.8f, Fifth B1: %.8f, Fifth B2: %.8f, Sixth: %.8f, Seventh: %.8f"%(np.mean(np.array(env.first)),np.mean(np.array(env.second)),np.mean(np.array(env.third)),np.mean(np.array(env.fourth)),np.mean(np.array(env.fifth)),np.mean(np.array(env.fifth_a)),np.mean(np.array(env.fifth_b)),np.mean(np.array(env.fifth_b_1)),np.mean(np.array(env.fifth_b_2)),np.mean(np.array(env.sixth)),np.mean(np.array(env.seventh)))
 print(print_string)
 
 file_name = "results.txt"
