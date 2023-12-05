@@ -13,10 +13,11 @@ from itertools import product
 import pickle
 from collections import deque
 import math
+from functools import reduce
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 50
-WIDTH = 50
+HEIGHT = 20
+WIDTH = 20
 
 # Chosen values
 height = 100 # m
@@ -357,6 +358,7 @@ class Environment:
         # spawn grid
         global WIDTH
         global HEIGHT
+        global distances
         self.grid = np.zeros((HEIGHT, WIDTH))
 
         self.weight = weight
@@ -391,6 +393,7 @@ class Environment:
 
                 self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
+                distances = env.calculate_distances()
 
         self.grid = self.starting_grid.copy()
         
@@ -410,6 +413,10 @@ class Environment:
             if self.radius_spawning:
                 all_selected = False
                 while not all_selected:
+                    if indices.size == 0:
+                        print("No solution where all nodes can be searched with limited fuel.")
+                        print(self.ES_starting_grid)
+                        self.reset(weight, i, goal_spawning)
                     radius_center = Point(indices[0,1], indices[0,0])
                     indices = indices.tolist()
                     del indices[0]
@@ -423,8 +430,35 @@ class Environment:
                             # AND the state is unexplored
                             if distance <= self.spawning_radius_length and 0 <= x < WIDTH/2 and 0 <= y < HEIGHT/2 and self.ES_starting_grid[y][x] == States.UNEXP.value:
                                 spawning_radius.append(Point(x, y))
+                    # check if all drones have been spawned
                     if len(spawning_radius) >= self.nr:
-                        all_selected = True
+                        # check if all nodes can be reached with limited fuel
+                        if refuelling:
+                            out_of_reach = [[] for spawn in spawning_radius]
+                            for j in range(self.nr):
+                                # get all node distances from spawning location
+                                node_distances = distances[spawning_radius[j].y*HEIGHT+spawning_radius[j].x]
+                                # get indices of out of reach nodes
+                                out_of_reach_indices = np.argwhere(np.array(node_distances) != WIDTH*HEIGHT).flatten()
+                                out_of_reach_indices = np.argwhere(np.array(out_of_reach_indices) >= (starting_fuel-refuel_threshold)/2).flatten()
+                                # get coordinates of out of reach nodes
+                                # out_of_reach_nodes = np.array([np.where(node_distances == k) for k in out_of_reach_indices]).flatten()
+                                out_of_reach[j] = np.array([(index % WIDTH, index // HEIGHT) for index in out_of_reach_indices]).flatten()
+                                breakpoint
+
+                            # check for nr spawning locations which can reach all nodes
+                            no_common_values_found = True
+                            for k in range(len(out_of_reach)):
+                                for j in range(k + 1, len(out_of_reach)):
+                                    common_values = np.intersect1d(out_of_reach[k], out_of_reach[j])
+                                    if common_values.size == 0:
+                                        no_common_values_found = False
+                            
+                            if not no_common_values_found:
+                                all_selected = True
+                            else:
+                                breakpoint
+
 
                 save_starting_pos = [None]*nr
                 for ri in range(self.nr):
@@ -1153,6 +1187,12 @@ preprocessing = True
 maneuvering = False
 fixed_wing = False
 refuelling = True
+if WIDTH > HEIGHT:
+    starting_fuel = (WIDTH*4 + HEIGHT*2)
+else:
+    starting_fuel = (HEIGHT*4 + WIDTH*2)
+
+refuel_threshold = 3
 test_iterations = 1000
 saved_iterations = 2
 saves = []
@@ -1169,14 +1209,14 @@ if save_trajectory:
     if not os.path.exists(dir_path): os.makedirs(dir_path)
 
 # environment initialisations
-goal_spawning = False
+goal_spawning = True
 radius_spawning = True
 spawning_radius_length = 1
 nr = 2
 weight = 19
 obstacles = True
 obstacle_density = 0.2
-set_obstacles = True
+set_obstacles = False
 save_obstacles = True
 save_dir = os.path.join(dir_path, 'Save')
 if not os.path.exists(save_dir): os.makedirs(save_dir)
@@ -1262,21 +1302,19 @@ for i in range(test_iterations):
     if i % 500 == 0: print(i)
     if i != 0:
         env.reset(weight, i, goal_spawning)
-        if not set_obstacles: distances = env.calculate_distances()
     obstacles = env.exploration_grid.copy()
     steps = 0
     actions = [[] for _ in range(nr)]
     return_home = [False for _ in range(nr)]
-    starting_fuel = WIDTH*2 + HEIGHT*2
     fuel = [starting_fuel for _ in range(nr)]
     refuel = [False for _ in range(nr)]
-    refuel_threshold = 3
     trajectory = [[env.starting_pos[r]] for r in range(nr)]
     maneuvers = [[False] for r in range(nr)]
     current_path = [[] for _ in range(nr)]
     current_maneuvers = [[] for _ in range(nr)]
     finished_scheduling = [False]*nr
     which = [False]*nr
+    r_which = []
     occupied_cells = {}
     occupied_cells[steps] = []
     explorations = [0]*nr
@@ -1286,7 +1324,7 @@ for i in range(test_iterations):
     ongoing_frontiers = [None]*nr
     exit_condition = False
     while not env.exploration_grid.all() and not exit_condition and planning_successful:
-        if steps > 40:
+        if steps > 1000:
             breakpoint
         if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]) and finished_scheduling[ri] == True:
             breakpoint
@@ -1302,6 +1340,9 @@ for i in range(test_iterations):
                 if finished_scheduling[r] or return_home[r] or refuel[r]: continue
                 if fuel[r]-refuel_threshold < distances[env.pos[r].y*HEIGHT + env.pos[r].x][env.starting_pos[r].y*HEIGHT + env.starting_pos[r].x]:
                     refuel[r] = True
+                    r_which.append(env.pos)
+                    r_which.append(fuel[r]-refuel_threshold)
+                    r_which.append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][env.starting_pos[r].y*HEIGHT + env.starting_pos[r].x])
                     frontiers[r] = env.starting_pos[r]
                     ongoing_frontiers[r] = None
                     if len(current_path[r]) != 0:
@@ -1365,13 +1406,14 @@ for i in range(test_iterations):
             for r in range(nr):
                 if env.pos[r] == frontiers[r] and env.pos[r] == env.starting_pos[r]:# or done[r]:
                     if return_home[r] and not finished_scheduling[r]:
-                        ongoing_frontiers[r] = frontiers[r]
+                        
                         finished_scheduling[r] = True
                         which[r] = 0
                         if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]):
                             save = True
                         if all([finished_scheduling[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT and finished_scheduling[ri] == True:
                             breakpoint
+                        ongoing_frontiers[r] = frontiers[r]
                     continue
                 
             # initialise replanning sequence
@@ -1494,7 +1536,7 @@ for i in range(test_iterations):
 
                 env.move(r, current_path[r][0])
                 fuel[r] -= 1
-                if fuel[r] < 0:
+                if refuelling and fuel[r] < 0:
                     print("Drone %d has crashed!!!" %(r))
                 
                 # check if drone reached frontier
