@@ -393,7 +393,7 @@ class Environment:
 
                 self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
-                distances = env.calculate_distances()
+                if i==0 or not self.set_obstacles: distances = env.calculate_distances()
 
         self.grid = self.starting_grid.copy()
         
@@ -458,6 +458,8 @@ class Environment:
                                 all_selected = True
                             else:
                                 breakpoint
+                        elif len(spawning_radius) >= self.nr:
+                            all_selected = True
 
 
                 save_starting_pos = [None]*nr
@@ -622,6 +624,7 @@ class Environment:
                     occupied_cells[c].remove(current_path[ri][c-steps])
                     if len(occupied_cells[c]) == 0:
                         del occupied_cells[c]
+                current_path[ri] = []
                 breakpoint
 
         end = time.time()
@@ -1209,10 +1212,10 @@ if save_trajectory:
     if not os.path.exists(dir_path): os.makedirs(dir_path)
 
 # environment initialisations
-goal_spawning = True
+goal_spawning = False
 radius_spawning = True
-spawning_radius_length = 1
-nr = 2
+spawning_radius_length = 3
+nr = 3
 weight = 19
 obstacles = True
 obstacle_density = 0.2
@@ -1356,12 +1359,24 @@ for i in range(test_iterations):
                                 del occupied_cells[c]
 
         # get frontiers
+        temp_ongoing_frontiers = ongoing_frontiers.copy()
         if any(frontier is None for frontier in ongoing_frontiers) and not all(refuel):
             start_scheduler_time = time.time()
             frontiers = env.scheduler(ongoing_frontiers)
             end_scheduler_time = time.time()
             
             for ri in range(nr):
+                # # check if on going frontiers was overwritten
+                # if temp_ongoing_frontiers[ri] != ongoing_frontiers[ri] and len(current_path[ri]) != 0:
+                #     # delete on going path from dynamic obstacles
+                #     count = list(occupied_cells)[-1]
+                #     for c in range(steps, count+1):
+                #         # checks that the current path of the drone is not shorter than the occupied cells dictionary
+                #         if len(current_path[ri]) == c-steps: break
+                #         occupied_cells[c].remove(current_path[ri][c-steps])
+                #         if len(occupied_cells[c]) == 0:
+                #             del occupied_cells[c]
+
                 if frontiers[ri] == env.starting_pos[ri]:
                     return_home[ri] = True
                 else:
@@ -1453,16 +1468,27 @@ for i in range(test_iterations):
                     if current_path[r] != None:
                         del current_path[r][0]
 
-                        if len(current_path[r]) > fuel[r]:
+                        # for debugging
+                        if refuelling and len(current_path[r]) > fuel[r]:
                             breakpoint
+
+                        # for debugging
+                        for path_step, pos in enumerate(current_path[r]):
+                            if steps+path_step not in temp_occupied_cells: continue
+                            if len(temp_occupied_cells[steps+path_step]) > nr:
+                                breakpoint
                 
                         # add path to occupied cells
                         for path_step, pos in enumerate(current_path[r]):
                             if steps+path_step not in temp_occupied_cells: temp_occupied_cells[steps+path_step] = []
+                            # for debugging
                             if pos in temp_occupied_cells[steps+path_step]:
                                 breakpoint
+                            # for debugging
+                            if len(temp_occupied_cells[steps+path_step]) == nr:
+                                breakpoint
                             temp_occupied_cells[steps+path_step].append(pos)
-                            
+                            # for debugging
                             if len(temp_occupied_cells[steps+path_step]) > nr:
                                 breakpoint
                     else:
@@ -1496,23 +1522,27 @@ for i in range(test_iterations):
                         planning_successful = False
                         unsuccessful += 1
                         planning = False
+                        for ri in range(nr):
+                            env.print_graph(ri, steps-1, trajectory[ri], maneuvers[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i, False)
                     else:
+                        # delete on going path from dynamic obstacles
+                        count = list(temp_occupied_cells)[-1]
+                        
+                        for c in range(steps, count+1):
+                            # checks that the current path of the drone is not shorter than the occupied cells dictionary
+                            # if current_path[ri] == None or len(current_path[ri]) == c-steps: break
+                            # temp_occupied_cells[c].remove(current_path[ri][c-steps])
+                            # if len(temp_occupied_cells[c]) == 0:
+                            del occupied_cells[c]
+                            del temp_occupied_cells[c]
+                        current_path = [[] for _ in range(nr)]
+
                         # replan all paths again without any ongoing paths
                         replan_ongoing = True
                         prior_r = 0
                         r = prior_r
                         cntr = 0
                         n_plans = 0
-
-                        # delete on going path from dynamic obstacles
-                        count = list(temp_occupied_cells)[-1]
-                        for c in range(steps, count+1):
-                            # checks that the current path of the drone is not shorter than the occupied cells dictionary
-                            if len(current_path[r]) == c-steps: break
-                            temp_occupied_cells[c].remove(current_path[r][c-steps])
-                            if len(temp_occupied_cells[c]) == 0:
-                                del occupied_cells[c]
-                                del temp_occupied_cells[c]
             
         if planning_successful:
             for r in range(nr):
