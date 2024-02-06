@@ -1123,9 +1123,9 @@ class Environment:
         else:
             file_name = "trajectory%d_step%d.png"%(cnt, steps)
         plt.savefig(os.path.join(dir_path, file_name))
-        plt.show()
-        plt.pause(0.0005)
-        # plt.close()
+        # plt.show()
+        # plt.pause(0.0005)
+        plt.close()
 
 # weights test
 # weight = np.arange(1,20)
@@ -1189,14 +1189,14 @@ in_loop_dist = False
 preprocessing = True
 maneuvering = False
 fixed_wing = False
-refuelling = True
+refuelling = False
 if WIDTH > HEIGHT:
     starting_fuel = (WIDTH*4 + HEIGHT*2)
 else:
     starting_fuel = (HEIGHT*4 + WIDTH*2)
 
 refuel_threshold = 3
-test_iterations = 1000
+test_iterations = 10000
 saved_iterations = 2
 saves = []
 
@@ -1212,13 +1212,13 @@ if save_trajectory:
     if not os.path.exists(dir_path): os.makedirs(dir_path)
 
 # environment initialisations
-goal_spawning = False
-radius_spawning = True
+goal_spawning = True
+radius_spawning = False
 spawning_radius_length = 3
-nr = 3
+nr = 2
 weight = 19
 obstacles = True
-obstacle_density = 0.2
+obstacle_density = 0.5
 set_obstacles = False
 save_obstacles = True
 save_dir = os.path.join(dir_path, 'Save')
@@ -1297,7 +1297,7 @@ path_times = []
 frontier_list = [[] for _ in range(test_iterations)]
 counter = 0
 unsuccessful = 0
-sheduled_distances = []
+sheduled_distances = [[] for _ in range(nr)]
 for i in range(test_iterations):
     planning_successful = True
     save = False
@@ -1550,7 +1550,8 @@ for i in range(test_iterations):
                     maneuvers[r].append(False)
                     continue
                 # count distance
-                sheduled_distances.append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][frontiers[r].y*HEIGHT + frontiers[r].x])
+                if frontiers[r] != ongoing_frontiers[r]:
+                    sheduled_distances[r].append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][frontiers[r].y*HEIGHT + frontiers[r].x])
 
                 # execute move 
                 trajectory[r].append(current_path[r][0])
@@ -1712,7 +1713,20 @@ print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_ti
 print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times)))
 print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
 print_string += "\nObstacles: %.2f"%(obstacle_density)
-print_string += "\nDistances: %.2f"%(np.mean(np.array(sheduled_distances)))
+for r in range(nr):
+    # Count the occurrences of each unique number
+    unique_numbers, counts = np.unique(sheduled_distances[r], return_counts=True)
+    # Clear the existing figure
+    plt.clf()
+    # Plotting the histogram
+    plt.bar(unique_numbers, counts, color='blue', alpha=0.7)
+    plt.xlabel('Planned distances')
+    plt.ylabel('Occurrences')
+    plt.title('Histogram of distances for drone %d'%(r))
+    # Save the histogram as a PNG file
+    file_name = 'distance_hist_%d.png' %(r)
+    plt.savefig(os.path.join(dir_path, file_name))
+    # print_string += "\nDistances for drone %d: %.2f"%(np.mean(np.array(sheduled_distances[r])))
 print_string += "\nFirst: %.8f, Second: %.8f, Third: %.8f, Fourth: %.8f, Fifth: %.8f, Fifth A: %.8f, Fifth B: %.8f, Fifth B1: %.8f, Fifth B2: %.8f, Sixth: %.8f, Seventh: %.8f"%(np.mean(np.array(env.first)),np.mean(np.array(env.second)),np.mean(np.array(env.third)),np.mean(np.array(env.fourth)),np.mean(np.array(env.fifth)),np.mean(np.array(env.fifth_a)),np.mean(np.array(env.fifth_b)),np.mean(np.array(env.fifth_b_1)),np.mean(np.array(env.fifth_b_2)),np.mean(np.array(env.sixth)),np.mean(np.array(env.seventh)))
 print(print_string)
 
