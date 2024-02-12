@@ -124,50 +124,19 @@ class Grid(object):
     def is_obstacle(self, id, current_id, path_step):
         (x, y) = id
         temp_grid = env.grid.copy()
-        # if not preprocessing:
-        #     if path_step == 0:
-        #         for ri in range(nr):
-        #             if r > ri:
-        #                 # on location collision
-        #                 # make next position of drone an obstacle 
-        #                 temp_grid[env.pos[ri].y, env.pos[ri].x] = States.OBS.value
-
-        #                 # cross location collision
-        #                 # if current location of drone is equal to next position id
-        #                 # and previous location of drone is equal to current position id
-        #                 # make current position id obstacle
-        #                 if env.prev_pos[ri] ==  Point(x,y)\
-        #                     and env.pos[ri] == Point(current_id[0],current_id[1]):
-        #                     temp_grid[y, x] = States.OBS.value
 
         return temp_grid[y,x] != States.OBS.value
 
     def neighbors(self, id, path_step, direction):
         (x, y) = id
-        
-        if preprocessing or not fixed_wing:
-            # (right, up, left, down)
-            results = [Point(x+1, y), Point(x, y-1), Point(x-1, y), Point(x, y+1)]
-        else:
-            if direction == "right":
-                results = [Point(x+1, y), Point(x, y-1), Point(x, y+1)]
-            elif direction == "left":
-                results = [Point(x, y-1), Point(x-1, y), Point(x, y+1)]
-            elif direction == "up":
-                results = [Point(x+1, y), Point(x, y-1), Point(x-1, y)]
-            elif direction == "down":
-                results = [Point(x+1, y), Point(x-1, y), Point(x, y+1)]
+
+        # (right, up, left, down)
+        results = [Point(x+1, y), Point(x, y-1), Point(x-1, y), Point(x, y+1)]
         
         # This is done to prioritise straight paths
         #if (x + y) % 2 == 0: results.reverse()
         results = list(filter(self.in_bounds, results))
         results = list(filter(lambda k: self.is_obstacle(k, id, path_step), results))
-        if len(results) == 0:
-            breakpoint
-        # if occupied_cells != None:
-        #     results = list(filter(lambda k: self.is_collision(k, cr, x, y, path_step), results))
-        # if len(results) == 0:
-        #     breakpoint
         return results
 
 class Astar:
@@ -184,127 +153,99 @@ class Astar:
     def reconstruct_path(self, start, end, id=None): #: dict[Location, Location], : Location, : Location
         current = end
         path = [current]
-        if maneuvering: reconstructed_maneuvers = [maneuvers[r][steps-1]]
         while (id,current) != (0,start):
+            # for debugging
             if (id,current) not in self.came_from:
                 print((id,current) ,self.came_from)
                 print(self.grid, self.start, end, "this one")
-                
-            if maneuvering:
-                maneuver = self.came_from_maneuvers[(id, current)][2]
+
             new_id, new_current = self.came_from[(id, current)]
             current = new_current
             id = new_id
             path.append(current)
-            if maneuvering: reconstructed_maneuvers.append(maneuver)
         path.reverse()
-        if maneuvering:
-            reconstructed_maneuvers.reverse()
-            return path, reconstructed_maneuvers
-        else:
-            return path
+        return path
 
     # A* algorithm
     def a_star(self, start, end, grid, dynamic_obstacles, direction=None):
-        self.grid = grid
-        self.dynamic_obstacles = dynamic_obstacles
-        self.graph = Grid(HEIGHT, WIDTH, grid, direction)
-        self.start = start
-        self.came_from = {}
-        self.cost_so_far = {}
-        self.heap = [(0, 0, start, direction)]
-        if maneuvering:
-            self.came_from_maneuvers = {(0,start):(-1, env.prev_pos[r], maneuvers[r][steps-1])}
-            # self.cost_so_far[start] = 0
-        self.cost_so_far[(0,start)] = 0
+        self.grid = grid # grid for debugging
+        self.dynamic_obstacles = dynamic_obstacles # tracks dynamic obstacles (drones)
+        self.graph = Grid(HEIGHT, WIDTH, grid, direction) # up to date environment without dynamic obstacles
+        self.start = start # starting position
+        self.came_from = {} # tree
+        self.cost_so_far = {} # closed set
+        self.heap = [(0, 0, start, direction)] # open set
+        
+        self.cost_so_far[(0,start)] = 0 # initialise the costs
         current = start
         found = False
         id = 0
         
         while len(self.heap) > 0:
-            _, id, current, direction = heapq.heappop(self.heap)
+            _, id, current, direction = heapq.heappop(self.heap) # pop open set
             path_step = id
+            # if the current cell is equal to the end cell
             if current == end:
                 found = True
                 break
-            
+            # for debugging
             if id > HEIGHT*WIDTH:
                 breakpoint
                 print("Maybe stuck...")
             
-            self.neighbors = self.graph.neighbors(current, path_step, direction)
+            self.neighbors = self.graph.neighbors(current, path_step, direction) # get neighbours
             for next_node in self.neighbors:
-                maneuver = False
                 # on location collision
                 # if a drone has planned thus far
                 # AND a drone is on next_node location
-                # AND current is not a maneuver action
                 if steps+path_step in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step]:
-                    if maneuvering:
-                        # if steps+path_step-2 in self.dynamic_obstacles and current not in self.dynamic_obstacles[steps+path_step-2]:
-                        if current in self.came_from_maneuvers and self.came_from_maneuvers[current][1]:
-                            continue
-                        maneuver = True
-                    else:
-                        continue
+                    continue
                 # cross location collision
                 # current is in dynamic obstacles on next step
                 if steps+path_step in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step]:
                     # next node is in dynamic obstacles on previous step
                     if steps+path_step-1 in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step-1]:
-                        if maneuvering:
-                            maneuver = True
-                        else:
-                            continue
+                        continue
 
-                if maneuvering and maneuver:
-                    new_cost = self.cost_so_far[(id,current)] + self.heuristic(current, next_node) + 3
-                else:
-                    new_cost = self.cost_so_far[(id,current)] + self.heuristic(current, next_node)
-            
+                new_cost = self.cost_so_far[(id,current)] + self.heuristic(current, next_node)
+
+                # if next node and next id is not in the closed set
+                # add to closed and open sets
                 if (id+1,next_node) not in self.cost_so_far:
                     self.cost_so_far[(id+1,next_node)] = new_cost
-                    if fixed_wing:
-                        if current.x < next_node.x: # right
-                            direction = "right"
-                        elif current.x > next_node.x: # left
-                            direction = "left"
-                        elif current.y < next_node.y: # down
-                            direction = "down"
-                        elif current.y > next_node.y: # up
-                            direction = "up"
                     priority = new_cost + self.heuristic(next_node, end)
                     heapq.heappush(self.heap, (priority, id+1, next_node, direction))
                     self.came_from[(id+1,next_node)] = (id, current)
-                    if maneuvering: self.came_from_maneuvers[(id+1,next_node)] = (id, current, maneuver)
         
+        # if current cell is equal to end cell
+        # then the end cell is found
         if current == end:
             found = True
         # if current != end:
         #     print("bugga%d"%(i))
+            
+        # if the end cell was found
+        # then reconstruct path
+        # else return nothing
         if found:
-            if maneuvering:
-                return self.reconstruct_path(start, end, id)
-            else:
-                self.which = 1
-                return self.reconstruct_path(start, end, id), []
+            self.which = 1
+            return self.reconstruct_path(start, end, id)
         else:
-            return None, None
+            return None
     
 class Environment:
-    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, radius_spawning, spawning_radius_length, save_dir, load_obstacles, load_dir):
+    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir):
         # initalise variables
         self.nr = nr
-        self.obstacles = obstacles
-        self.set_obstacles = set_obstacles
-        self.obstacle_density = obstacle_density
-        self.save_obstacles = save_obstacles
-        self.save_dir = save_dir
-        self.load_obstacles = load_obstacles
-        self.load_dir = load_dir
-        self.distances = []
-        self.radius_spawning = radius_spawning
-        self.spawning_radius_length = spawning_radius_length
+        self.obstacles = obstacles # turn obstacles on or off
+        self.set_obstacles = set_obstacles # set obstacles to random or static
+        self.obstacle_density = obstacle_density # sets density
+        self.save_obstacles = save_obstacles # sets if obstacle layout is saved
+        self.save_dir = save_dir # points to path to save
+        self.load_obstacles = load_obstacles # sets if obstacle layout should be loaded from previous simulation
+        self.load_dir = load_dir #  points to path to load from  
+        self.distances = [] # list of distances to each cell
+        # for debugging
         self.first = []
         self.second = []
         self.third = []
@@ -352,38 +293,33 @@ class Environment:
                 # Deserialize and read the sublists using pickle.load()
                 self.goals = pickle.load(file)
 
-        breakpoint
-
-    def reset(self, weight, i, goal_spawning):
+    def reset(self, goal_spawning, i=0):
         # spawn grid
         global WIDTH
         global HEIGHT
         global distances
         self.grid = np.zeros((HEIGHT, WIDTH))
 
-        self.weight = weight
-        # obstacles
+        # generates obstacles
         if self.obstacles:
             if self.load_obstacles:
                 self.starting_grid = np.array(self.grids[i])
                 self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
-            elif preprocessing or not self.set_obstacles:
+            elif not self.set_obstacles:
                 self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
                 
-                    # Calculate the number of elements to be filled with 1's
+                # Calculate the number of elements to be filled with 1's
                 total_elements = int(HEIGHT/2) * int(WIDTH/2)
                 num_ones_to_place = math.ceil(self.obstacle_density * total_elements)
 
-                    # Generate random indices to place 1's
+                # Generate random indices to place 1's
                 possible_indexes = np.argwhere(np.array(self.starting_grid) == States.UNEXP.value)
                 np.random.shuffle(possible_indexes)
                 indexes = possible_indexes[:num_ones_to_place]
 
-                    # Set the elements at the random indices to 1
+                # Set the elements at the random indices to 1
                 self.starting_grid[indexes[:, 0], indexes[:, 1]] = States.OBS.value
-
-                # self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
 
                 WIDTH = int(WIDTH/2)*2
                 HEIGHT = int(HEIGHT/2)*2
@@ -410,77 +346,17 @@ class Environment:
             else:
                 indices = np.argwhere(np.array(self.ES_starting_grid) == States.UNEXP.value)
             np.random.shuffle(indices)
-            if self.radius_spawning:
-                all_selected = False
-                while not all_selected:
-                    if indices.size == 0:
-                        print("No solution where all nodes can be searched with limited fuel.")
-                        print(self.ES_starting_grid)
-                        self.reset(weight, i, goal_spawning)
-                    radius_center = Point(indices[0,1], indices[0,0])
-                    indices = indices.tolist()
-                    del indices[0]
-                    indices = np.array(indices)
-                    spawning_radius = []
-                    for x in range(radius_center.x - self.spawning_radius_length, radius_center.x + self.spawning_radius_length + 1):
-                        for y in range(radius_center.y - self.spawning_radius_length, radius_center.y + self.spawning_radius_length + 1):
-                            distance = math.sqrt((x - radius_center.x)**2 + (y - radius_center.y)**2)
-                            # if distance is equal or smaller than radius
-                            # AND within bounds
-                            # AND the state is unexplored
-                            if distance <= self.spawning_radius_length and 0 <= x < WIDTH/2 and 0 <= y < HEIGHT/2 and self.ES_starting_grid[y][x] == States.UNEXP.value:
-                                spawning_radius.append(Point(x, y))
-                    # check if all drones have been spawned
-                    if len(spawning_radius) >= self.nr:
-                        # check if all nodes can be reached with limited fuel
-                        if refuelling:
-                            out_of_reach = [[] for spawn in spawning_radius]
-                            for j in range(self.nr):
-                                # get all node distances from spawning location
-                                node_distances = distances[spawning_radius[j].y*HEIGHT+spawning_radius[j].x]
-                                # get indices of out of reach nodes
-                                out_of_reach_indices = np.argwhere(np.array(node_distances) != WIDTH*HEIGHT).flatten()
-                                out_of_reach_indices = np.argwhere(np.array(out_of_reach_indices) >= (starting_fuel-refuel_threshold)/2).flatten()
-                                # get coordinates of out of reach nodes
-                                # out_of_reach_nodes = np.array([np.where(node_distances == k) for k in out_of_reach_indices]).flatten()
-                                out_of_reach[j] = np.array([(index % WIDTH, index // HEIGHT) for index in out_of_reach_indices]).flatten()
-                                breakpoint
 
-                            # check for nr spawning locations which can reach all nodes
-                            no_common_values_found = True
-                            for k in range(len(out_of_reach)):
-                                for j in range(k + 1, len(out_of_reach)):
-                                    common_values = np.intersect1d(out_of_reach[k], out_of_reach[j])
-                                    if common_values.size == 0:
-                                        no_common_values_found = False
-                            
-                            if not no_common_values_found:
-                                all_selected = True
-                            else:
-                                breakpoint
-                        elif len(spawning_radius) >= self.nr:
-                            all_selected = True
-
-
-                save_starting_pos = [None]*nr
-                for ri in range(self.nr):
-                    save_starting_pos[ri] = spawning_radius[0]
-                    self.starting_pos[ri] = Point(spawning_radius[0].x*2, spawning_radius[0].y*2)
-                    self.pos[ri] = self.starting_pos[ri]
-                    self.prev_pos[ri] = self.starting_pos[ri]
-                    self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
-                    del spawning_radius[0]
-            else:
-                save_starting_pos = [None]*nr
-                for ri in range(self.nr):
-                    save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
-                    self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
-                    self.pos[ri] = self.starting_pos[ri]
-                    self.prev_pos[ri] = self.starting_pos[ri]
-                    self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
-                    indices_list = indices.tolist()
-                    del indices_list[0]
-                    indices = np.array(indices_list)
+            save_starting_pos = [None]*nr
+            for ri in range(self.nr):
+                save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
+                self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
+                self.pos[ri] = self.starting_pos[ri]
+                self.prev_pos[ri] = self.starting_pos[ri]
+                self.grid[self.starting_pos[ri].y, self.starting_pos[ri].x] = States.ROBOT.value
+                indices_list = indices.tolist()
+                del indices_list[0]
+                indices = np.array(indices_list)
 
         # set directions
         self.direction = [None]*self.nr
@@ -542,58 +418,22 @@ class Environment:
             self.direction[r] = "down"
         elif self.prev_pos[r].y > self.pos[r].y: # up
             self.direction[r] = "up"
-
-    def get_distance(self, end, start):
-        return abs(start.x - end.x) + abs(start.y - end.y)
-
-    def get_closest_unexplored(self):
-        distances = {}
-        temp_exploration_grid = self.exploration_grid.copy()
-        temp_exploration_grid[self.pos.y, self.pos.x] = True
-        
-        # gets the distance to all unvisited blocks
-        for y in range(self.grid.shape[0]):
-            for x in range(self.grid.shape[1]):
-                if temp_exploration_grid[y,x] == False:
-                    distance = self.get_distance(Point(x,y), self.pos)
-
-                    distances[Point(x,y)] = distance
-        
-        # checks if cell reachable
-        if not distances:
-            return None
-        else:
-            return min(distances, key=distances.get) # returns position
         
     def get_min_targets(self, costs):
-        # get min value of each dorne
+        # get min distance of each dorne
         min_targets_value = [None]*self.nr
         for ri in range(self.nr):
             if not costs[ri]: min_targets_value[ri] = None
             else:
                 min_value = min(costs[ri].values())
-                if refuelling:
-                    if min_value > fuel[ri]-refuel_threshold:
-                        min_targets_value[ri] = None
-                    else:
-                        min_targets_value[ri] = min_value
-                else:
-                    min_targets_value[ri] = min_value
+                min_targets_value[ri] = min_value
 
-        # min_targets_value = [None]*self.nr
-        # for ri in range(self.nr):
-        #     min_targets_value[ri] = np.min(np.ma.masked_equal(dists[self.pos[ri].y*HEIGHT+self.pos[ri].x], 0, copy=False))
-
-        # get all positions with min value
+        # get all positions distances equal min distance
         min_targets = [[] for i in range(self.nr)]
         for ri in range(self.nr):
             if min_targets_value[ri] == None: continue
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
-            if refuelling:
-                # add min target to list 
-                # if fuel-threshold > (distance to target) + (distance from target to start)
-                min_targets[ri] = [m_target for m_target in min_targets[ri] if fuel[ri]-refuel_threshold >= distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][m_target.y*HEIGHT + m_target.x]+distances[self.starting_pos[ri].y*HEIGHT + self.starting_pos[ri].x][m_target.y*HEIGHT + m_target.x]]
-
+            
         return min_targets
         
     def scheduler(self, ongoing_frontiers):
@@ -603,7 +443,8 @@ class Environment:
         for ri in range(self.nr): 
             temp_exploration_grid[self.pos[ri].y, self.pos[ri].x] = True
 
-        # if no more unexplored cells return to home
+        # if no more unexplored cells
+        # then return to home
         if np.count_nonzero(temp_exploration_grid) == HEIGHT*WIDTH:
             return [self.starting_pos[ri] for ri in range(self.nr)]
         
@@ -611,11 +452,14 @@ class Environment:
         self.first.append(end-start)
         start = time.time()
 
-        # if on going frontier already searched
+        
         for ri in range(nr):
-            if ongoing_frontiers[ri] == None or return_home[ri] or refuel[ri]: continue
+            if ongoing_frontiers[ri] == None or return_home[ri]: continue
+            # if on going candidate already searched
+            # then set on going condidate to None
             if temp_exploration_grid[ongoing_frontiers[ri].y, ongoing_frontiers[ri].x]:
                 ongoing_frontiers[ri] = None
+
                 # delete on going path from dynamic obstacles
                 count = list(occupied_cells)[-1]
                 for c in range(steps, count+1):
@@ -625,30 +469,16 @@ class Environment:
                     if len(occupied_cells[c]) == 0:
                         del occupied_cells[c]
                 current_path[ri] = []
-                breakpoint
 
+        # for testing
         end = time.time()
         self.second.append(end-start)
-        
-        # gets the distance to all unvisited blocks
-        if in_loop_dist:
-            for ri in range(self.nr):
-                if ongoing_frontiers[ri] != None: continue
-                temp_dist = {}
-                for y in range(self.grid.shape[0]):
-                    for x in range(self.grid.shape[1]):
-                        if not temp_exploration_grid[y,x]:
-                            distance = self.get_distance(Point(x,y), self.pos[ri])
-                            temp_dist[Point(x,y)] = distance
-                            distances[self.pos[ri]] = temp_dist
-        
         start = time.time()
 
         # get costs of unexplored cells
         # TODO do without for loops
         costs = [{} for _ in range(self.nr)]
         for ri in range(self.nr):
-            if refuel[ri]: continue
             # if ongoing_frontiers[ri] != None: continue
             for y in range(self.grid.shape[0]):
                 for x in range(self.grid.shape[1]):
@@ -656,11 +486,19 @@ class Environment:
                         # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
                         costs[ri][Point(x,y)] = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][y*HEIGHT + x]
 
+        # for testing
         end = time.time()
         self.third.append(end-start)
         start = time.time()
 
-        # set minimum targets
+        # get minimum targets
+        # process:
+        # get the minimum distance
+        # delete minimum from cost list
+        # repeat for number of drones minus 1
+        # it's repeated this many times since drones could share the minumum distance cells
+        # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
+        # this becomes important when there are only n cells left to explore
         min_targets = self.get_min_targets(costs)
         temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
         for rj in range(self.nr-1):
@@ -674,18 +512,10 @@ class Environment:
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
                     min_targets[ri] = [ongoing_frontiers[ri]]
-                elif refuel[ri]:
-                    min_targets[ri] = [env.starting_pos[ri]]
                 else:
-                    min_targets[ri] += next_min_targets[ri]
-
-        # check if any targets reachable with limited fuel
-        if refuelling:
-            for ri,r_min_targets in enumerate(min_targets):
-                if len(r_min_targets) == 0:
-                    refuel[ri] = True
-                
+                    min_targets[ri] += next_min_targets[ri]                
         
+        # for testing
         end = time.time()
         self.fourth.append(end-start)
         start = time.time()
@@ -693,19 +523,23 @@ class Environment:
         # get all combinations of best targets
         combinations = list(product(*min_targets))
 
+        # for testing
         end_a = time.time()
         self.fifth_a.append(end_a-start)
         start_b_1 = time.time()
 
-
         # find invalid combinations
         delete_indices = []
         for i,combination in enumerate(combinations):
+            # if the combination has any duplicates
+            # then remove from all combinations
             if len(combination) != len(set(combination)):
                 delete_indices.append(i)
             # check drone neighbours
             # if drone only has 1 valid neighbour mark node as invalid for other drones
+            # TODO
 
+        # for testing
         end_b_1 = time.time()
         self.fifth_b_1.append(end_b_1-start_b_1)
         start_b_2 = time.time()
@@ -715,12 +549,14 @@ class Environment:
         modified_combinations = [combination for i, combination in enumerate(combinations) if i not in delete_indices_set]
         combinations = modified_combinations.copy()
 
+        # for testing
         end = time.time()
         self.fifth.append(end-start)
         self.fifth_b.append(end-start_b_1)
         self.fifth_b_2.append(end-start_b_2)
 
-        # if no equal targets
+        # if there are valid combinations
+        # then find best combination and return
         targets = [None]*self.nr
         if len(combinations) > 0:
             start = time.time()
@@ -740,14 +576,17 @@ class Environment:
             for ri in range(self.nr):
                 targets[ri] = best_combination[ri]
 
+            # for debugging
             if not self.exploration_grid.all() and all([targets[ri] == self.starting_pos[ri] for ri in range(self.nr)]) and targets[0] == self.starting_pos[0]:
                 breakpoint
 
+            # for testing
             end = time.time()
             self.sixth.append(end-start)
 
             return targets
 
+        # for testing
         start = time.time()
         
         # add starting positions to maximum targets with lower value
@@ -785,16 +624,12 @@ class Environment:
         best_combination = combinations[sum_costs.index(min_cost)]
         for ri in range(self.nr):
             targets[ri] = best_combination[ri]
-            # self.distances.append(costs[ri][targets[ri]])
 
-            # if self.pos[ri] != self.starting_pos[ri]:
-            #     done[ri] = False
-            # if targets[ri] != self.starting_pos[ri]:
-            #     done[ri] = False
-
+        # for debugging
         if not self.exploration_grid.all() and all([targets[ri] == self.starting_pos[ri] for ri in range(self.nr)]) and targets[0] == self.starting_pos[0]:
             breakpoint
 
+        # for testing
         end = time.time()
         self.seventh.append(end-start)
 
@@ -830,7 +665,7 @@ class Environment:
 
         return distances
     
-    def print_graph(self, r, steps, path, maneuvers, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
+    def print_graph(self, r, steps, path, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
         """
         Prints the grid environment
         """
@@ -880,21 +715,11 @@ class Environment:
                     [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
                     facecolor="yellow", 
                     alpha=0.5)
-            # elif i == len(path)-1 and goal_pos == None and maneuvers[i]:
-            #     ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
-            #         [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
-            #         facecolor="red", 
-            #         alpha=0.5)
             elif goal_pos != Point(x,y) and Point(x,y) != starting_pos:
                 ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
                         [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
                         facecolor="blue", 
                         alpha=0.5)
-            # elif goal_pos != Point(x,y) and maneuvers[i]:
-            #     ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
-            #             [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
-            #             facecolor="red", 
-            #             alpha=0.5)
             
         # adds all indices of actions on cell
         indices = {}
@@ -913,44 +738,18 @@ class Environment:
                 if Point(x,y) in path:
                     for i in indices[Point(x,y)]:
                         if i == len(actions): break
-                        if maneuvering:
-                            if actions[i] == "right":
-                                clabel += "%02d\u2192 "%(i)
-                                breakpoint
-                            elif actions[i] == "left" and not maneuvers[i]: 
-                                clabel += "%02d\u2190 "%(i)
-                                breakpoint
-                            elif actions[i] == "up" and not maneuvers[i]: 
-                                clabel += "%02d\u2193 "%(i)
-                                breakpoint
-                            elif actions[i] == "down" and not maneuvers[i]: 
-                                clabel += "%02d\u2191 "%(i)
-                                breakpoint
-                            elif actions[i] == "right" and maneuvers[i]: 
-                                clabel += "%02d\u21D2 "%(i)
-                                breakpoint
-                            elif actions[i] == "left" and maneuvers[i]: 
-                                clabel += "%02d\u21D0 "%(i)
-                                breakpoint
-                            elif actions[i] == "up" and maneuvers[i]: 
-                                clabel += "%02d\u21D3 "%(i)
-                                breakpoint
-                            elif actions[i] == "down" and maneuvers[i]: 
-                                clabel += "%02d\u21D1 "%(i)
-                                breakpoint
-                        else:
-                            if actions[i] == "right":
-                                clabel += "%02d\u2192 "%(i)
-                                breakpoint
-                            elif actions[i] == "left": 
-                                clabel += "%02d\u2190 "%(i)
-                                breakpoint
-                            elif actions[i] == "up": 
-                                clabel += "%02d\u2193 "%(i)
-                                breakpoint
-                            elif actions[i] == "down": 
-                                clabel += "%02d\u2191 "%(i)
-                                breakpoint
+                        if actions[i] == "right":
+                            clabel += "%02d\u2192 "%(i)
+                            breakpoint
+                        elif actions[i] == "left": 
+                            clabel += "%02d\u2190 "%(i)
+                            breakpoint
+                        elif actions[i] == "up": 
+                            clabel += "%02d\u2193 "%(i)
+                            breakpoint
+                        elif actions[i] == "down": 
+                            clabel += "%02d\u2191 "%(i)
+                            breakpoint
 
                 temp_label = ""
                 if len(clabel) > 3:
@@ -977,7 +776,7 @@ class Environment:
         # plt.pause(0.0005)
         plt.close()
 
-    def print_frame(self, steps, path, maneuvers, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
+    def print_frame(self, steps, path, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
         """
         Prints the grid environment
         """
@@ -1028,21 +827,11 @@ class Environment:
                         [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
                         facecolor="yellow", 
                         alpha=0.5)
-                # elif i == len(path)-1 and goal_pos == None and maneuvers[i]:
-                #     ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
-                #         [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
-                #         facecolor="red", 
-                #         alpha=0.5)
                 elif goal_pos != Point(x,y) and Point(x,y) != starting_pos:
                     ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
                             [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
                             facecolor="blue", 
                             alpha=0.5)
-                # elif goal_pos != Point(x,y) and maneuvers[i]:
-                #     ax.fill([x + 0.5, x + 1.5, x + 1.5, x + 0.5], 
-                #             [y + 0.5, y + 0.5, y + 1.5, y + 1.5], 
-                #             facecolor="red", 
-                #             alpha=0.5)
             
         # adds all indices of actions on cell
         indices = {}
@@ -1063,44 +852,18 @@ class Environment:
                     if Point(x,y) in path[ri]:
                         for i in indices[(ri, Point(x,y))]:
                             if i == len(actions[ri]): break
-                            if maneuvering:
-                                if actions[ri][i] == "right" and not maneuvers[ri][i]:
-                                    clabel += "%02d\u2192 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "left" and not maneuvers[ri][i]: 
-                                    clabel += "%02d\u2190 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "up" and not maneuvers[ri][i]: 
-                                    clabel += "%02d\u2193 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "down" and not maneuvers[ri][i]: 
-                                    clabel += "%02d\u2191 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "right" and maneuvers[ri][i]: 
-                                    clabel += "%02d\u21D2 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "left" and maneuvers[ri][i]: 
-                                    clabel += "%02d\u21D0 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "up" and maneuvers[ri][i]: 
-                                    clabel += "%02d\u21D3 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "down" and maneuvers[ri][i]: 
-                                    clabel += "%02d\u21D1 "%(i)
-                                    breakpoint
-                            else:
-                                if actions[ri][i] == "right":
-                                    clabel += "%02d\u2192 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "left": 
-                                    clabel += "%02d\u2190 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "up": 
-                                    clabel += "%02d\u2193 "%(i)
-                                    breakpoint
-                                elif actions[ri][i] == "down": 
-                                    clabel += "%02d\u2191 "%(i)
-                                    breakpoint
+                            if actions[ri][i] == "right":
+                                clabel += "%02d\u2192 "%(i)
+                                breakpoint
+                            elif actions[ri][i] == "left": 
+                                clabel += "%02d\u2190 "%(i)
+                                breakpoint
+                            elif actions[ri][i] == "up": 
+                                clabel += "%02d\u2193 "%(i)
+                                breakpoint
+                            elif actions[ri][i] == "down": 
+                                clabel += "%02d\u2191 "%(i)
+                                breakpoint
 
                 temp_label = ""
                 if len(clabel) > 3:
@@ -1127,80 +890,33 @@ class Environment:
         # plt.pause(0.0005)
         plt.close()
 
-# weights test
-# weight = np.arange(1,20)
-# indices = []
-# for j in range(1000):
-#     if j % 10 == 0 and j != 0: print(j, weight[max(set(indices), key = indices.count)])
-#     env = Environment(0.3)
-#     all_steps = []
-#     for i,w in enumerate(weight):
-#         env.reset(w,i)
-#         astar = Astar(HEIGHT, WIDTH, env.grid)
-#         # print(env.grid)
-#         obstacles = env.exploration_grid.copy()
-#         steps = 0
-#         actions = []
-#         trajectory = [env.starting_pos]
-#         while not env.exploration_grid.all():
-#             closest = env.cost_function()
-#             path = astar.a_star(env.pos, closest)
-#             del path[0]
-#             while len(path) > 0:
-#                 trajectory.append(path[0])
-#                 steps += 1
-#                 env.move(path[0])
-#                 del path[0]
-#                 if env.prev_pos.x < env.pos.x: actions.append("right")
-#                 if env.prev_pos.x > env.pos.x: actions.append("left")
-#                 if env.prev_pos.y > env.pos.y: actions.append("up")
-#                 if env.prev_pos.y < env.pos.y: actions.append("down")
-#                 # print(actions[steps-1], env.pos)
+##############################################################################################################################################################################################################################################
+##############################################################################################################################################################################################################################################
+# Initialisations
+# Simulation initialisations
+test_iterations = 100 # Number of simulation iterations
+goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
-#         # print(w, " - ", steps)
-#         all_steps.append(steps)
-#         if save_trajectory:
-#             PATH = os.getcwd()
-#             PATH = os.path.join(PATH, 'SAR')
-#             PATH = os.path.join(PATH, 'Results')
-#             PATH = os.path.join(PATH, 'Astar')      
+# Environment initialisations
+nr = 3 # number of drones
+obstacles = True # Sets of obstacels spawn
+obstacle_density = 0.1 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
+set_obstacles = False # Sets if obstacles should change each iteration
+save_obstacles = True # Sets if obstacles are saved
+load_obstacles = False # Sets if obstacles should be loaded from previous simulation
 
-#             date_and_time = datetime.now()
-#             dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
-#             if not os.path.exists(dir_path): os.makedirs(dir_path)
+# Trajectory saving initialisations
+save_trajectory = True # Sets if drone trajectories are saves
+step_trajectory = False # Sets if the drone trajectories are saves each step
+each_drone = False # Stes if drone trajectories are saved separately in the step trajectories
+saved_iterations = 2 # Sets number of iteration trajectories are saved
+saves = []                                     #    <---------------------------------------------------------------------- (IDK what this does)
 
-#             env.print_graph(trajectory, actions, env.starting_pos, obstacles, dir_path)
-
-#     indices.append(all_steps.index(min(all_steps)))
-# print(weight[max(set(indices), key = indices.count)])
-
-# initialisations
+# Directory initialisations
 PATH = os.getcwd()
 PATH = os.path.join(PATH, 'SAR')
-# set environment
-# file_name = "distances.json"
-# file_path = os.path.join(PATH, file_name)
-# distances = read_json(file_path)
-# distances = convert_json_data(distances)
-save_trajectory = True
-in_loop_trajectory = False
-each_drone = False
-in_loop_dist = False
-preprocessing = True
-maneuvering = False
-fixed_wing = False
-refuelling = False
-if WIDTH > HEIGHT:
-    starting_fuel = (WIDTH*4 + HEIGHT*2)
-else:
-    starting_fuel = (HEIGHT*4 + WIDTH*2)
 
-refuel_threshold = 3
-test_iterations = 1
-saved_iterations = 2
-saves = []
-
-# set directory path
+# Set directory path
 if save_trajectory:
     PATH = os.getcwd()
     PATH = os.path.join(PATH, 'SAR')
@@ -1211,373 +927,267 @@ if save_trajectory:
     dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
     if not os.path.exists(dir_path): os.makedirs(dir_path)
 
-# environment initialisations
-goal_spawning = True
-radius_spawning = False
-spawning_radius_length = 3
-nr = 2
-weight = 19
-obstacles = True
-obstacle_density = 0.5
-set_obstacles = False
-save_obstacles = True
-save_dir = os.path.join(dir_path, 'Save')
-if not os.path.exists(save_dir): os.makedirs(save_dir)
-load_obstacles = False
+    # Set save path
+    save_dir = os.path.join(dir_path, 'Save')
+    if not os.path.exists(save_dir): os.makedirs(save_dir)
+
+# Set load path
 load_dir = os.path.join(PATH, 'Load') 
 if not os.path.exists(load_dir): os.makedirs(load_dir)
-env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, radius_spawning, spawning_radius_length, save_dir, load_obstacles, load_dir)
-env.reset(weight, 0, goal_spawning)
+
+# Environment generation
+env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
+env.reset(goal_spawning)
 print(env.ES_starting_grid)
 
-# calculate distances
-if not in_loop_dist:
-    # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
-    file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
-    if file_name in os.listdir(load_dir):
-    #     file_path = os.path.join(load_dir, file_name)
-    #     with open(file_path, 'rb') as file:
-    #         distances = file.read()
-        file_path = os.path.join(load_dir, file_name)
-        distances = read_json(file_path)
+# Tracking initialisations
+testing_start_time = time.time() # starts simulation testing time
+steps_list = [] # tracks number of steps per iteration
+explorations_list = [[] for r in range(nr)] # tracks the number of cells each drone explores during an iteration
+planning_times = [] # tracks time per iteration
+flight_times = [] # tracks flight time per iteration
+flight_distances = [] # tracks flight distance per ietration
+schedule_times = [] # tracks each scheduling time 
+path_times = [] # track each path planning time
+frontier_list = [[] for _ in range(test_iterations)] # tracks scheduled candidates for each iteration in separate lists
+unsuccessful = 0 # tracks number of unsuccessful search attempts 
+sheduled_distances = [[] for _ in range(nr)] # tracks the distance a candidate cell is from teh current cell
 
-        distances = convert_json_data(distances)
-    else:
-        distances = {}
-        print("Preprocessing...")
-        starting_time = time.time()
-        # for dx in range(WIDTH):
-        #     print(dx)
-        #     for dy in range(HEIGHT):
-        #         if env.grid[dy,dx] == States.OBS.value: continue
-        #         temp_paths = {}
-        #         for x in range(WIDTH):
-        #             for y in range(HEIGHT):
-        #                 if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
-        #                     # A* distances
-        #                     # astar = Astar(env.grid)
-        #                     # temp_path = astar.a_star(Point(dx, dy), Point(x,y), env.grid)
-        #                     # del temp_path[0]
-        #                     # temp_paths[Point(x,y)] = temp_path
-        #                     # distances[Point(dx,dy)] = temp_paths
-
-        #                     # Mannhattan distances
-        #                     distance = env.get_distance(Point(dx, dy), Point(x,y))
-        #                     temp_paths[Point(x,y)] = distance
-        #                     distances[Point(dx,dy)] = temp_paths
-
-        # # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
-        # # file_path = os.path.join(load_dir, file_name)
-        # # with open(file_path, 'wb') as file:
-        # #     file.write(distances)
-
-        # # write to file for later use
-        # # data_json = convert_data_to_json_format(distances)
-        # # file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
-        # # file_path = os.path.join(load_dir, file_name)
-        # # write_json(data_json, file_path)
-
-        distances = env.calculate_distances()
-
-    end_time = time.time()
-    print("Preprocessing time: %.2fs" %(end_time - starting_time))
-    
-preprocessing = False
-
-# testing loop
-testing_start_time = time.time()
-steps_list = []
-explorations_list = [[] for r in range(nr)]
-maneuvers_list = []
-planning_times = []
-flight_times = []
-flight_distances = []
-schedule_times = []
-path_times = []
-frontier_list = [[] for _ in range(test_iterations)]
-counter = 0
-unsuccessful = 0
-sheduled_distances = [[] for _ in range(nr)]
+# Simulation testing loop
 for i in range(test_iterations):
-    planning_successful = True
-    save = False
-    planning_starting_time = time.time()
-    if i % 500 == 0: print(i)
+    # Iteration initialisations
+    planning_successful = True # boolean for checking if schedule and path planning is successful
+    save = False #                              #    <---------------------------------------------------------------------- (IDK what this does)
+    planning_starting_time = time.time() # sets starts time for current iteration
+    if i % 500 == 0: print(i) # prints every x iterations
+    # the first iteration has already been reset
+    # thus it does not have to be run again
     if i != 0:
-        env.reset(weight, i, goal_spawning)
-    obstacles = env.exploration_grid.copy()
-    steps = 0
-    actions = [[] for _ in range(nr)]
-    return_home = [False for _ in range(nr)]
-    fuel = [starting_fuel for _ in range(nr)]
-    refuel = [False for _ in range(nr)]
-    trajectory = [[env.starting_pos[r]] for r in range(nr)]
-    maneuvers = [[False] for r in range(nr)]
-    current_path = [[] for _ in range(nr)]
-    current_maneuvers = [[] for _ in range(nr)]
-    finished_scheduling = [False]*nr
-    which = [False]*nr
-    r_which = []
-    occupied_cells = {}
-    occupied_cells[steps] = []
-    explorations = [0]*nr
+        env.reset(goal_spawning, i)
+    obstacle_layout = env.exploration_grid.copy() # set obstacle layout for iteration
+    steps = 0 # sets number of steps equal to zero
+    actions = [[] for _ in range(nr)] # tracks actions for current iteration
+    return_home = [False for _ in range(nr)] # boolean for tracking drone state. If True the drone returns to starting position 
+    trajectory = [[env.starting_pos[r]] for r in range(nr)] # tracks drone trajectories
+    current_path = [[] for _ in range(nr)] # tracks current path of drone
+    finished_scheduling = [False]*nr # boolean for tracking scheduling state of drone. If True the drone returns to starting position #    <---------------------------------------------------------------------- (check if same functionality as return home state)
+    which = [False]*nr # for debugging
+    r_which = [] # for debugging
+    occupied_cells = {} # tracks occupancy state of cells at specified steps
+    occupied_cells[steps] = [] # initialises the list occupancy states for step zero
+    explorations = [0]*nr # initialises number of cells explored for each drone for this iteration
+    # initialises the occupancy states for step zero
     for r in range(nr):
         occupied_cells[steps].append(env.starting_pos[r])
 
-    ongoing_frontiers = [None]*nr
-    exit_condition = False
-    while not env.exploration_grid.all() and not exit_condition and planning_successful:
+    ongoing_frontiers = [None]*nr # initialises on going candidates (this is a variable which checks if the drone has reach its candidate cell)
+    goal_exit_condition = False # initialises boolean for exit condition (checks if any drone has reached goal)
+    # loop for planning until an exit condition is met
+    while not env.exploration_grid.all() and not goal_exit_condition and planning_successful:
         if steps > 1000:
             breakpoint
         if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]) and finished_scheduling[ri] == True:
             breakpoint
-        steps += 1
-        # if steps not in occupied_cells: occupied_cells[steps] = []
 
+        steps += 1 # counts number of steps
+        
+        # if all cells have been explored then exit loop
         if env.exploration_grid.all():
             break
 
-        # check if the drone has to fuel
-        if refuelling:
-            for r in range(nr):
-                if finished_scheduling[r] or return_home[r] or refuel[r]: continue
-                if fuel[r]-refuel_threshold < distances[env.pos[r].y*HEIGHT + env.pos[r].x][env.starting_pos[r].y*HEIGHT + env.starting_pos[r].x]:
-                    refuel[r] = True
-                    r_which.append(env.pos)
-                    r_which.append(fuel[r]-refuel_threshold)
-                    r_which.append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][env.starting_pos[r].y*HEIGHT + env.starting_pos[r].x])
-                    frontiers[r] = env.starting_pos[r]
-                    ongoing_frontiers[r] = None
-                    if len(current_path[r]) != 0:
-                        # delete on going path from dynamic obstacles
-                        count = list(occupied_cells)[-1]
-                        for c in range(steps, count+1):
-                            # checks that the current path of the drone is not shorter than the occupied cells dictionary
-                            if len(current_path[r]) == c-steps: break
-                            occupied_cells[c].remove(current_path[r][c-steps])
-                            if len(occupied_cells[c]) == 0:
-                                del occupied_cells[c]
-
         # get frontiers
-        temp_ongoing_frontiers = ongoing_frontiers.copy()
-        if any(frontier is None for frontier in ongoing_frontiers) and not all(refuel):
-            start_scheduler_time = time.time()
-            frontiers = env.scheduler(ongoing_frontiers)
-            end_scheduler_time = time.time()
+        temp_ongoing_frontiers = ongoing_frontiers.copy() # save current on going candidates
+        # if any of the drones do not have on going candidates
+        # then schedule candidates
+        if any(frontier is None for frontier in ongoing_frontiers):
+            start_scheduler_time = time.time() # tracks scheduling time
+            frontiers = env.scheduler(ongoing_frontiers) # schedules candidates
+            end_scheduler_time = time.time() # tracks scheduling time
             
+            # checks if any drones have its starting positions as its candidate
+            # if True then there are not any better cells to travel to, which means the area is almost covered
             for ri in range(nr):
-                # # check if on going frontiers was overwritten
-                # if temp_ongoing_frontiers[ri] != ongoing_frontiers[ri] and len(current_path[ri]) != 0:
-                #     # delete on going path from dynamic obstacles
-                #     count = list(occupied_cells)[-1]
-                #     for c in range(steps, count+1):
-                #         # checks that the current path of the drone is not shorter than the occupied cells dictionary
-                #         if len(current_path[ri]) == c-steps: break
-                #         occupied_cells[c].remove(current_path[ri][c-steps])
-                #         if len(occupied_cells[c]) == 0:
-                #             del occupied_cells[c]
-
                 if frontiers[ri] == env.starting_pos[ri]:
                     return_home[ri] = True
                 else:
                     return_home[ri] = False
         
-        frontier_list[i].append(frontiers)
+        frontier_list[i].append(frontiers) # tracks scheduled candidates of drones
 
         # plan paths
-        path_time = 0
-        if maneuvering:
-            for r in range(nr):
-                if env.pos[r] == frontiers[r]:# or done[r]:
-                    if return_home[r] and not refuel[r]:
-                        ongoing_frontiers[r] = frontiers[r]
-                        finished_scheduling[r] = True
-                        which[r] = 0
-                        if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]):
-                            save = True
-                        if all([finished_scheduling[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT and finished_scheduling[ri] == True:
-                            breakpoint
-                    continue
-                
-                if ongoing_frontiers[r] == None:
-                    start_path_time = time.time()
-                    astar = Astar(env.grid)
-                    current_path[r], current_maneuvers[r] = astar.a_star(env.pos[r], frontiers[r], env.grid, occupied_cells, env.direction[r])
-                    end_path_time = time.time()
-                    del current_path[r][0]
-                    if maneuvering: del current_maneuvers[r][0]
-                
-                    # add path to occupied cells
-                    for path_step, pos in enumerate(current_path[r]):
-                        if steps+path_step not in occupied_cells: occupied_cells[steps+path_step] = []
-                        if pos in occupied_cells[steps+path_step]:
-                            breakpoint
-                        occupied_cells[steps+path_step].append(pos)
-                        if len(occupied_cells[steps+path_step]) > nr:
-                            breakpoint
-        
-        # replan paths if drones get stuck
-        else:
-            for r in range(nr):
-                if env.pos[r] == frontiers[r] and env.pos[r] == env.starting_pos[r]:# or done[r]:
-                    if return_home[r] and not finished_scheduling[r]:
-                        
-                        finished_scheduling[r] = True
-                        which[r] = 0
-                        if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]):
-                            save = True
-                        if all([finished_scheduling[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT and finished_scheduling[ri] == True:
-                            breakpoint
-                        ongoing_frontiers[r] = frontiers[r]
-                    continue
-                
-            # initialise replanning sequence
-            planning = True
-            replan_ongoing = False
-            prior_r = 0
-            r = prior_r
-            cntr = 0
-            n_plans = 0
-            # check which drone has least fuel to get back home and set as priority
-            # if no drones have to refuel then skip
-            if refuelling and any(refuel):
-                fuel_comp = []
-                for ri in range(nr):
-                    fuel_comp.append(fuel[ri] - distances[env.pos[ri].y*HEIGHT + env.pos[ri].x][env.starting_pos[ri].y*HEIGHT + env.starting_pos[ri].x])
-                index = min(fuel_comp)
-                prior_r = fuel_comp.index(index)
-                r = prior_r
-
-            temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()}
-            while planning:
-                # loop counters
-                if cntr != 0 and cntr % nr == 0:
-                    cntr = 0
-                    r = prior_r
-                if r != 0 and r % nr == 0: r = 0
-
-                # check if drone has on going frontier
-                # if there was no path with the on going frontiers path then replan on going frontier paths aswell
-                if ongoing_frontiers[r] == None or replan_ongoing:
-                    start_path_time = time.time()
-                    astar = Astar(env.grid)
-                    current_path[r], current_maneuvers[r] = astar.a_star(env.pos[r], frontiers[r], env.grid, temp_occupied_cells, env.direction[r])
-                    end_path_time = time.time()
-
-                    # if there is a path add to dynamic obstacles
-                    if current_path[r] != None:
-                        del current_path[r][0]
-
-                        # for debugging
-                        if refuelling and len(current_path[r]) > fuel[r]:
-                            breakpoint
-
-                        # for debugging
-                        for path_step, pos in enumerate(current_path[r]):
-                            if steps+path_step not in temp_occupied_cells: continue
-                            if len(temp_occupied_cells[steps+path_step]) > nr:
-                                breakpoint
-                
-                        # add path to occupied cells
-                        for path_step, pos in enumerate(current_path[r]):
-                            if steps+path_step not in temp_occupied_cells: temp_occupied_cells[steps+path_step] = []
-                            # for debugging
-                            if pos in temp_occupied_cells[steps+path_step]:
-                                breakpoint
-                            # for debugging
-                            if len(temp_occupied_cells[steps+path_step]) == nr:
-                                breakpoint
-                            temp_occupied_cells[steps+path_step].append(pos)
-                            # for debugging
-                            if len(temp_occupied_cells[steps+path_step]) > nr:
-                                breakpoint
-                    else:
+        path_time = 0 # tracks path planning time
+        # if drones are returning home and if the drone has been taken out of consideration for scheduling 
+        for r in range(nr):
+            # if drone is at candidate and the candidate is the dtarting postition
+            if env.pos[r] == frontiers[r] and env.pos[r] == env.starting_pos[r]:# or done[r]:
+                # if the drone is returning home and not already taken out of consideration for scheduling
+                # then flag drone as finished scheduling
+                if return_home[r] and not finished_scheduling[r]: #    <---------------------------------------------------------------------- (is it possible to not enter this statement?)
+                    finished_scheduling[r] = True # flags drone as finished searching (at home/landed)
+                    which[r] = 0 # for debugging
+                    if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]): #    <---------------------------------------------------------------------- (i think old functionality)
+                        save = True
+                    if all([finished_scheduling[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT and finished_scheduling[ri] == True:
                         breakpoint
-                
-                cntr += 1
-
-                # if all of the paths could be planned 
-                if cntr == nr and all([current_path[ri] != None for ri in range(nr)]):
-                    planning = False
-                    occupied_cells = temp_occupied_cells.copy()
-                else:
-                    planning = True
-                
-                # if the current path could not be planned reset priority drone
-                if current_path[r] == None:
-                    prior_r += 1
-                    if prior_r % nr == 0: prior_r = 0
-                    n_plans += 1
-                    cntr = 0
-                    r = prior_r
-                    temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()}
-                else:
-                    r += 1
-                
-                # if planned for all drones as priority drone
-                if n_plans == nr:
-                    # if all of the paths have been replanned including on going paths 
-                    if replan_ongoing:
-                        print("No route")
-                        planning_successful = False
-                        unsuccessful += 1
-                        planning = False
-                        for ri in range(nr):
-                            env.print_graph(ri, steps-1, trajectory[ri], maneuvers[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i, False)
-                    else:
-                        # delete on going path from dynamic obstacles
-                        count = list(temp_occupied_cells)[-1]
-                        
-                        for c in range(steps, count+1):
-                            # checks that the current path of the drone is not shorter than the occupied cells dictionary
-                            # if current_path[ri] == None or len(current_path[ri]) == c-steps: break
-                            # temp_occupied_cells[c].remove(current_path[ri][c-steps])
-                            # if len(temp_occupied_cells[c]) == 0:
-                            del occupied_cells[c]
-                            del temp_occupied_cells[c]
-                        current_path = [[] for _ in range(nr)]
-
-                        # replan all paths again without any ongoing paths
-                        replan_ongoing = True
-                        prior_r = 0
-                        r = prior_r
-                        cntr = 0
-                        n_plans = 0
+                    ongoing_frontiers[r] = frontiers[r] # sets on going candidate as current candidate (which is starting position) this way the drone will not be scheduled another candidate 
+                continue
             
+        # initialise replanning sequence
+        planning = True # boolean for tracking planning state
+        replan_ongoing = False # boolean for tracking re-planning. if a path plan failed the algorithm has to re-plan the paths
+        prior_r = 0 # sets the planning priority of the drones
+        r = prior_r # sets the priority drone to the current drone
+        cntr = 0 # initialises the number of plans for current drone as priority drone to zeros
+        n_plans = 0 # initialises the number of plans
+        temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()} # sets the occupancy of all cells to current history
+
+        # loop for path planning
+        while planning:
+            # if the number of plans for current priority drone is not equal to zero
+            # AND (the number of plans for current priorty drone) MOD (the number of drones) equals zero
+            # then the current priority drone has to be changed since no planned path was successfull
+            if cntr != 0 and cntr % nr == 0:
+                cntr = 0 # sets the number of plans for current drone as priority drone to zeros
+                r = prior_r # sets the selected drone to the priority drone
+
+            # if the selected drone is not equal to zero
+            # AND (the selected drone) MOD (the number of drones) equals zero
+            # then set selected drone to first drone
+            if r != 0 and r % nr == 0: r = 0
+
+            # if drone does not have an on going candidate
+            # OR there was no path with the on going frontiers path
+            # then replan on going frontier paths aswell
+            if ongoing_frontiers[r] == None or replan_ongoing:
+                start_path_time = time.time() # sets start time for path planning
+                astar = Astar(env.grid) # initialises A* class
+                current_path[r] = astar.a_star(env.pos[r], frontiers[r], env.grid, temp_occupied_cells, env.direction[r]) # plans path for selected drone
+                end_path_time = time.time() # sets end time for path planning
+
+                # if valid path was found
+                # then add to dynamic obstacles
+                if current_path[r] != None:
+                    del current_path[r][0] # deletes first step in path since it is the current position of the drone
+
+                    # for debugging
+                    if len(current_path[r]):
+                        breakpoint
+
+                    # for debugging
+                    for path_step, pos in enumerate(current_path[r]):
+                        if steps+path_step not in temp_occupied_cells: continue
+                        if len(temp_occupied_cells[steps+path_step]) > nr:
+                            breakpoint
+            
+                    # add path to occupied cells
+                    # loops through current path of selected drone
+                    for path_step, pos in enumerate(current_path[r]):
+                        # if the step plus the step of the current path is not in the occupancy state list
+                        # then inisialise the step
+                        if steps+path_step not in temp_occupied_cells: temp_occupied_cells[steps+path_step] = []
+                        # for debugging
+                        if pos in temp_occupied_cells[steps+path_step]:
+                            breakpoint
+                        # for debugging
+                        if len(temp_occupied_cells[steps+path_step]) == nr:
+                            breakpoint
+
+                        temp_occupied_cells[steps+path_step].append(pos) # add path step to occupany state for current step plus path step
+
+                        # for debugging
+                        if len(temp_occupied_cells[steps+path_step]) > nr:
+                            breakpoint
+                else:
+                    breakpoint # for debugging
+            
+            cntr += 1
+
+            # if all of the paths could be planned
+            # then end planning and update occupancy state list with current paths
+            # else keep planning
+            if cntr == nr and all([current_path[ri] != None for ri in range(nr)]):
+                planning = False
+                occupied_cells = temp_occupied_cells.copy()
+            else:
+                planning = True
+            
+            # if the current path could not be planned
+            # then reset priority drone
+            # else continue planning for next drone
+            if current_path[r] == None:
+                prior_r += 1
+                # if the priority drone equals the last drone
+                # then set to the first drone 
+                if prior_r % nr == 0: prior_r = 0
+                n_plans += 1
+                cntr = 0
+                r = prior_r
+                temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()} # reset occupancy state list to original
+            else:
+                r += 1
+            
+            # if all drone had te chance to be the priority drone and the planning not complete
+            # then check if replanning without on going candidates have been executed
+            # if replanning as been executed
+            # then the iteration is unsuccessful
+            # else replan without on going candidates
+            if n_plans == nr:
+                # if all of the paths have been replanned including on going paths
+                # then the iteration is unsuccessfull
+                if replan_ongoing:
+                    print("No route")
+                    planning_successful = False
+                    unsuccessful += 1
+                    planning = False
+                    for ri in range(nr):
+                        env.print_graph(ri, steps-1, trajectory[ri], actions[ri], env.starting_pos[ri], obstacle_layout, dir_path, i, False)
+                else:
+                    # delete on going path from dynamic obstacles
+                    count = list(temp_occupied_cells)[-1]
+                    for c in range(steps, count+1):
+                        del occupied_cells[c]
+                        del temp_occupied_cells[c]
+
+                    current_path = [[] for _ in range(nr)] # reinitialise the current paths
+
+                    # replan all paths again without any ongoing paths
+                    replan_ongoing = True
+                    prior_r = 0
+                    r = prior_r
+                    cntr = 0
+                    n_plans = 0
+        
+        # paths were successfully planned
+        # then continue to moving the drones
         if planning_successful:
             for r in range(nr):
+                # if drone is finished searching
+                # then do not move
                 if finished_scheduling[r]:
-                    maneuvers[r].append(False)
                     continue
-                # count distance
+
+                # if candidate is not equal to on going candidate
+                # then track scheduled distance of drone
                 if frontiers[r] != ongoing_frontiers[r]:
                     sheduled_distances[r].append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][frontiers[r].y*HEIGHT + frontiers[r].x])
 
-                # execute move 
+                # add cell to trajectory
                 trajectory[r].append(current_path[r][0])
-                if maneuvering:
-                    maneuvers[r].append(current_maneuvers[r][0])
-                    if current_maneuvers[r][0] and counter < 20:
-                        counter += 1
-                        save = True
 
-                # new exploration
+                # if new exploration
+                # then track it
                 if not env.exploration_grid[current_path[r][0].y, current_path[r][0].x]:
                     explorations[r] += 1
-
-                env.move(r, current_path[r][0])
-                fuel[r] -= 1
-                if refuelling and fuel[r] < 0:
-                    print("Drone %d has crashed!!!" %(r))
                 
-                # check if drone reached frontier
-                if env.pos[r] == frontiers[r] and env.pos[r] == env.starting_pos[r]:
-                    if refuel[r]:
-                        ongoing_frontiers[r] = None
-                        return_home[r] = False
-                        refuel[r] = False
-                        fuel[r] = starting_fuel
-                    elif return_home[r] and not finished_scheduling[r]:
+                # execute move in environment
+                env.move(r, current_path[r][0])
+                
+                # if drone reached frontier
+                # AND drone position is equal to starting position
+                # then not drone searching state to finished
+                # else set on going candidate to current candidate #    <---------------------------------------------------------------------- (why do you check if the drone is at starting position aswell?)
+                if env.pos[r] == frontiers[r] and env.pos[r] == env.starting_pos[r]: #    <---------------------------------------------------------------------- (is this check necessary?)
+                    if return_home[r] and not finished_scheduling[r]:
                         ongoing_frontiers[r] = frontiers[r]
                         finished_scheduling[r] = True
                         which[r] = 1
@@ -1590,11 +1200,12 @@ for i in range(test_iterations):
                 else:
                     ongoing_frontiers[r] = frontiers[r]
 
-                # remove step from current path
-                del current_path[r][0]
-                if maneuvering: del current_maneuvers[r][0]
+                del current_path[r][0] # remove step from current path
 
-                # add on going frontiers if required
+                # if drone did not reach end of path
+                # OR drone is finished searching
+                # then add current candidate to on going candidate
+                # else set on going candidate to nothing
                 if len(current_path[r]) != 0 or finished_scheduling[r]:
                     ongoing_frontiers[r] = frontiers[r]
                 else:
@@ -1607,56 +1218,46 @@ for i in range(test_iterations):
                 if env.prev_pos[r].y < env.pos[r].y: actions[r].append("down")
 
                 # in loop trajectory drawing
-                if in_loop_trajectory and i < saved_iterations:
+                if step_trajectory and i < saved_iterations:
                     if each_drone:
                         if goal_spawning:
-                            env.print_graph(r, steps-1, trajectory[r], maneuvers[r], actions[r], env.starting_pos[r], obstacles, dir_path, i, False, env.goal)
+                            env.print_graph(r, steps-1, trajectory[r], actions[r], env.starting_pos[r], obstacle_layout, dir_path, i, False, env.goal)
                         else:
-                            env.print_graph(r, steps-1, trajectory[r], maneuvers[r], actions[r], env.starting_pos[r], obstacles, dir_path, i, False)
+                            env.print_graph(r, steps-1, trajectory[r], actions[r], env.starting_pos[r], obstacle_layout, dir_path, i, False)
                     else:
                         if r == nr-1:
                             if goal_spawning:
-                                env.print_frame(steps, trajectory, maneuvers, actions, env.starting_pos, obstacles, dir_path, i, True, env.goal)
-                            else: # [False]+maneuvers[ri] this is because the previous action warns for a maneuver, but since the printing is discrete we only print on the cell where the maneuver happens
-                                env.print_frame(steps, trajectory, maneuvers, actions, env.starting_pos, obstacles, dir_path, i, False, None)
+                                env.print_frame(steps, trajectory, actions, env.starting_pos, obstacle_layout, dir_path, i, True, env.goal)
+                            else:
+                                env.print_frame(steps, trajectory, actions, env.starting_pos, obstacle_layout, dir_path, i, False, None)
 
                 # exit condition
+                # if testing method is set to goal spawning
+                # AND any drone has reached the goal
+                # then set condition to found goal
                 if goal_spawning and np.array([True for j in range(0, nr) if env.pos[j] == env.goal]).any() == True:
-                    exit_condition = True
+                    goal_exit_condition = True
                 
                 path_time += end_path_time - start_path_time
             
             schedule_times.append(end_scheduler_time-start_scheduler_time)
             path_times.append(path_time)
             
-            # catch maneuvers and save to draw trajectories
-            if maneuvering:
-                if counter < 20 and not save and env.pos[0] == env.pos[1] and all([not finished_scheduling[ri] for ri in range(nr)]) and any([maneuvers[ri][steps-1] for ri in range(nr)]):
-                    save = True
-                    step = steps
-                    counter += 1
-                    breakpoint
-                if counter < 20 and not save and env.prev_pos[0] == env.pos[1] and env.prev_pos[1] == env.pos[0] and all([not finished_scheduling[ri] for ri in range(nr)]) and any([maneuvers[ri][steps-1] for ri in range(nr)]):
-                    save = True
-                    step = steps
-                    counter += 1
-                    breakpoint
-            else:
-                if i in saves: save = True
+            # save to draw trajectories
+            if i in saves: save = True #    <---------------------------------------------------------------------- (i think old functionality)
 
     steps_list.append(steps)
     for ri in range(nr):
         explorations_list[ri].append(explorations[ri])
 
     if save_trajectory and save or i < saved_iterations:
-        maneuvers_list.append(maneuvers)
         for ri in range(nr):
             if goal_spawning:
-                env.print_graph(ri, steps, trajectory[ri], maneuvers[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i, True, env.goal)
-            else: # [False]+maneuvers[ri] this is because the previous action warns for a maneuver, but since the printing is discrete we only print on the cell where the maneuver happens
-                env.print_graph(ri, steps, trajectory[ri], [False]+maneuvers[ri], actions[ri], env.starting_pos[ri], obstacles, dir_path, i, True, None)
+                env.print_graph(ri, steps, trajectory[ri], actions[ri], env.starting_pos[ri], obstacle_layout, dir_path, i, True, env.goal)
+            else: 
+                env.print_graph(ri, steps, trajectory[ri], actions[ri], env.starting_pos[ri], obstacle_layout, dir_path, i, True, None)
 
-    # calculate flight time
+    # calculate flight time and planning time
     flight_time = 0
     flight_distance = 0
     for ri in range(nr):
@@ -1697,9 +1298,8 @@ for drone_explorations in explorations_list:
     # Append the average to the corresponding sublist in the averages list
     average_explorations.append(drone_average)
 
+# string of results
 print_string = ""
-print_string += "Maneuvering: %s"%(str(maneuvering))
-print_string += "\nFixed wing: %s"%(str(fixed_wing))
 print_string += "\nFOV width: %dm\nFOV height: %dm" %(FOV_W, FOV_H)
 print_string += "\nTesting iterations: %d"%(test_iterations)
 print_string += "\nTesting time: %.2fh%.2fm%.2fs" %(th,tm,ts)
@@ -1726,10 +1326,11 @@ for r in range(nr):
     # Save the histogram as a PNG file
     file_name = 'distance_hist_%d.png' %(r)
     plt.savefig(os.path.join(dir_path, file_name))
-    # print_string += "\nDistances for drone %d: %.2f"%(np.mean(np.array(sheduled_distances[r])))
+
 print_string += "\nFirst: %.8f, Second: %.8f, Third: %.8f, Fourth: %.8f, Fifth: %.8f, Fifth A: %.8f, Fifth B: %.8f, Fifth B1: %.8f, Fifth B2: %.8f, Sixth: %.8f, Seventh: %.8f"%(np.mean(np.array(env.first)),np.mean(np.array(env.second)),np.mean(np.array(env.third)),np.mean(np.array(env.fourth)),np.mean(np.array(env.fifth)),np.mean(np.array(env.fifth_a)),np.mean(np.array(env.fifth_b)),np.mean(np.array(env.fifth_b_1)),np.mean(np.array(env.fifth_b_2)),np.mean(np.array(env.sixth)),np.mean(np.array(env.seventh)))
 print(print_string)
 
+# saves results to required location
 file_name = "results.txt"
 file_path = os.path.join(dir_path, file_name)
 with open(file_path, 'w') as file:
@@ -1740,16 +1341,6 @@ file_path = os.path.join(dir_path, file_name)
 with open(file_path, 'w') as file:
     # Iterate through the sublists and write them to the file
     for sublist in frontier_list:
-        # Convert sublist elements to strings and join them with commas
-        sublist_str = ','.join(map(str, sublist))
-        # Write the sublist string followed by a newline character
-        file.write(sublist_str + '\n')
-
-file_name = "maneuvers.txt"
-file_path = os.path.join(dir_path, file_name)
-with open(file_path, 'w') as file:
-    # Iterate through the sublists and write them to the file
-    for sublist in maneuvers_list:
         # Convert sublist elements to strings and join them with commas
         sublist_str = ','.join(map(str, sublist))
         # Write the sublist string followed by a newline character
