@@ -329,7 +329,6 @@ class Environment:
 
                 self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
-                if i==0 or not self.set_obstacles: distances = env.calculate_distances()
 
         self.grid = self.starting_grid.copy()
         
@@ -395,11 +394,20 @@ class Environment:
             for y in range(HEIGHT):
                 if self.grid[y,x] != States.UNEXP.value: self.exploration_grid[y, x] = True
         for r in range(self.nr): self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
+        # initialise explored cells
+        self.explorated_cells = []
+        for ri in range(self.nr):
+            self.explorated_cells.append((self.starting_pos[ri].y,self.starting_pos[ri].x))
 
         # set target cluster
         self.target_cluster = [[None]]*self.nr
+
+        distances = np.full((HEIGHT * WIDTH, HEIGHT * WIDTH), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+        for ri in range(self.nr):
+            distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][self.pos[ri].y*HEIGHT + self.pos[ri].x] = 0
+        distances = env.calculate_distances()
         
-    def move(self, r, new_pos):        
+    def move(self, r, new_pos):   
         # move drone to new position
         self.prev_pos[r] = self.pos[r]
         self.pos[r] = Point(new_pos.x,new_pos.y)
@@ -409,6 +417,7 @@ class Environment:
         self.grid[self.pos[r].y, self.pos[r].x] = States.ROBOT.value
         self.exploration_grid[self.prev_pos[r].y, self.prev_pos[r].x] = True
         self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
+        self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
 
         if self.prev_pos[r].x < self.pos[r].x: # right
             self.direction[r] = "right"
@@ -418,6 +427,8 @@ class Environment:
             self.direction[r] = "down"
         elif self.prev_pos[r].y > self.pos[r].y: # up
             self.direction[r] = "up"
+
+        self.calculate_distances()
         
     def get_min_targets(self, costs):
         # get min distance of each dorne
@@ -635,33 +646,39 @@ class Environment:
 
         return targets
     
+    def in_bounds(self, id):
+        (x, y) = id
+        return 0 <= x < WIDTH and 0 <= y < HEIGHT
+    
+    def is_obstcle(self, id):
+        (x, y) = id
+        return env.grid[y,x] != States.OBS.value
+    
     def calculate_distances(self):
-        num_cells = HEIGHT * WIDTH
-        distances = np.full((num_cells, num_cells), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+        for ri in range(self.nr):
+            # get neighbours
+            # (right, up, left, down)
+            results = [Point(self.pos[ri].x+1, self.pos[ri].y),
+                       Point(self.pos[ri].x, self.pos[ri].y-1),
+                       Point(self.pos[ri].x-1, self.pos[ri].y),
+                       Point(self.pos[ri].x, self.pos[ri].y+1)]
+            results = list(filter(self.in_bounds, results))
+            results = list(filter(self.is_obstcle, results))
 
-        # Define movements (up, down, left, right)
-        moves = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+            # get shortet path for all cells to neighbours
+            for neighbour in results:
+                distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][neighbour.y*HEIGHT + neighbour.x] = 1
+                distances[neighbour.y*HEIGHT + neighbour.x][self.pos[ri].y*HEIGHT + self.pos[ri].x] \
+                    = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][neighbour.y*HEIGHT + neighbour.x]
+                distances[neighbour.y*HEIGHT + neighbour.x][neighbour.y*HEIGHT + neighbour.x] = 0
 
-        for start_cell in range(num_cells):
-            if self.starting_grid[start_cell // HEIGHT, start_cell % HEIGHT] == States.UNEXP.value:
-                queue = deque([(start_cell, 0)])  # Initialize queue with the starting cell and distance 0
-                visited = np.zeros(num_cells, dtype=bool)  # Mark all cells as not visited
-                visited[start_cell] = True  # Mark the starting cell as visited
-
-                while queue:
-                    current_cell, distance = queue.popleft()
-                    distances[start_cell, current_cell] = distance
-
-                    # Explore neighbors
-                    row, col = current_cell // HEIGHT, current_cell % HEIGHT
-                    for move_row, move_col in moves:
-                        new_row, new_col = row + move_row, col + move_col
-                        neighbor_cell = new_row * HEIGHT + new_col
-
-                        if 0 <= new_row < WIDTH and 0 <= new_col < HEIGHT \
-                            and not visited[neighbor_cell] and self.starting_grid[new_row, new_col] == States.UNEXP.value:
-                            queue.append((neighbor_cell, distance + 1))
-                            visited[neighbor_cell] = True
+            # set distances of neighbours
+            for neighbour in results:
+                for cell_n, cell_dist in enumerate(distances[self.pos[ri].y*HEIGHT + self.pos[ri].x]):
+                    if cell_dist == WIDTH*HEIGHT or cell_n == neighbour.y*HEIGHT + neighbour.x: continue
+                    distances[neighbour.y*HEIGHT + neighbour.x][cell_n] \
+                        = distances[neighbour.y*HEIGHT + neighbour.x][self.pos[ri].y*HEIGHT + self.pos[ri].x] \
+                        + distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][cell_n]
 
         return distances
     
@@ -898,7 +915,7 @@ test_iterations = 100 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 3 # number of drones
+nr = 1 # number of drones
 obstacles = True # Sets of obstacels spawn
 obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
@@ -951,7 +968,7 @@ schedule_times = [] # tracks each scheduling time
 path_times = [] # track each path planning time
 frontier_list = [[] for _ in range(test_iterations)] # tracks scheduled candidates for each iteration in separate lists
 unsuccessful = 0 # tracks number of unsuccessful search attempts 
-sheduled_distances = [[] for _ in range(nr)] # tracks the distance a candidate cell is from teh current cell
+sheduled_distances = [[] for _ in range(nr)] # tracks the distance a candidate cell is from the current cell
 
 # Simulation testing loop
 for i in range(test_iterations):
