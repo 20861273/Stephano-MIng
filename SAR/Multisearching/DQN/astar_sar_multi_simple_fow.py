@@ -16,8 +16,8 @@ import math
 from functools import reduce
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 10
+WIDTH = 10
 
 # Chosen values
 height = 100 # m
@@ -405,6 +405,7 @@ class Environment:
         distances = np.full((HEIGHT * WIDTH, HEIGHT * WIDTH), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
         for ri in range(self.nr):
             distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][self.pos[ri].y*HEIGHT + self.pos[ri].x] = 0
+        self.neighbours = {}
         distances = env.calculate_distances()
         
     def move(self, r, new_pos):   
@@ -654,33 +655,75 @@ class Environment:
         (x, y) = id
         return env.grid[y,x] != States.OBS.value
     
+    def update_distances(self, cell, ri):
+        # Calculate the distance from the current cell to all its neighbors
+        for neighbor in self.neighbours[cell]:
+            new_distance = distances[cell.y * WIDTH + cell.x][cell.y * WIDTH + cell.x] \
+                        + distances[cell.y * WIDTH + cell.x][neighbor.y * WIDTH + neighbor.x]
+            # If the new distance is shorter than the existing distance, update it
+            if new_distance < distances[self.pos[ri].y * WIDTH + self.pos[ri].x][neighbor.y * WIDTH + neighbor.x]:
+                distances[self.pos[ri].y * WIDTH + self.pos[ri].x][neighbor.y * WIDTH + neighbor.x] = new_distance
+                distances[neighbor.y * WIDTH + neighbor.x][self.pos[ri].y * WIDTH + self.pos[ri].x] = new_distance
+                # Update distances recursively for neighbors of the current cell
+                self.update_distances(neighbor, ri)
+            
+        return distances
+    
     def calculate_distances(self):
         for ri in range(self.nr):
-            # get neighbours
-            # (right, up, left, down)
-            results = [Point(self.pos[ri].x+1, self.pos[ri].y),
-                       Point(self.pos[ri].x, self.pos[ri].y-1),
-                       Point(self.pos[ri].x-1, self.pos[ri].y),
-                       Point(self.pos[ri].x, self.pos[ri].y+1)]
-            results = list(filter(self.in_bounds, results))
-            results = list(filter(self.is_obstcle, results))
+            # if the current position is not in neighbours
+            # then get neighbours and add to neighbours
+            if self.pos[ri] not in self.neighbours:
+                # get neighbours
+                # (right, up, left, down)
+                results = [Point(self.pos[ri].x+1, self.pos[ri].y),
+                        Point(self.pos[ri].x, self.pos[ri].y-1),
+                        Point(self.pos[ri].x-1, self.pos[ri].y),
+                        Point(self.pos[ri].x, self.pos[ri].y+1)]
+                results = list(filter(self.in_bounds, results))
+                results = list(filter(self.is_obstcle, results))
+            
+                self.neighbours[self.pos[ri]] = results
 
-            # get shortet path for all cells to neighbours
-            for neighbour in results:
+                # check if neighbours are neighbours of any other cells
+                # this is to check if there is a shortest path to its neighbours
+                for neighbour in results:
+                    # if the neighbour is in the neighbours list
+                    # AND the parent cell of neighbours list is not in trajectory of drone
+                    # this means that the cell has not been explored and is in the neighbours list
+                    # which means the neighbour has a parent cell that has been explored earilier
+                    # which means there is a shorter path to the neighbour
+                    shorter_paths_to = [key for key, lst in self.neighbours.items() if key not in trajectory[ri] and neighbour in lst]
+
+                    # if shorter_paths_to dictionar is populated
+                    # then there are shorter paths to cell
+                    for cell in shorter_paths_to:
+                        self.update_distances(cell, ri)
+
+            # get shortest path for all cells to neighbours
+            for neighbour in self.neighbours[self.pos[ri]]:
                 distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][neighbour.y*HEIGHT + neighbour.x] = 1
                 distances[neighbour.y*HEIGHT + neighbour.x][self.pos[ri].y*HEIGHT + self.pos[ri].x] \
                     = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][neighbour.y*HEIGHT + neighbour.x]
                 distances[neighbour.y*HEIGHT + neighbour.x][neighbour.y*HEIGHT + neighbour.x] = 0
 
             # set distances of neighbours
-            for neighbour in results:
+            # loop through neighbours
+            # loop through the distances of the current position of the drone
+            # then update the distances of the neighbour based on the distance in the current position
+            # distance[neighbour][selected_cell] = distance[neighbour][current_position] + distance[current_position][selected_cell]
+            # the distance from the neighbour cell to the selected cell is equal to
+            # the distance from the neightbour cell to the current position plus
+            # the distance from the the curent position to the selected cell
+            # the selected cell would always be in the current positions' list since the drone would have to have "seen" the cell already
+            for neighbour in self.neighbours[self.pos[ri]]:
                 for cell_n, cell_dist in enumerate(distances[self.pos[ri].y*HEIGHT + self.pos[ri].x]):
                     if cell_dist == WIDTH*HEIGHT or cell_n == neighbour.y*HEIGHT + neighbour.x: continue
                     distances[neighbour.y*HEIGHT + neighbour.x][cell_n] \
                         = distances[neighbour.y*HEIGHT + neighbour.x][self.pos[ri].y*HEIGHT + self.pos[ri].x] \
                         + distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][cell_n]
 
-        return distances
+        return distances # give code to chat to get update function
     
     def print_graph(self, r, steps, path, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
         """
@@ -915,9 +958,9 @@ test_iterations = 100 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 1 # number of drones
+nr = 2 # number of drones
 obstacles = True # Sets of obstacels spawn
-obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
+obstacle_density = 0.1 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
 save_obstacles = True # Sets if obstacles are saved
 load_obstacles = False # Sets if obstacles should be loaded from previous simulation
@@ -952,11 +995,6 @@ if save_trajectory:
 load_dir = os.path.join(PATH, 'Load') 
 if not os.path.exists(load_dir): os.makedirs(load_dir)
 
-# Environment generation
-env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
-env.reset(goal_spawning)
-print(env.ES_starting_grid)
-
 # Tracking initialisations
 testing_start_time = time.time() # starts simulation testing time
 steps_list = [] # tracks number of steps per iteration
@@ -969,6 +1007,12 @@ path_times = [] # track each path planning time
 frontier_list = [[] for _ in range(test_iterations)] # tracks scheduled candidates for each iteration in separate lists
 unsuccessful = 0 # tracks number of unsuccessful search attempts 
 sheduled_distances = [[] for _ in range(nr)] # tracks the distance a candidate cell is from the current cell
+trajectory = [[] for r in range(nr)] # tracks drone trajectories
+
+# Environment generation
+env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
+env.reset(goal_spawning)
+print(env.ES_starting_grid)
 
 # Simulation testing loop
 for i in range(test_iterations):
@@ -985,9 +1029,9 @@ for i in range(test_iterations):
     steps = 0 # sets number of steps equal to zero
     actions = [[] for _ in range(nr)] # tracks actions for current iteration
     return_home = [False for _ in range(nr)] # boolean for tracking drone state. If True the drone returns to starting position 
-    trajectory = [[env.starting_pos[r]] for r in range(nr)] # tracks drone trajectories
     current_path = [[] for _ in range(nr)] # tracks current path of drone
     finished_scheduling = [False]*nr # boolean for tracking scheduling state of drone. If True the drone returns to starting position #    <---------------------------------------------------------------------- (check if same functionality as return home state)
+    trajectory = [[env.starting_pos[r]] for r in range(nr)] # tracks drone trajectories
     which = [False]*nr # for debugging
     r_which = [] # for debugging
     occupied_cells = {} # tracks occupancy state of cells at specified steps

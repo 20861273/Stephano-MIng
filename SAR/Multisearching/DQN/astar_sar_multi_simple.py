@@ -16,8 +16,8 @@ import math
 from functools import reduce
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 10
+WIDTH = 10
 
 # Chosen values
 height = 100 # m
@@ -234,7 +234,7 @@ class Astar:
             return None
     
 class Environment:
-    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir):
+    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir, goal_spawning):
         # initalise variables
         self.nr = nr
         self.obstacles = obstacles # turn obstacles on or off
@@ -287,11 +287,12 @@ class Environment:
             file_name = os.path.join(self.load_dir, file_name)
             self.grids = np.array(read_json(file_name))
 
-            file_name = "targets.pkl"
-            file_path = os.path.join(self.load_dir, file_name)
-            with open(file_path, 'rb') as file:
-                # Deserialize and read the sublists using pickle.load()
-                self.goals = pickle.load(file)
+            if goal_spawning:
+                file_name = "targets.pkl"
+                file_path = os.path.join(self.load_dir, file_name)
+                with open(file_path, 'rb') as file:
+                    # Deserialize and read the sublists using pickle.load()
+                    self.goals = pickle.load(file)
 
     def reset(self, goal_spawning, i=0):
         # spawn grid
@@ -304,8 +305,10 @@ class Environment:
         if self.obstacles:
             if self.load_obstacles:
                 self.starting_grid = np.array(self.grids[i])
+                self.ES_starting_grid = self.starting_grid.copy()
                 self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
+                distances = env.calculate_distances()
             elif not self.set_obstacles:
                 self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
                 
@@ -898,12 +901,12 @@ test_iterations = 100 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 3 # number of drones
+nr = 1 # number of drones
 obstacles = True # Sets of obstacels spawn
 obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
-save_obstacles = True # Sets if obstacles are saved
-load_obstacles = False # Sets if obstacles should be loaded from previous simulation
+save_obstacles = False # Sets if obstacles are saved
+load_obstacles = True # Sets if obstacles should be loaded from previous simulation
 
 # Trajectory saving initialisations
 save_trajectory = True # Sets if drone trajectories are saves
@@ -936,7 +939,7 @@ load_dir = os.path.join(PATH, 'Load')
 if not os.path.exists(load_dir): os.makedirs(load_dir)
 
 # Environment generation
-env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
+env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir, goal_spawning)
 env.reset(goal_spawning)
 print(env.ES_starting_grid)
 
