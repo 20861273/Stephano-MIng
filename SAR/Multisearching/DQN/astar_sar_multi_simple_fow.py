@@ -16,8 +16,8 @@ import math
 from functools import reduce
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 10
-WIDTH = 10
+HEIGHT = 4
+WIDTH = 4
 
 # Chosen values
 height = 100 # m
@@ -298,6 +298,7 @@ class Environment:
         global WIDTH
         global HEIGHT
         global distances
+        global trajectory
         self.grid = np.zeros((HEIGHT, WIDTH))
 
         # generates obstacles
@@ -392,21 +393,25 @@ class Environment:
         self.exploration_grid = np.zeros((HEIGHT, WIDTH), dtype=np.bool_)
         for x in range(WIDTH):
             for y in range(HEIGHT):
-                if self.grid[y,x] != States.UNEXP.value: self.exploration_grid[y, x] = True
+                if self.grid[y,x] == States.OBS.value: self.exploration_grid[y, x] = True
+
+        # set target cluster
+        self.target_cluster = [[None]]*self.nr
+
+        distances = np.full((HEIGHT,WIDTH, HEIGHT,WIDTH), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+        for ri in range(self.nr):
+            distances[self.pos[ri].y][self.pos[ri].x][self.pos[ri].y][self.pos[ri].x] = 0
+        self.neighbours = {}
+        self.neighbours_complete = {}
+        trajectory = [[self.starting_pos[r]] for r in range(nr)]
+        env.calculate_distances()
+
+        # set starting pos to true in exploration grid
         for r in range(self.nr): self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
         # initialise explored cells
         self.explorated_cells = []
         for ri in range(self.nr):
             self.explorated_cells.append((self.starting_pos[ri].y,self.starting_pos[ri].x))
-
-        # set target cluster
-        self.target_cluster = [[None]]*self.nr
-
-        distances = np.full((HEIGHT * WIDTH, HEIGHT * WIDTH), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
-        for ri in range(self.nr):
-            distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][self.pos[ri].y*HEIGHT + self.pos[ri].x] = 0
-        self.neighbours = {}
-        distances = env.calculate_distances()
         
     def move(self, r, new_pos):   
         # move drone to new position
@@ -416,9 +421,6 @@ class Environment:
         # update grids
         self.grid[self.prev_pos[r].y, self.prev_pos[r].x] = States.EXP.value
         self.grid[self.pos[r].y, self.pos[r].x] = States.ROBOT.value
-        self.exploration_grid[self.prev_pos[r].y, self.prev_pos[r].x] = True
-        self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
-        self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
 
         if self.prev_pos[r].x < self.pos[r].x: # right
             self.direction[r] = "right"
@@ -430,6 +432,10 @@ class Environment:
             self.direction[r] = "up"
 
         self.calculate_distances()
+        
+        self.exploration_grid[self.prev_pos[r].y, self.prev_pos[r].x] = True
+        self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
+        self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
         
     def get_min_targets(self, costs):
         # get min distance of each dorne
@@ -496,7 +502,7 @@ class Environment:
                 for x in range(self.grid.shape[1]):
                     if not temp_exploration_grid[y,x]:
                         # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
-                        costs[ri][Point(x,y)] = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][y*HEIGHT + x]
+                        costs[ri][Point(x,y)] = distances[self.pos[ri].y][self.pos[ri].x][y][x]
 
         # for testing
         end = time.time()
@@ -654,58 +660,210 @@ class Environment:
     def is_obstcle(self, id):
         (x, y) = id
         return env.grid[y,x] != States.OBS.value
-    
-    def update_distances(self, cell, ri):
-        # Calculate the distance from the current cell to all its neighbors
-        for neighbor in self.neighbours[cell]:
-            new_distance = distances[cell.y * WIDTH + cell.x][cell.y * WIDTH + cell.x] \
-                        + distances[cell.y * WIDTH + cell.x][neighbor.y * WIDTH + neighbor.x]
-            # If the new distance is shorter than the existing distance, update it
-            if new_distance < distances[self.pos[ri].y * WIDTH + self.pos[ri].x][neighbor.y * WIDTH + neighbor.x]:
-                distances[self.pos[ri].y * WIDTH + self.pos[ri].x][neighbor.y * WIDTH + neighbor.x] = new_distance
-                distances[neighbor.y * WIDTH + neighbor.x][self.pos[ri].y * WIDTH + self.pos[ri].x] = new_distance
-                # Update distances recursively for neighbors of the current cell
-                self.update_distances(neighbor, ri)
-            
-        return distances
+
+    def update_neighbours_distances(self, point):
+        # Mask the already calculated distances to avoid overwriting them
+        mask = distances[point.y, point.x, \
+                        self.neighbours[point][:, 1], self.neighbours[point][:, 0]] == HEIGHT*WIDTH
+        # Update distance from current position to unknown neighbours
+        distances[point.y, point.x, \
+                    self.neighbours[point][mask][:, 1], self.neighbours[point][mask][:, 0]] = 1
+        # Update distance from unknown neighbours to unknown neighbours
+        distances[self.neighbours[point][mask][:, 1], self.neighbours[point][mask][:, 0], \
+                    self.neighbours[point][mask][:, 1], self.neighbours[point][mask][:, 0]] = 0
+        # Update distance from unknown neighbours to current position
+        distances[self.neighbours[point][mask][:, 1], self.neighbours[point][mask][:, 0], \
+                    point.y, point.x] = 1
+        
+    # def find_path(self, )
     
     def calculate_distances(self):
+        global distances
         for ri in range(self.nr):
-            # if the current position is not in neighbours
+            # if the current position is not in neighbours collection
             # then get neighbours and add to neighbours
-            if self.pos[ri] not in self.neighbours:
+            # BUG!!!!!!!!!!!!!!!!
+            # if not explored
+            # add neighbours as parents and add all known neighbours
+            if not self.exploration_grid[self.pos[ri].y, self.pos[ri].x]:
                 # get neighbours
                 # (right, up, left, down)
-                results = [Point(self.pos[ri].x+1, self.pos[ri].y),
-                        Point(self.pos[ri].x, self.pos[ri].y-1),
-                        Point(self.pos[ri].x-1, self.pos[ri].y),
-                        Point(self.pos[ri].x, self.pos[ri].y+1)]
+                results = [[self.pos[ri].x+1, self.pos[ri].y],
+                        [self.pos[ri].x, self.pos[ri].y-1],
+                        [self.pos[ri].x-1, self.pos[ri].y],
+                        [self.pos[ri].x, self.pos[ri].y+1]]
                 results = list(filter(self.in_bounds, results))
                 results = list(filter(self.is_obstcle, results))
             
-                self.neighbours[self.pos[ri]] = results
-
-                # check if neighbours are neighbours of any other cells
-                # this is to check if there is a shortest path to its neighbours
+                self.neighbours[self.pos[ri]] = np.array(results)
                 for neighbour in results:
-                    # if the neighbour is in the neighbours list
-                    # AND the parent cell of neighbours list is not in trajectory of drone
-                    # this means that the cell has not been explored and is in the neighbours list
-                    # which means the neighbour has a parent cell that has been explored earilier
-                    # which means there is a shorter path to the neighbour
-                    shorter_paths_to = [key for key, lst in self.neighbours.items() if key not in trajectory[ri] and neighbour in lst]
+                    if Point(neighbour[0], neighbour[1]) not in self.neighbours: self.neighbours[Point(neighbour[0], neighbour[1])] = [np.array([self.pos[ri].x, self.pos[ri].y])]
+                    elif self.pos[ri] not in self.neighbours[Point(neighbour[0], neighbour[1])]: self.neighbours[Point(neighbour[0], neighbour[1])].append(np.array([self.pos[ri].x, self.pos[ri].y]))
+                self.neighbours_complete[self.pos[ri]] = True
 
-                    # if shorter_paths_to dictionar is populated
-                    # then there are shorter paths to cell
-                    for cell in shorter_paths_to:
-                        self.update_distances(cell, ri)
+                # self.update_neighbours(ri, results)
+                    
+
+
+                # # check if neighbours are neighbours of any other cells
+                # # this is to check if there is a shortest path to its neighbours
+                # for neighbour in results:
+                #     # if the neighbour is in the neighbours list
+                #     # AND the parent cell of neighbours list is not in trajectory of drone
+                #     # this means that the cell has not been explored and is in the neighbours list
+                #     # which means the neighbour has a parent cell that has been explored earilier
+                #     # which means there is a shorter path to the neighbour
+                #     shorter_paths_to = [key for key, lst in self.neighbours.items() if key not in trajectory[ri] and neighbour in lst]
+
+                #     # if shorter_paths_to dictionar is populated
+                #     # then there are shorter paths to cell
+                #     for cell in shorter_paths_to:
+                #         self.update_distances(cell, ri)
 
             # get shortest path for all cells to neighbours
-            for neighbour in self.neighbours[self.pos[ri]]:
-                distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][neighbour.y*HEIGHT + neighbour.x] = 1
-                distances[neighbour.y*HEIGHT + neighbour.x][self.pos[ri].y*HEIGHT + self.pos[ri].x] \
-                    = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][neighbour.y*HEIGHT + neighbour.x]
-                distances[neighbour.y*HEIGHT + neighbour.x][neighbour.y*HEIGHT + neighbour.x] = 0
+            # for neighbour in self.neighbours[self.pos[ri]]:
+            #     if distances[self.pos[ri].y][self.pos[ri].x][neighbour.y][neighbour.x] != WIDTH*HEIGHT: continue
+            #     distances[self.pos[ri].y][self.pos[ri].x][neighbour.y][neighbour.x] = 1
+            #     distances[neighbour.y][neighbour.x][self.pos[ri].y][self.pos[ri].x] \
+            #         = distances[self.pos[ri].y][self.pos[ri].x][neighbour.y][neighbour.x]
+            #     distances[neighbour.y][neighbour.x][neighbour.y][neighbour.x] = 0
+            #     self.grid_plot()
+            #     plt.show()
+            #     breakpoint
+                
+            # Mask the already calculated distances to avoid overwriting them
+            mask = distances[self.pos[ri].y, self.pos[ri].x, \
+                            self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] == HEIGHT*WIDTH
+            # Update distance from current position to unknown neighbours
+            distances[self.pos[ri].y, self.pos[ri].x, \
+                      self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0]] = 1
+            # Update distance from unknown neighbours to unknown neighbours
+            distances[self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0], \
+                      self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0]] = 0
+            # Update distance from unknown neighbours to current position
+            distances[self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0], \
+                      self.pos[ri].y, self.pos[ri].x] = 1
+
+            self.grid_plot()
+            plt.show()
+            breakpoint
+
+            # # Update any new neighbours here
+            # fmask_matrix = distances[self.pos[ri].y, self.pos[ri].x] != WIDTH*HEIGHT
+            # fmask = np.transpose(np.where(fmask_matrix)).tolist()
+            # fmask_set = set(map(tuple, fmask))
+
+            # Update any new neighbours here
+            fmask = []
+            for pos in self.pos:
+                fmask_matrix = distances[pos[1], pos[0]] != WIDTH * HEIGHT
+                temp_fmask = np.transpose(np.where(fmask_matrix)).tolist()
+                temp_fmask_set = set(map(tuple, temp_fmask))
+                # Accumulate fmask_set
+                fmask.append(temp_fmask)
+            fmask = np.array([item for row in fmask for item in row])
+            breakpoint
+            
+            distances[
+                np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                ] \
+            =\
+            np.minimum(\
+                distances[
+                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
+                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
+                ],
+                distances[
+                    np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
+                    np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0]),
+                ]\
+                +\
+                np.repeat(np.repeat(
+                    distances[
+                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
+                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
+                    np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
+                    np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0])
+                    ][:,np.newaxis,np.newaxis],WIDTH,axis=1),HEIGHT,axis=2)
+                )# distance from neighbour to parent for all cells in matrix (create new matrix for all neighbours)
+            
+            # distances[
+            #     np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
+            #     np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
+            #     np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+            #     np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+            #     ] \
+            # =\
+            # np.minimum(\
+            #     distances[
+            #         np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
+            #         np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
+            #         np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+            #         np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+            #     ],
+            #     distances[
+            #         np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
+            #         np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0]),
+            #         np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+            #         np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+            #     ]\
+            #     +\
+            #     distances[
+            #         np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
+            #         np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
+            #         np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
+            #         np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0])
+            #     ])
+
+            # After the loop, convert all_fmask to a set if needed
+            fmask_set = set(map(tuple, fmask))
+            for cell in fmask:
+                if Point(cell[1],cell[0]) in self.neighbours_complete: continue
+                results = [[cell[1]+1, cell[0]],
+                        [cell[1], cell[0]-1],
+                        [cell[1]-1, cell[0]],
+                        [cell[1], cell[0]+1]]
+                results = list(filter(self.in_bounds, results))
+                neighbours = [n for n in results if tuple((n[1],n[0])) in fmask_set]
+                self.neighbours[Point(cell[1],cell[0])] = np.array(neighbours)
+                # self.update_neighbours_distances(Point(cell[1],cell[0]))
+            
+            self.grid_plot()
+            plt.show()
+            breakpoint
+
+            # for known_matrices in fmask:
+            #     known_matrices = Point(known_matrices[1], known_matrices[0])
+
+            #     for known_cell in fmask: # iterate through cell of each matrix
+            #         known_cell = Point(known_cell[1], known_cell[0])
+
+            #         for neighbour in self.neighbours[known_cell]: # iterate through neighbours of known cells
+            #             nx,ny = neighbour
+
+            #             find_path(known_cell, neighbour)
+
+            # for known_matrices in fmask: # iterate through matrices
+            #     known_matrices = Point(known_matrices[1], known_matrices[0])
+                
+            #     for known_cell in fmask: # iterate through cell of each matrix
+            #         known_cell = Point(known_cell[1], known_cell[0])
+
+            #         for neighbour in self.neighbours[known_cell]: # iterate through neighbours of known cells
+            #             nx,ny = neighbour
+
+            #             new_distance = abs(distances[self.pos[ri].y][self.pos[ri].x][ny][nx] \
+            #                 - distances[self.pos[ri].y][self.pos[ri].x][known_matrices.y][known_matrices.x])\
+            #                 + abs(distances[self.pos[ri].y][self.pos[ri].x][ny][nx] \
+            #                       -distances[self.pos[ri].y][self.pos[ri].x][known_cell.y][known_cell.x])
+                        
+            #             if new_distance < distances[known_matrices.y][known_matrices.x][known_cell.y][known_cell.x]:
+            #                 distances[known_matrices.y][known_matrices.x][known_cell.y][known_cell.x] = new_distance
+
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
 
             # set distances of neighbours
             # loop through neighbours
@@ -716,14 +874,64 @@ class Environment:
             # the distance from the neightbour cell to the current position plus
             # the distance from the the curent position to the selected cell
             # the selected cell would always be in the current positions' list since the drone would have to have "seen" the cell already
-            for neighbour in self.neighbours[self.pos[ri]]:
-                for cell_n, cell_dist in enumerate(distances[self.pos[ri].y*HEIGHT + self.pos[ri].x]):
-                    if cell_dist == WIDTH*HEIGHT or cell_n == neighbour.y*HEIGHT + neighbour.x: continue
-                    distances[neighbour.y*HEIGHT + neighbour.x][cell_n] \
-                        = distances[neighbour.y*HEIGHT + neighbour.x][self.pos[ri].y*HEIGHT + self.pos[ri].x] \
-                        + distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][cell_n]
+            # BUG!!!!!!!!!!!!!!
+            # check if distance in neighbour list is shorter than distance in current list
+            # for known_cell in fmask:
+            #     known_cell = Point(known_cell[1], known_cell[0])
+            #     for parent in self.neighbours.keys():
+            #         for neighbour in self.neighbours[known_cell]:
+            #             x,y = neighbour
+            #             if any(np.array_equal(array, np.array([x,y])) for array in self.neighbours[Point(parent.x,parent.y)]):
+            #                 distances[parent.y][parent.x][y][x] = 1
+            #                 distances[y][x][parent.y][parent.x] = 1
+            #                 # self.grid_plot()
+            #                 # plt.show()
+            #                 # breakpoint
+            #             else:
+            #                 new_distance = distances[parent.y][parent.x][known_cell.y][known_cell.x] \
+            #                     + distances[known_cell.y][known_cell.x][y][x]
+            #                 if new_distance < distances[parent.y][parent.x][y][x]:
+            #                     distances[parent.y][parent.x][y][x] = new_distance
+            #                     # self.grid_plot()
+            #                     # plt.show()
+            #                     # breakpoint
+            #                 else:
+            #                     continue
+                        # # Calculate new distance between current cell and neighbor
+                        # new_distance = distances[neighbour[1]][neighbour[0]][self.pos[ri].y][self.pos[ri].x] + distances[self.pos[ri].y][self.pos[ri].x][y][x]
+                        
+                        # # Update distance if new distance is smaller
+                        # distances[neighbour[1]][neighbour[0]][y][x] = np.minimum(distances[neighbour[1]][neighbour[0]][y][x], new_distance)
+            self.grid_plot()
+            plt.show()
+            breakpoint
+                    
+    def grid_plot(self):
+        grid_size = int(math.sqrt(HEIGHT*WIDTH))
+        # Create a figure and axes
+        fig, axs = plt.subplots(grid_size, grid_size, figsize=(8, 8))
 
-        return distances # give code to chat to get update function
+        # Loop through each cell of the larger grid
+        for j in range(HEIGHT):
+            for i in range(WIDTH):
+                # Create a subplot for the current cell
+                ax = axs[j, i]
+
+                # Plot the smaller grid with actual values
+                ax.imshow(distances[j][i], cmap='viridis')
+
+                for y in range(distances[j][i].shape[0]):
+                    for x in range(distances[j][i].shape[1]):
+                        ax.text(x, y, f'{int(distances[j, i, y, x])}', va='center', ha='center', color='white')
+
+                # Optionally, you can set titles for each subplot
+                ax.set_title(f'Subgrid {j * grid_size + i + 1}')
+
+                # Remove axis ticks and labels if desired
+                ax.axis('off')
+
+        # Adjust layout to prevent overlap
+        plt.tight_layout()
     
     def print_graph(self, r, steps, path, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
         """
@@ -954,13 +1162,13 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 100 # Number of simulation iterations
+test_iterations = 1 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 2 # number of drones
+nr = 1 # number of drones
 obstacles = True # Sets of obstacels spawn
-obstacle_density = 0.1 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
+obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
 save_obstacles = True # Sets if obstacles are saved
 load_obstacles = False # Sets if obstacles should be loaded from previous simulation
@@ -1031,7 +1239,7 @@ for i in range(test_iterations):
     return_home = [False for _ in range(nr)] # boolean for tracking drone state. If True the drone returns to starting position 
     current_path = [[] for _ in range(nr)] # tracks current path of drone
     finished_scheduling = [False]*nr # boolean for tracking scheduling state of drone. If True the drone returns to starting position #    <---------------------------------------------------------------------- (check if same functionality as return home state)
-    trajectory = [[env.starting_pos[r]] for r in range(nr)] # tracks drone trajectories
+    # trajectory = [[env.starting_pos[r]] for r in range(nr)] # tracks drone trajectories
     which = [False]*nr # for debugging
     r_which = [] # for debugging
     occupied_cells = {} # tracks occupancy state of cells at specified steps
@@ -1230,7 +1438,7 @@ for i in range(test_iterations):
                 # if candidate is not equal to on going candidate
                 # then track scheduled distance of drone
                 if frontiers[r] != ongoing_frontiers[r]:
-                    sheduled_distances[r].append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][frontiers[r].y*HEIGHT + frontiers[r].x])
+                    sheduled_distances[r].append(distances[env.pos[r].y][env.pos[r].x][frontiers[r].y][frontiers[r].x])
 
                 # add cell to trajectory
                 trajectory[r].append(current_path[r][0])
