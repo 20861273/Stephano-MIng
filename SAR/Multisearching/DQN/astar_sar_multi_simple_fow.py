@@ -753,7 +753,8 @@ class Environment:
             # fmask = np.transpose(np.where(fmask_matrix)).tolist()
             # fmask_set = set(map(tuple, fmask))
 
-            # Update any new neighbours here
+            ## Update any new neighbours here
+            # Set mask of all known cells
             fmask = []
             for pos in self.pos:
                 fmask_matrix = distances[pos[1], pos[0]] != WIDTH * HEIGHT
@@ -763,60 +764,8 @@ class Environment:
                 fmask.append(temp_fmask)
             fmask = np.array([item for row in fmask for item in row])
             breakpoint
-            
-            distances[
-                np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-                ] \
-            =\
-            np.minimum(\
-                distances[
-                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
-                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
-                ],
-                distances[
-                    np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
-                    np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0]),
-                ]\
-                +\
-                np.repeat(np.repeat(
-                    distances[
-                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
-                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
-                    np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
-                    np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0])
-                    ][:,np.newaxis,np.newaxis],WIDTH,axis=1),HEIGHT,axis=2)
-                )# distance from neighbour to parent for all cells in matrix (create new matrix for all neighbours)
-            
-            # distances[
-            #     np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
-            #     np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
-            #     np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-            #     np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-            #     ] \
-            # =\
-            # np.minimum(\
-            #     distances[
-            #         np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
-            #         np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
-            #         np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-            #         np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-            #     ],
-            #     distances[
-            #         np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
-            #         np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0]),
-            #         np.repeat(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-            #         np.repeat(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-            #     ]\
-            #     +\
-            #     distances[
-            #         np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,1].shape[0]),
-            #         np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,0].shape[0]),
-            #         np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,1].shape[0]),
-            #         np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,0].shape[0])
-            #     ])
 
-            # After the loop, convert all_fmask to a set if needed
+            # Update neighbours of all known cells
             fmask_set = set(map(tuple, fmask))
             for cell in fmask:
                 if Point(cell[1],cell[0]) in self.neighbours_complete: continue
@@ -827,6 +776,111 @@ class Environment:
                 results = list(filter(self.in_bounds, results))
                 neighbours = [n for n in results if tuple((n[1],n[0])) in fmask_set]
                 self.neighbours[Point(cell[1],cell[0])] = np.array(neighbours)
+
+                # Mask the already calculated distances to avoid overwriting them
+                mask = distances[
+                        cell[0],
+                        cell[1],
+                        self.neighbours[Point(cell[1],cell[0])][:, 1], 
+                        self.neighbours[Point(cell[1],cell[0])][:, 0]] \
+                        == HEIGHT*WIDTH
+                # Update distance from current position to unknown neighbours
+                distances[
+                    cell[0],
+                    cell[1],
+                    self.neighbours[Point(cell[1],cell[0])][mask][:, 1],
+                    self.neighbours[Point(cell[1],cell[0])][mask][:, 0]] \
+                    = 1
+                # Update distance from unknown neighbours to unknown neighbours
+                distances[
+                    self.neighbours[Point(cell[1],cell[0])][mask][:, 1], 
+                    self.neighbours[Point(cell[1],cell[0])][mask][:, 0], 
+                        self.neighbours[Point(cell[1],cell[0])][mask][:, 1], 
+                        self.neighbours[Point(cell[1],cell[0])][mask][:, 0]] \
+                        = 0
+                # Update distance from unknown neighbours to current position
+                distances[
+                    self.neighbours[Point(cell[1],cell[0])][mask][:, 1], 
+                    self.neighbours[Point(cell[1],cell[0])][mask][:, 0], 
+                    cell[0], 
+                    cell[1]] \
+                    = 1
+                
+            self.grid_plot()
+            plt.show()
+            breakpoint
+
+            # Set neighbours of neighbours
+            c_neighbours = [Point(neighbour.x, neighbour.y) for neighbour in self.neighbours[self.pos]]
+            n_neighbours = [self.neighbours[key] for key in c_neighbours]
+            n_neighbours = np.array([item for row in n_neighbours for item in row])
+            
+            # Update distances of current position neighbours
+            distances[
+                np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
+                np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
+                np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                ] \
+            =\
+            np.minimum(\
+                # From neighbours to all known cells
+                distances[ 
+                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
+                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
+                    np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                    np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                ],
+                # From current position to all known cells PLUS neighbours to current position
+                distances[ 
+                    np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+                    np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
+                    np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                    np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                ]\
+                +\
+                distances[
+                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
+                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
+                    np.tile(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+                    np.tile(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
+                ],
+                # From neighbours of neighbours to all known cells PLUS neighbours to current position
+                distances[ # finish thought from here
+                    np.repeat(n_neighbours[:,1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+                    np.repeat(n_neighbours[:,0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
+                    np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                    np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                ]\
+                +\
+                distances[
+                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
+                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
+                    np.tile(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+                    np.tile(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
+                ]
+                )
+            
+            self.grid_plot()
+            plt.show()
+            breakpoint
+            
+            # Update mirrored distances of updated neighbour distances
+            distances[
+                np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0]),
+                np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
+                np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0])                
+                ]\
+            =\
+            distances[
+                np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
+                np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
+                np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                ]
+
+            
                 # self.update_neighbours_distances(Point(cell[1],cell[0]))
             
             self.grid_plot()
@@ -902,9 +956,7 @@ class Environment:
                         
                         # # Update distance if new distance is smaller
                         # distances[neighbour[1]][neighbour[0]][y][x] = np.minimum(distances[neighbour[1]][neighbour[0]][y][x], new_distance)
-            self.grid_plot()
-            plt.show()
-            breakpoint
+
                     
     def grid_plot(self):
         grid_size = int(math.sqrt(HEIGHT*WIDTH))
