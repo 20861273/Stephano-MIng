@@ -744,9 +744,9 @@ class Environment:
             distances[self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0], \
                       self.pos[ri].y, self.pos[ri].x] = 1
 
-            self.grid_plot()
-            plt.show()
-            breakpoint
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
 
             # # Update any new neighbours here
             # fmask_matrix = distances[self.pos[ri].y, self.pos[ri].x] != WIDTH*HEIGHT
@@ -757,7 +757,7 @@ class Environment:
             # Set mask of all known cells
             fmask = []
             for pos in self.pos:
-                fmask_matrix = distances[pos[1], pos[0]] != WIDTH * HEIGHT
+                fmask_matrix = distances[pos.y, pos.x] != WIDTH * HEIGHT
                 temp_fmask = np.transpose(np.where(fmask_matrix)).tolist()
                 temp_fmask_set = set(map(tuple, temp_fmask))
                 # Accumulate fmask_set
@@ -806,86 +806,77 @@ class Environment:
                     cell[1]] \
                     = 1
                 
-            self.grid_plot()
-            plt.show()
-            breakpoint
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
 
             # Set neighbours of neighbours
-            c_neighbours = [Point(neighbour.x, neighbour.y) for neighbour in self.neighbours[self.pos]]
+            c_neighbours = [Point(neighbour[0], neighbour[1]) for neighbour in self.neighbours[self.pos[ri]]]
             n_neighbours = [self.neighbours[key] for key in c_neighbours]
+            n_neighbours.append(np.array([[self.pos[ri].x, self.pos[ri].y]]))
             n_neighbours = np.array([item for row in n_neighbours for item in row])
-            
-            # Update distances of current position neighbours
-            distances[
-                np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
-                np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
-                np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-                ] \
-            =\
-            np.minimum(\
-                # From neighbours to all known cells
-                distances[ 
-                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
-                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
-                    np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                    np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-                ],
-                # From current position to all known cells PLUS neighbours to current position
-                distances[ 
-                    np.repeat(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-                    np.repeat(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
-                    np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                    np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-                ]\
-                +\
-                distances[
-                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
-                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
-                    np.tile(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-                    np.tile(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
-                ],
-                # From neighbours of neighbours to all known cells PLUS neighbours to current position
-                distances[ # finish thought from here
-                    np.repeat(n_neighbours[:,1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-                    np.repeat(n_neighbours[:,0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
-                    np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                    np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
-                ]\
-                +\
-                distances[
-                    np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
-                    np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
-                    np.tile(self.pos[ri].y,self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-                    np.tile(self.pos[ri].x,self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
-                ]
-                )
-            
-            self.grid_plot()
-            plt.show()
+
             breakpoint
+                
+            # Update distances of current position neighbours
+            for neighbour in n_neighbours:
+                distances[
+                    np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]), # n * k
+                    np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
+                    np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                    np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                    ] \
+                =\
+                np.minimum(\
+                    # From neighbours to all known cells
+                    distances[ 
+                        np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
+                        np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
+                        np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                        np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                    ],
+                    # From current position to all known cells PLUS neighbours to current position
+                    # Instead from all neighbours of neighbours to all known cells PLUS neighbours to neighbours neighbours of neighbours
+                    distances[ 
+                        np.repeat(neighbour[1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+                        np.repeat(neighbour[0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
+                        np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                        np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                    ]\
+                    +\
+                    distances[
+                        np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
+                        np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
+                        np.tile(neighbour[1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+                        np.tile(neighbour[0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
+                    ]
+                    )
+            
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
             
             # Update mirrored distances of updated neighbour distances
             distances[
-                np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0]),
-                np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
-                np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0])                
+                np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0]),
+                np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
+                np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0])                
                 ]\
             =\
             distances[
-                np.repeat(self.neighbours[self.pos[ri]][:, 1][np.newaxis,:], fmask[:,0].shape[0]),
-                np.repeat(self.neighbours[self.pos[ri]][:, 0][np.newaxis,:], fmask[:,1].shape[0]),
-                np.tile(fmask[:, 0][np.newaxis,:],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                np.tile(fmask[:, 1][np.newaxis,:],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
+                np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
+                np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+                np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
                 ]
 
             
                 # self.update_neighbours_distances(Point(cell[1],cell[0]))
             
-            self.grid_plot()
-            plt.show()
-            breakpoint
+        # self.grid_plot()
+        # plt.show()
+        # breakpoint
 
             # for known_matrices in fmask:
             #     known_matrices = Point(known_matrices[1], known_matrices[0])
@@ -1214,7 +1205,7 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 1 # Number of simulation iterations
+test_iterations = 1000 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
@@ -1263,6 +1254,7 @@ planning_times = [] # tracks time per iteration
 flight_times = [] # tracks flight time per iteration
 flight_distances = [] # tracks flight distance per ietration
 schedule_times = [] # tracks each scheduling time 
+dist_update_times = []
 path_times = [] # track each path planning time
 frontier_list = [[] for _ in range(test_iterations)] # tracks scheduled candidates for each iteration in separate lists
 unsuccessful = 0 # tracks number of unsuccessful search attempts 
@@ -1501,7 +1493,9 @@ for i in range(test_iterations):
                     explorations[r] += 1
                 
                 # execute move in environment
+                start_dist_time = time.time()
                 env.move(r, current_path[r][0])
+                end_dist_time = time.time()
                 
                 # if drone reached frontier
                 # AND drone position is equal to starting position
@@ -1563,6 +1557,7 @@ for i in range(test_iterations):
             
             schedule_times.append(end_scheduler_time-start_scheduler_time)
             path_times.append(path_time)
+            dist_update_times.append(end_dist_time-start_dist_time)
             
             # save to draw trajectories
             if i in saves: save = True #    <---------------------------------------------------------------------- (i think old functionality)
@@ -1630,8 +1625,11 @@ print_string += "\nAverage flight time: %.2fh%.2fm%.2fs" %(fh,fm,fs)
 print_string += "\nAverage flight distance: %.2f m" %(np.mean(np.array(flight_distances)))
 for ri in range(nr):
     print_string += "\nAverage explorations for drone %d: %.2f" %(ri, average_explorations[ri])
+average_time = np.mean(np.array(schedule_times)) + np.mean(np.array(path_times)) + np.mean(np.array(dist_update_times))
 print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_times)))
 print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times)))
+print_string += "\nAverage time updating distance matrix: %.8fs"%(np.mean(np.array(dist_update_times)))
+print_string += "\nAverage time per step: %.8fs"%(average_time)
 print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
 print_string += "\nObstacles: %.2f"%(obstacle_density)
 for r in range(nr):
