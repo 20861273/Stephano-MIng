@@ -7,7 +7,8 @@ import time
 from collections import namedtuple
 Point = namedtuple('Point', 'x, y')
 
-t = [True, True]
+t = np.array([1,2])
 
-if not all(t):
-    print(0)
+print(np.tile(t, 2))
+
+print(np.tile(np.tile(t, 2),2))
