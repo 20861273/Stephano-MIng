@@ -16,8 +16,8 @@ import math
 from functools import reduce
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 8
-WIDTH = 8
+HEIGHT = 20
+WIDTH = 20
 
 # Chosen values
 height = 100 # m
@@ -825,73 +825,84 @@ class Environment:
             n_neighbours = np.array([item for row in n_neighbours for item in row])
 
             breakpoint
-                
-            # Update distances of current position neighbours
-            for neighbour in n_neighbours:
+
+            # update neighbours
+            for cell in c_neighbours:
+                cell = np.array([cell.y, cell.x])
                 distances[
-                    np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]), # n * k
-                    np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
-                    np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                    np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                    np.repeat(cell[0], fmask[:,0].shape[0]),
+                    np.repeat(cell[1], fmask[:,1].shape[0]),
+                    fmask[:, 0],
+                    fmask[:, 1]
                     ] \
                 =\
                 np.minimum(\
-                    # From neighbours to all known cells
+                    # From cell to all known cells
                     distances[ 
-                        np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
-                        np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
-                        np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                        np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+                        np.repeat(cell[0], fmask[:,0].shape[0]),
+                        np.repeat(cell[1], fmask[:,1].shape[0]),
+                        fmask[:, 0],
+                        fmask[:, 1]
                     ],
-                    # From current position to all known cells PLUS neighbours to current position
-                    # Instead from all neighbours of neighbours to all known cells PLUS neighbours to neighbours neighbours of neighbours
-                    distances[ 
-                        np.repeat(neighbour[1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-                        np.repeat(neighbour[0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
-                        np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-                        np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
-                    ]\
-                    +\
-                    distances[
-                        np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
-                        np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
-                        np.tile(neighbour[1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-                        np.tile(neighbour[0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
-                    ]
+                    # 
+                    np.minimum.reduceat(
+                        distances[ 
+                            np.tile(fmask[:, 0], fmask[:,0].shape[0]),
+                            np.tile(fmask[:, 1], fmask[:,0].shape[0]),
+                            np.tile(np.repeat(cell[0], fmask[:,0].shape[0]), fmask[:,0].shape[0]),
+                            np.tile(np.repeat(cell[1], fmask[:,1].shape[0]), fmask[:,0].shape[0])
+                        ]\
+                        +\
+                        distances[ 
+                            np.tile(fmask[:,0], fmask[:,0].shape[0]),
+                            np.tile(fmask[:,1], fmask[:,0].shape[0]),
+                            np.repeat(fmask[:,0], fmask[:,0].shape[0]),
+                            np.repeat(fmask[:,1], fmask[:,0].shape[0])                        
+                            ],
+                        np.arange(0, fmask[:,0].shape[0]*fmask[:,0].shape[0], fmask[:,0].shape[0])
                     )
+                        
+                    )
+                # self.grid_plot()
+                # plt.show()
+                # breakpoint
+                # plt.close()
                 
-            # # Update distances of current position neighbours
-            # temp_dist_vec[
-            #     np.tile(np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]), n_neighbours[:,1].shape[0]), # n * k
-            #     np.tile(np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]), n_neighbours[:,0].shape[0]),
-            #     np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]*n_neighbours[:,1].shape[0]),
-            #     np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0]*n_neighbours[:,0].shape[0])
-            #     ] \
-            # =\
-            # np.minimum(\
-            #     # From neighbours to all known cells
-            #     temp_dist_vec[ 
-            #         np.tile(np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]), n_neighbours[:,1].shape[0]),
-            #         np.tile(np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]), n_neighbours[:,0].shape[0]),
-            #         np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]*n_neighbours[:,1].shape[0]),
-            #         np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0]*n_neighbours[:,0].shape[0])
-            #     ],
-            #     # From current position to all known cells PLUS neighbours to current position
-            #     # Instead from all neighbours of neighbours to all known cells PLUS neighbours to neighbours neighbours of neighbours
-            #     temp_dist_vec[ 
-            #         np.repeat(n_neighbours[:,1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-            #         np.repeat(n_neighbours[:,0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
-            #         np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]*n_neighbours[:,1].shape[0]),
-            #         np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0]*n_neighbours[:,0].shape[0])
-            #     ]\
-            #     +\
-            #     temp_dist_vec[
-            #         np.tile(np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]), n_neighbours[:,1].shape[0]),
-            #         np.tile(np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]), n_neighbours[:,0].shape[0]),
-            #         np.repeat(n_neighbours[:,1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
-            #         np.repeat(n_neighbours[:,0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
-            #     ]
-            #     )
+            # Update distances of current position neighbours
+            # for neighbour in n_neighbours:
+            #     distances[
+            #         np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]), # n * k
+            #         np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
+            #         np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+            #         np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+            #         ] \
+            #     =\
+            #     np.minimum(\
+            #         # From neighbours to all known cells
+            #         distances[ 
+            #             np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
+            #             np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
+            #             np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+            #             np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+            #         ],
+            #         # From current position to all known cells PLUS neighbours to current position
+            #         # Instead from all neighbours of neighbours to all known cells PLUS neighbours to neighbours neighbours of neighbours
+            #         distances[ 
+            #             np.repeat(neighbour[1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+            #             np.repeat(neighbour[0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0]),
+            #             np.tile(fmask[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
+            #             np.tile(fmask[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
+            #         ]\
+            #         +\
+            #         distances[
+            #             np.repeat(self.neighbours[self.pos[ri]][:, 1], fmask[:,0].shape[0]),
+            #             np.repeat(self.neighbours[self.pos[ri]][:, 0], fmask[:,1].shape[0]),
+            #             np.tile(neighbour[1],self.neighbours[self.pos[ri]][:, 1].shape[0]*fmask[:,0].shape[0]),
+            #             np.tile(neighbour[0],self.neighbours[self.pos[ri]][:, 0].shape[0]*fmask[:,1].shape[0])
+            #         ]
+            #         )
+                
+            
             
             # self.grid_plot()
             # plt.show()
@@ -1217,7 +1228,7 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 1 # Number of simulation iterations
+test_iterations = 100 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
