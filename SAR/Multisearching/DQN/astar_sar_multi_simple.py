@@ -14,10 +14,11 @@ import pickle
 from collections import deque
 import math
 from functools import reduce
+import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 10
-WIDTH = 10
+HEIGHT = 100
+WIDTH = 100
 
 # Chosen values
 height = 100 # m
@@ -503,12 +504,13 @@ class Environment:
         # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
         # this becomes important when there are only n cells left to explore
         min_targets = self.get_min_targets(costs)
-        temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
+        temp_costs = copy.deepcopy(costs)
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
             for ri in range(self.nr):
-                for target in min_targets[ri]:
-                    if target in temp_costs[ri]: del temp_costs[ri][target]
+                targets_to_remove = set(min_targets[ri]) & set(temp_costs[ri].keys())
+                for target in targets_to_remove:
+                    del temp_costs[ri][target]
 
             # find next best targets
             next_min_targets = self.get_min_targets(temp_costs)
@@ -897,16 +899,16 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 100 # Number of simulation iterations
+test_iterations = 1 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 1 # number of drones
+nr = 3 # number of drones
 obstacles = True # Sets of obstacels spawn
 obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
 save_obstacles = False # Sets if obstacles are saved
-load_obstacles = True # Sets if obstacles should be loaded from previous simulation
+load_obstacles = False # Sets if obstacles should be loaded from previous simulation
 
 # Trajectory saving initialisations
 save_trajectory = True # Sets if drone trajectories are saves
@@ -986,7 +988,10 @@ for i in range(test_iterations):
     ongoing_frontiers = [None]*nr # initialises on going candidates (this is a variable which checks if the drone has reach its candidate cell)
     goal_exit_condition = False # initialises boolean for exit condition (checks if any drone has reached goal)
     # loop for planning until an exit condition is met
+    start_step = 0
     while not env.exploration_grid.all() and not goal_exit_condition and planning_successful:
+        print("%.4f    %.4f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
+        start_step = time.time()
         if steps > 1000:
             breakpoint
         if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]) and finished_scheduling[ri] == True:

@@ -14,10 +14,12 @@ import pickle
 from collections import deque
 import math
 from functools import reduce
+import copy
 
 Point = namedtuple('Point', 'x, y')
 HEIGHT = 20
 WIDTH = 20
+UNKNOWN = WIDTH*HEIGHT*2
 
 # Chosen values
 height = 100 # m
@@ -404,7 +406,7 @@ class Environment:
         # set target cluster
         self.target_cluster = [[None]]*self.nr
 
-        distances = np.full((HEIGHT,WIDTH, HEIGHT,WIDTH), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+        distances = np.full((HEIGHT,WIDTH, HEIGHT,WIDTH), UNKNOWN)  # Initialize distances to HEIGHT*WIDTH (unreachable)
         for ri in range(self.nr):
             distances[self.pos[ri].y][self.pos[ri].x][self.pos[ri].y][self.pos[ri].x] = 0
         temp_dist_vec = np.copy(distances)
@@ -508,7 +510,7 @@ class Environment:
             # if ongoing_frontiers[ri] != None: continue
             for y in range(self.grid.shape[0]):
                 for x in range(self.grid.shape[1]):
-                    if not temp_exploration_grid[y,x]:
+                    if not temp_exploration_grid[y,x] and distances[self.pos[ri].y][self.pos[ri].x][y][x] != UNKNOWN:
                         # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
                         costs[ri][Point(x,y)] = distances[self.pos[ri].y][self.pos[ri].x][y][x]
 
@@ -526,7 +528,7 @@ class Environment:
         # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
         # this becomes important when there are only n cells left to explore
         min_targets = self.get_min_targets(costs)
-        temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
+        temp_costs = copy.deepcopy(costs)
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
             for ri in range(self.nr):
@@ -731,7 +733,7 @@ class Environment:
                             neighbour[0],
                             self.neighbours[Point(neighbour[0],neighbour[1])][:, 1], 
                             self.neighbours[Point(neighbour[0],neighbour[1])][:, 0]] \
-                            == HEIGHT*WIDTH
+                            == UNKNOWN
                     # Update distance from current position to unknown neighbours
                     distances[
                         neighbour[1],
@@ -758,7 +760,7 @@ class Environment:
                 
             # Mask the already calculated distances to avoid overwriting them
             mask = distances[self.pos[ri].y, self.pos[ri].x, \
-                            self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] == HEIGHT*WIDTH
+                            self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] == UNKNOWN
             # Update distance from current position to unknown neighbours
             distances[self.pos[ri].y, self.pos[ri].x, \
                       self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0]] = 1
@@ -1208,7 +1210,7 @@ test_iterations = 1 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 2 # number of drones
+nr = 3 # number of drones
 obstacles = True # Sets of obstacels spawn
 obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
@@ -1217,7 +1219,7 @@ load_obstacles = False # Sets if obstacles should be loaded from previous simula
 
 # Trajectory saving initialisations
 save_trajectory = True # Sets if drone trajectories are saves
-step_trajectory = True # Sets if the drone trajectories are saves each step
+step_trajectory = False # Sets if the drone trajectories are saves each step
 each_drone = False # Stes if drone trajectories are saved separately in the step trajectories
 saved_iterations = 2 # Sets number of iteration trajectories are saved
 saves = []                                     #    <---------------------------------------------------------------------- (IDK what this does)
@@ -1255,6 +1257,8 @@ flight_distances = [] # tracks flight distance per ietration
 schedule_times = [] # tracks each scheduling time 
 dist_update_times = []
 path_times = [] # track each path planning time
+selection_times = []
+success_times = []
 frontier_list = [[] for _ in range(test_iterations)] # tracks scheduled candidates for each iteration in separate lists
 unsuccessful = 0 # tracks number of unsuccessful search attempts 
 sheduled_distances = [[] for _ in range(nr)] # tracks the distance a candidate cell is from the current cell
@@ -1295,7 +1299,10 @@ for i in range(test_iterations):
     ongoing_frontiers = [None]*nr # initialises on going candidates (this is a variable which checks if the drone has reach its candidate cell)
     goal_exit_condition = False # initialises boolean for exit condition (checks if any drone has reached goal)
     # loop for planning until an exit condition is met
+    start_step = 0
     while not env.exploration_grid.all() and not goal_exit_condition and planning_successful:
+        print("%.2f    %.2f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
+        start_step = time.time()
         if steps > 1000:
             breakpoint
         if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]) and finished_scheduling[ri] == True:
@@ -1328,6 +1335,8 @@ for i in range(test_iterations):
 
         # plan paths
         path_time = 0 # tracks path planning time
+        selection_time = 0
+        success_time = 0
         # if drones are returning home and if the drone has been taken out of consideration for scheduling 
         for r in range(nr):
             # if drone is at candidate and the candidate is the dtarting postition
@@ -1354,6 +1363,7 @@ for i in range(test_iterations):
         temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()} # sets the occupancy of all cells to current history
 
         # loop for path planning
+        start_selection = time.time()
         while planning:
             # if the number of plans for current priority drone is not equal to zero
             # AND (the number of plans for current priorty drone) MOD (the number of drones) equals zero
@@ -1469,8 +1479,10 @@ for i in range(test_iterations):
                     cntr = 0
                     n_plans = 0
         
+        end_selection = time.time()
         # paths were successfully planned
         # then continue to moving the drones
+        start_success = time.time()
         if planning_successful:
             for r in range(nr):
                 # if drone is finished searching
@@ -1553,10 +1565,14 @@ for i in range(test_iterations):
                     goal_exit_condition = True
                 
                 path_time += end_path_time - start_path_time
+            selection_time += end_selection - start_selection
+            success_time += time.time() - start_success
             
             schedule_times.append(end_scheduler_time-start_scheduler_time)
             path_times.append(path_time)
             dist_update_times.append(end_dist_time-start_dist_time)
+            selection_times.append(selection_time)
+            success_times.append(success_time)
             
             # save to draw trajectories
             if i in saves: save = True #    <---------------------------------------------------------------------- (i think old functionality)
@@ -1626,7 +1642,9 @@ for ri in range(nr):
     print_string += "\nAverage explorations for drone %d: %.2f" %(ri, average_explorations[ri])
 average_time = np.mean(np.array(schedule_times)) + np.mean(np.array(path_times)) + np.mean(np.array(dist_update_times))
 print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_times)))
-print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times)))
+print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times))) 
+print_string += "\nAverage time drone selection and planning: %.8fs"%(np.mean(np.array(selection_times)))
+print_string += "\nAverage time success: %.8fs"%(np.mean(np.array(success_times)))
 print_string += "\nAverage time updating distance matrix: %.8fs"%(np.mean(np.array(dist_update_times)))
 print_string += "\nAverage time per step: %.8fs"%(average_time)
 print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
