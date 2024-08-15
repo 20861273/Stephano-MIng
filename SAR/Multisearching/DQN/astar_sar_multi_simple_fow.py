@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 20
-WIDTH = 20
+HEIGHT = 4
+WIDTH = 4
 UNKNOWN = WIDTH*HEIGHT*2
 
 # Chosen values
@@ -533,7 +533,8 @@ class Environment:
             # delete best targets from temp cost list
             for ri in range(self.nr):
                 for target in min_targets[ri]:
-                    if target in temp_costs[ri]: del temp_costs[ri][target]
+                    if target in temp_costs[ri]:
+                        del temp_costs[ri][target]
 
             # find next best targets
             next_min_targets = self.get_min_targets(temp_costs)
@@ -727,51 +728,67 @@ class Environment:
                     neighbours = list(filter(self.is_known, second_neighbours))
                     self.neighbours[Point(neighbour[0],neighbour[1])] = np.array(neighbours)
 
-                    # Mask the already calculated distances to avoid overwriting them
-                    mask = distances[
-                            neighbour[1],
-                            neighbour[0],
-                            self.neighbours[Point(neighbour[0],neighbour[1])][:, 1], 
-                            self.neighbours[Point(neighbour[0],neighbour[1])][:, 0]] \
-                            == UNKNOWN
-                    # Update distance from current position to unknown neighbours
-                    distances[
-                        neighbour[1],
-                        neighbour[0],
-                        self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1],
-                        self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0]] \
-                        = 1
-                    # Update distance from unknown neighbours to unknown neighbours
-                    distances[
-                        self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1], 
-                        self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0], 
-                            self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1], 
-                            self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0]] \
-                            = 0
-                    # Update distance from unknown neighbours to current position
-                    distances[
-                        self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1], 
-                        self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0], 
-                        neighbour[1], 
-                        neighbour[0]] \
-                        = 1
+                    # # Mask the already calculated distances to avoid overwriting them
+                    # mask = distances[
+                    #         neighbour[1],
+                    #         neighbour[0],
+                    #         self.neighbours[Point(neighbour[0],neighbour[1])][:, 1], 
+                    #         self.neighbours[Point(neighbour[0],neighbour[1])][:, 0]] \
+                    #         == UNKNOWN
+                    # # Update distance from current position to unknown neighbours
+                    # distances[
+                    #     neighbour[1],
+                    #     neighbour[0],
+                    #     self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1],
+                    #     self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0]] \
+                    #     = 1
+                    # # Update distance from unknown neighbours to unknown neighbours
+                    # distances[
+                    #     self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1], 
+                    #     self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0], 
+                    #         self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1], 
+                    #         self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0]] \
+                    #         = 0
+                    # # Update distance from unknown neighbours to current position
+                    # distances[
+                    #     self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 1], 
+                    #     self.neighbours[Point(neighbour[0],neighbour[1])][mask][:, 0], 
+                    #     neighbour[1], 
+                    #     neighbour[0]] \
+                    #     = 1
 
                 self.neighbours_complete[self.pos[ri]] = True
                 
             # Mask the already calculated distances to avoid overwriting them
             mask = distances[self.pos[ri].y, self.pos[ri].x, \
                             self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] == UNKNOWN
+            
+            # self.grid_plot()
+            # plt.show()
             # Update distance from current position to unknown neighbours
             distances[self.pos[ri].y, self.pos[ri].x, \
-                      self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0]] = 1
+                      self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 1
+            
+            # self.grid_plot()
+            # plt.show()
             # Update distance from unknown neighbours to unknown neighbours
-            distances[self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0], \
-                      self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0]] = 0
+            distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
+                      self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 0
+            
+            # self.grid_plot()
+            # plt.show()
             # Update distance from unknown neighbours to current position
-            distances[self.neighbours[self.pos[ri]][mask][:, 1], self.neighbours[self.pos[ri]][mask][:, 0], \
+            distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
                       self.pos[ri].y, self.pos[ri].x] = 1
             end = time.time()
             self.first_dist.append(end-start)
+            # self.grid_plot()
+            # plt.show()
+
+            # self.grid_plot()
+            # plt.show()
+
+        
 
         # # Update any new neighbours here
         # # Set mask of all known cells
@@ -833,6 +850,8 @@ class Environment:
             # breakpoint
             end = time.time()
             self.second_dist.append(end-start)
+        # self.grid_plot()
+        # plt.show()
 
         np_known_cells = np.array(self.known_cells)
         for ri in range(self.nr):
@@ -917,38 +936,71 @@ class Environment:
             
         
         # self.grid_plot()
-        # # self.grid_plot_vec()
         # plt.show()
-        # breakpoint
+        # # breakpoint
         # plt.close()
 
-                    
     def grid_plot(self):
-        grid_size = int(math.sqrt(HEIGHT*WIDTH))
-        # Create a figure and axes
-        fig, axs = plt.subplots(grid_size, grid_size, figsize=(8, 8))
+        fig, axs = plt.subplots(HEIGHT, WIDTH, figsize=(10, 10), gridspec_kw={'wspace': 0.2, 'hspace': 0.2})
 
-        # Loop through each cell of the larger grid
         for j in range(HEIGHT):
             for i in range(WIDTH):
-                # Create a subplot for the current cell
                 ax = axs[j, i]
-
-                # Plot the smaller grid with actual values
-                ax.imshow(distances[j][i], cmap='viridis')
+                im = ax.imshow(distances[j][i], cmap='Reds')
 
                 for y in range(distances[j][i].shape[0]):
                     for x in range(distances[j][i].shape[1]):
-                        ax.text(x, y, f'{int(distances[j, i, y, x])}', va='center', ha='center', color='white', fontsize=6)
+                        ax.text(x, y, f'{int(distances[j][i][y, x])}', va='center', ha='center', color='black', fontsize=6)
 
-                # Optionally, you can set titles for each subplot
-                ax.set_title(f'Subgrid {j * grid_size + i + 1}')
+                ax.set_xticks(np.arange(distances[j][i].shape[1]))
+                ax.set_yticks(np.arange(distances[j][i].shape[0]))
+                ax.set_xticklabels(np.arange(distances[j][i].shape[1]), fontsize=8)
+                ax.set_yticklabels(np.arange(distances[j][i].shape[0])[::-1], fontsize=8)  # Reversed inner y-axis
 
-                # Remove axis ticks and labels if desired
-                ax.axis('off')
+                ax.tick_params(axis='both', which='both', length=0)
+                ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
+                ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
 
-        # Adjust layout to prevent overlap
-        plt.tight_layout()
+        # for ax, col in zip(axs[-1, :], range(WIDTH)):
+        #     ax.annotate(col, xy=(1.5,0), xytext=(0, 0),
+        #                 textcoords='figure points', ha='center', va='baseline', fontsize=10)  # Lowered outer x-axis
+
+        # for ax, row in zip(axs[:, 0], range(HEIGHT)):
+        #     ax.annotate(HEIGHT - 1 - row, xy=(-1, 1), xytext=(0, 0),
+        #                 textcoords='offset points', ha='right', va='center', fontsize=10)  # Reversed outer y-axis
+
+        plt.tight_layout(rect=[0.15, 0.15, 0.9, 0.9])
+
+        # fig.text(0.5, 0.02, 'Outer X-axis', ha='center', fontsize=12)
+        # fig.text(0.02, 0.5, 'Outer Y-axis', va='center', rotation='vertical', fontsize=12)
+
+                    
+    # def grid_plot(self):
+    #     grid_size = int(math.sqrt(HEIGHT*WIDTH))
+    #     # Create a figure and axes
+    #     fig, axs = plt.subplots(grid_size, grid_size, figsize=(8, 8))
+
+    #     # Loop through each cell of the larger grid
+    #     for j in range(HEIGHT):
+    #         for i in range(WIDTH):
+    #             # Create a subplot for the current cell
+    #             ax = axs[j, i]
+
+    #             # Plot the smaller grid with actual values
+    #             ax.imshow(distances[j][i], cmap='viridis')
+
+    #             for y in range(distances[j][i].shape[0]):
+    #                 for x in range(distances[j][i].shape[1]):
+    #                     ax.text(x, y, f'{int(distances[j, i, y, x])}', va='center', ha='center', color='white', fontsize=6)
+
+    #             # Optionally, you can set titles for each subplot
+    #             ax.set_title(f'Subgrid {j * grid_size + i + 1}')
+
+    #             # Remove axis ticks and labels if desired
+    #             ax.axis('off')
+
+    #     # Adjust layout to prevent overlap
+    #     plt.tight_layout()
 
     def grid_plot_vec(self):
         grid_size = int(math.sqrt(HEIGHT*WIDTH))
@@ -1206,11 +1258,11 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 1 # Number of simulation iterations
+test_iterations = 1000 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 3 # number of drones
+nr = 2 # number of drones
 obstacles = True # Sets of obstacels spawn
 obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
@@ -1267,7 +1319,7 @@ trajectory = [[] for r in range(nr)] # tracks drone trajectories
 # Environment generation
 env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
 env.reset(goal_spawning)
-print(env.ES_starting_grid)
+# print(env.ES_starting_grid)
 
 # Simulation testing loop
 for i in range(test_iterations):
@@ -1301,7 +1353,7 @@ for i in range(test_iterations):
     # loop for planning until an exit condition is met
     start_step = 0
     while not env.exploration_grid.all() and not goal_exit_condition and planning_successful:
-        print("%.2f    %.2f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
+        # print("%.2f    %.2f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
         start_step = time.time()
         if steps > 1000:
             breakpoint
@@ -1726,7 +1778,10 @@ if save_obstacles:
     file_name = os.path.join(save_dir, file_name)
     write_json(obstacle_positions, file_name)
 
-    # env.grid_plot()
+    plt.close()
+    env.grid_plot()
+    file_name = 'distance_matrix.png'
+    plt.savefig(os.path.join(dir_path, file_name))
     # # self.grid_plot_vec()
     # plt.show()
     # breakpoint
