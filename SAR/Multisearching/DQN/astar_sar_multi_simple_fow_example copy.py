@@ -760,19 +760,21 @@ class Environment:
             mask = distances[self.pos[ri].y, self.pos[ri].x, \
                             self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] == UNKNOWN
             
-            # Update distance from current position to neighbour neighbours
+            # self.grid_plot()
+            # plt.show()
+            # Update distance from current position to unknown neighbours
             distances[self.pos[ri].y, self.pos[ri].x, \
                       self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 1
             
             # self.grid_plot()
             # plt.show()
-            # Update distance from neighbours to neighbours
+            # Update distance from unknown neighbours to unknown neighbours
             distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
                       self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 0
             
             # self.grid_plot()
             # plt.show()
-            # Update distance from neighbours to current position
+            # Update distance from unknown neighbours to current position
             distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
                       self.pos[ri].y, self.pos[ri].x] = 1
             end = time.time()
@@ -780,75 +782,12 @@ class Environment:
             # self.grid_plot()
             # plt.show()
 
-            # self.grid_plot()
-            # plt.show()
-            # breakpoint
-            # plt.close()
-
-        
-
-        # # Update any new neighbours here
-        # # Set mask of all known cells
-        # start = time.time()
-        # fmask = []
-        # for pos in self.pos:
-        #     fmask_matrix = distances[pos.y, pos.x] != WIDTH * HEIGHT
-        #     temp_fmask = np.transpose(np.where(fmask_matrix)).tolist()
-        #     temp_fmask_set = set(map(tuple, temp_fmask))
-        #     # Accumulate fmask_set
-        #     fmask.append(temp_fmask)
-        # fmask = np.array([item for row in fmask for item in row])
-        # breakpoint
-
-        # # Update neighbours of all known cells
-        # fmask_set = set(map(tuple, fmask))
-        # to_be_removed = []
-        # for cell_i, cell in enumerate(fmask):
-        #     if Point(cell[1],cell[0]) in self.neighbours_complete: continue
-        #     results = [[cell[1]+1, cell[0]],
-        #             [cell[1], cell[0]-1],
-        #             [cell[1]-1, cell[0]],
-        #             [cell[1], cell[0]+1]]
-        #     results = list(filter(self.in_bounds, results))
-        #     neighbours = [n for n in results if tuple((n[1],n[0])) in fmask_set]
-        #     self.neighbours[Point(cell[1],cell[0])] = np.array(neighbours)
-
-        #     # Mask the already calculated distances to avoid overwriting them
-        #     mask = distances[
-        #             cell[0],
-        #             cell[1],
-        #             self.neighbours[Point(cell[1],cell[0])][:, 1], 
-        #             self.neighbours[Point(cell[1],cell[0])][:, 0]] \
-        #             == HEIGHT*WIDTH
-        #     # Update distance from current position to unknown neighbours
-        #     distances[
-        #         cell[0],
-        #         cell[1],
-        #         self.neighbours[Point(cell[1],cell[0])][mask][:, 1],
-        #         self.neighbours[Point(cell[1],cell[0])][mask][:, 0]] \
-        #         = 1
-        #     # Update distance from unknown neighbours to unknown neighbours
-        #     distances[
-        #         self.neighbours[Point(cell[1],cell[0])][mask][:, 1], 
-        #         self.neighbours[Point(cell[1],cell[0])][mask][:, 0], 
-        #             self.neighbours[Point(cell[1],cell[0])][mask][:, 1], 
-        #             self.neighbours[Point(cell[1],cell[0])][mask][:, 0]] \
-        #             = 0
-        #     # Update distance from unknown neighbours to current position
-        #     distances[
-        #         self.neighbours[Point(cell[1],cell[0])][mask][:, 1], 
-        #         self.neighbours[Point(cell[1],cell[0])][mask][:, 0], 
-        #         cell[0], 
-        #         cell[1]] \
-        #         = 1
-                
-            # self.grid_plot()
-            # plt.show()
-            # breakpoint
+            self.grid_plot()
+            plt.show()
+            breakpoint
+            plt.close()
             end = time.time()
             self.second_dist.append(end-start)
-        # self.grid_plot()
-        # plt.show()
 
         np_known_cells = np.array(self.known_cells)
         for ri in range(self.nr):
@@ -856,53 +795,44 @@ class Environment:
             # Set neighbours of neighbours
             c_neighbours = [Point(neighbour[0], neighbour[1]) for neighbour in self.neighbours[self.pos[ri]]]
             n_neighbours = [self.neighbours[key] for key in c_neighbours]
-            n_neighbours.append(np.array([[self.pos[ri].x, self.pos[ri].y]]))
-            n_neighbours = np.array([item for row in n_neighbours for item in row])
+            n_neighbours.append([[self.pos[ri].x, self.pos[ri].y]])
+            n_neighbours = [[item[0],item[1]] for row in n_neighbours for item in row]
+            c_neighbours.extend(n_neighbours)
+            # Convert inner lists to tuples to make them hashable
+            list_of_tuples = [tuple(lst) for lst in c_neighbours]
+
+            # Use set to remove duplicates
+            unique_tuples = set(list_of_tuples)
+
+            # Convert tuples back to lists
+            c_neighbours = [list(tpl) for tpl in unique_tuples]
+
             end = time.time()
             self.thrid_dist.append(end-start)
             breakpoint
             start = time.time()
 
             # update neighbours
-            for cell in c_neighbours:
-                cell = np.array([cell.y, cell.x])
-                distances[
-                    np.repeat(cell[0], np_known_cells[:,0].shape[0]),
-                    np.repeat(cell[1], np_known_cells[:,1].shape[0]),
-                    np_known_cells[:, 0],
-                    np_known_cells[:, 1]
-                    ] \
-                =\
-                np.minimum(\
-                    # From cell to all known cells
-                    distances[ 
-                        np.repeat(cell[0], np_known_cells[:,0].shape[0]),
-                        np.repeat(cell[1], np_known_cells[:,1].shape[0]),
-                        np_known_cells[:, 0],
-                        np_known_cells[:, 1]
-                    ],
-                    # 
-                    np.minimum.reduceat(
-                        distances[ 
-                            np.tile(np_known_cells[:, 0], np_known_cells[:,0].shape[0]),
-                            np.tile(np_known_cells[:, 1], np_known_cells[:,0].shape[0]),
-                            np.tile(np.repeat(cell[0], np_known_cells[:,0].shape[0]), np_known_cells[:,0].shape[0]),
-                            np.tile(np.repeat(cell[1], np_known_cells[:,1].shape[0]), np_known_cells[:,0].shape[0])
-                        ]\
-                        +\
-                        distances[ 
-                            np.tile(np_known_cells[:,0], np_known_cells[:,0].shape[0]),
-                            np.tile(np_known_cells[:,1], np_known_cells[:,0].shape[0]),
-                            np.repeat(np_known_cells[:,0], np_known_cells[:,0].shape[0]),
-                            np.repeat(np_known_cells[:,1], np_known_cells[:,0].shape[0])                        
-                            ],
-                        np.arange(0, np_known_cells[:,0].shape[0]*np_known_cells[:,0].shape[0], np_known_cells[:,0].shape[0])
-                    )
-                        
-                    )
+            for cell in np_known_cells:
+                c1 = []
+                c2 = []
+                c3 = []
+                # cell = np.array([cell.y, cell.x])
+                sums = []
+                for known_cell in np_known_cells:
+                    new_minimum = 1000
+
+                    for known_cell_2 in np_known_cells:
+                        temp_minimum = distances[(known_cell_2[0],known_cell_2[1],cell[0], cell[1])] + distances[(known_cell_2[0],known_cell_2[1],known_cell[0], known_cell[1])]
+
+                        if temp_minimum < new_minimum:
+                            new_minimum = temp_minimum
+
+                    if new_minimum < distances[cell[0],cell[1],known_cell[0], known_cell[1]]:
+                        distances[cell[0],cell[1],known_cell[0], known_cell[1]] = new_minimum
                 # self.grid_plot()
                 # plt.show()
-                # breakpoint
+                # # breakpoint
                 # plt.close()
                 
             end = time.time()
@@ -1261,7 +1191,7 @@ goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 # Environment initialisations
 nr = 2 # number of drones
 obstacles = True # Sets of obstacels spawn
-obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
+obstacle_density = 0.1 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
 save_obstacles = True # Sets if obstacles are saved
 load_obstacles = False # Sets if obstacles should be loaded from previous simulation

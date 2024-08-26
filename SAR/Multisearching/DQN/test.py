@@ -7,8 +7,6 @@ import time
 from collections import namedtuple
 Point = namedtuple('Point', 'x, y')
 
-t = np.array([1,2])
+d = np.array([[1,2,3],[4,5,6]])
 
-print(np.tile(t, 2))
-
-print(np.tile(np.tile(t, 2),2))
+print(np.minimum.reduceat(d[1,2,3,1,2,3,1,2,3,1,1,1,1,1,1,1,1,1],d[1,2,3,1,2,3,1,2,3,1,1,1,1,1,1,1,1,1],np.arange(0, 9, 3)))
