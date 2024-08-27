@@ -442,11 +442,11 @@ class Environment:
         elif self.prev_pos[r].y > self.pos[r].y: # up
             self.direction[r] = "up"
 
-        self.calculate_distances()
+        # self.calculate_distances()
         
-        self.exploration_grid[self.prev_pos[r].y, self.prev_pos[r].x] = True
-        self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
-        self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
+        # self.exploration_grid[self.prev_pos[r].y, self.prev_pos[r].x] = True
+        # self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
+        # self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
         
     def get_min_targets(self, costs):
         # get min distance of each dorne
@@ -854,18 +854,18 @@ class Environment:
         for ri in range(self.nr):
             start = time.time()
             # Set neighbours of neighbours
-            c_neighbours = [Point(neighbour[0], neighbour[1]) for neighbour in self.neighbours[self.pos[ri]]]
-            n_neighbours = [self.neighbours[key] for key in c_neighbours]
-            n_neighbours.append(np.array([[self.pos[ri].x, self.pos[ri].y]]))
-            n_neighbours = np.array([item for row in n_neighbours for item in row])
+            # c_neighbours = [Point(neighbour[0], neighbour[1]) for neighbour in self.neighbours[self.pos[ri]]]
+            # n_neighbours = [self.neighbours[key] for key in c_neighbours]
+            # n_neighbours.append(np.array([[self.pos[ri].x, self.pos[ri].y]]))
+            # n_neighbours = np.array([item for row in n_neighbours for item in row])
             end = time.time()
             self.thrid_dist.append(end-start)
             breakpoint
             start = time.time()
 
             # update neighbours
-            for cell in c_neighbours:
-                cell = np.array([cell.y, cell.x])
+            for cell in np_known_cells:
+                # cell = np.array([cell.y, cell.x])
                 distances[
                     np.repeat(cell[0], np_known_cells[:,0].shape[0]),
                     np.repeat(cell[1], np_known_cells[:,1].shape[0]),
@@ -943,7 +943,11 @@ class Environment:
         for j in range(HEIGHT):
             for i in range(WIDTH):
                 ax = axs[j, i]
-                im = ax.imshow(distances[j][i], cmap='Reds')
+                if Point(i,j) not in self.neighbours:
+                    max_value = 1.0  # Maximum value for the colormap
+                    im = ax.imshow(np.full_like(distances[j][i], max_value), cmap='Reds', vmin=0, vmax=max_value)
+                else:
+                    im = ax.imshow(distances[j][i], cmap='Reds')
 
                 for y in range(distances[j][i].shape[0]):
                     for x in range(distances[j][i].shape[1]):
@@ -954,50 +958,9 @@ class Environment:
                 ax.set_xticklabels(np.arange(distances[j][i].shape[1]), fontsize=8)
                 ax.set_yticklabels(np.arange(distances[j][i].shape[0])[::-1], fontsize=8)  # Reversed inner y-axis
 
-                ax.tick_params(axis='both', which='both', length=0)
-                ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
-                ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
-
-        # for ax, col in zip(axs[-1, :], range(WIDTH)):
-        #     ax.annotate(col, xy=(1.5,0), xytext=(0, 0),
-        #                 textcoords='figure points', ha='center', va='baseline', fontsize=10)  # Lowered outer x-axis
-
-        # for ax, row in zip(axs[:, 0], range(HEIGHT)):
-        #     ax.annotate(HEIGHT - 1 - row, xy=(-1, 1), xytext=(0, 0),
-        #                 textcoords='offset points', ha='right', va='center', fontsize=10)  # Reversed outer y-axis
-
-        plt.tight_layout(rect=[0.15, 0.15, 0.9, 0.9])
-
-        # fig.text(0.5, 0.02, 'Outer X-axis', ha='center', fontsize=12)
-        # fig.text(0.02, 0.5, 'Outer Y-axis', va='center', rotation='vertical', fontsize=12)
-
-                    
-    # def grid_plot(self):
-    #     grid_size = int(math.sqrt(HEIGHT*WIDTH))
-    #     # Create a figure and axes
-    #     fig, axs = plt.subplots(grid_size, grid_size, figsize=(8, 8))
-
-    #     # Loop through each cell of the larger grid
-    #     for j in range(HEIGHT):
-    #         for i in range(WIDTH):
-    #             # Create a subplot for the current cell
-    #             ax = axs[j, i]
-
-    #             # Plot the smaller grid with actual values
-    #             ax.imshow(distances[j][i], cmap='viridis')
-
-    #             for y in range(distances[j][i].shape[0]):
-    #                 for x in range(distances[j][i].shape[1]):
-    #                     ax.text(x, y, f'{int(distances[j, i, y, x])}', va='center', ha='center', color='white', fontsize=6)
-
-    #             # Optionally, you can set titles for each subplot
-    #             ax.set_title(f'Subgrid {j * grid_size + i + 1}')
-
-    #             # Remove axis ticks and labels if desired
-    #             ax.axis('off')
-
-    #     # Adjust layout to prevent overlap
-    #     plt.tight_layout()
+                # ax.tick_params(axis='both', which='both', length=0)
+                # ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
+                # ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
 
     def grid_plot_vec(self):
         grid_size = int(math.sqrt(HEIGHT*WIDTH))
@@ -1614,6 +1577,12 @@ for i in range(test_iterations):
                     goal_exit_condition = True
                 
                 path_time += end_path_time - start_path_time
+
+            env.calculate_distances()
+            env.exploration_grid[env.prev_pos[r].y, env.prev_pos[r].x] = True
+            env.exploration_grid[env.pos[r].y, env.pos[r].x] = True
+            env.explorated_cells.append((env.pos[r].y,env.pos[r].x))
+
             selection_time += end_selection - start_selection
             success_time += time.time() - start_success
             

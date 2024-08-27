@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 6
+WIDTH = 6
 UNKNOWN = WIDTH*HEIGHT*2
 
 # Chosen values
@@ -442,11 +442,11 @@ class Environment:
         elif self.prev_pos[r].y > self.pos[r].y: # up
             self.direction[r] = "up"
 
-        self.calculate_distances()
+        # self.calculate_distances()
         
-        self.exploration_grid[self.prev_pos[r].y, self.prev_pos[r].x] = True
-        self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
-        self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
+        # self.exploration_grid[self.prev_pos[r].y, self.prev_pos[r].x] = True
+        # self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
+        # self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
         
     def get_min_targets(self, costs):
         # get min distance of each dorne
@@ -782,10 +782,10 @@ class Environment:
             # self.grid_plot()
             # plt.show()
 
-            self.grid_plot()
-            plt.show()
-            breakpoint
-            plt.close()
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
+            # plt.close()
             end = time.time()
             self.second_dist.append(end-start)
 
@@ -794,10 +794,10 @@ class Environment:
             start = time.time()
             # Set neighbours of neighbours
             c_neighbours = [Point(neighbour[0], neighbour[1]) for neighbour in self.neighbours[self.pos[ri]]]
-            n_neighbours = [self.neighbours[key] for key in c_neighbours]
-            n_neighbours.append([[self.pos[ri].x, self.pos[ri].y]])
-            n_neighbours = [[item[0],item[1]] for row in n_neighbours for item in row]
-            c_neighbours.extend(n_neighbours)
+            # n_neighbours = [self.neighbours[key] for key in c_neighbours]
+            # n_neighbours.append([[self.pos[ri].x, self.pos[ri].y]])
+            # n_neighbours = [[item[0],item[1]] for row in n_neighbours for item in row]
+            # c_neighbours.extend(n_neighbours)
             # Convert inner lists to tuples to make them hashable
             list_of_tuples = [tuple(lst) for lst in c_neighbours]
 
@@ -873,7 +873,11 @@ class Environment:
         for j in range(HEIGHT):
             for i in range(WIDTH):
                 ax = axs[j, i]
-                im = ax.imshow(distances[j][i], cmap='Reds')
+                if Point(i,j) not in self.neighbours:
+                    max_value = 1.0  # Maximum value for the colormap
+                    im = ax.imshow(np.full_like(distances[j][i], max_value), cmap='Reds', vmin=0, vmax=max_value)
+                else:
+                    im = ax.imshow(distances[j][i], cmap='Reds')
 
                 for y in range(distances[j][i].shape[0]):
                     for x in range(distances[j][i].shape[1]):
@@ -884,22 +888,11 @@ class Environment:
                 ax.set_xticklabels(np.arange(distances[j][i].shape[1]), fontsize=8)
                 ax.set_yticklabels(np.arange(distances[j][i].shape[0])[::-1], fontsize=8)  # Reversed inner y-axis
 
-                ax.tick_params(axis='both', which='both', length=0)
-                ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
-                ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
-
-        # for ax, col in zip(axs[-1, :], range(WIDTH)):
-        #     ax.annotate(col, xy=(1.5,0), xytext=(0, 0),
-        #                 textcoords='figure points', ha='center', va='baseline', fontsize=10)  # Lowered outer x-axis
-
-        # for ax, row in zip(axs[:, 0], range(HEIGHT)):
-        #     ax.annotate(HEIGHT - 1 - row, xy=(-1, 1), xytext=(0, 0),
-        #                 textcoords='offset points', ha='right', va='center', fontsize=10)  # Reversed outer y-axis
+                # ax.tick_params(axis='both', which='both', length=0)
+                # ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
+                # ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
 
         plt.tight_layout(rect=[0.15, 0.15, 0.9, 0.9])
-
-        # fig.text(0.5, 0.02, 'Outer X-axis', ha='center', fontsize=12)
-        # fig.text(0.02, 0.5, 'Outer Y-axis', va='center', rotation='vertical', fontsize=12)
 
                     
     # def grid_plot(self):
@@ -1189,7 +1182,7 @@ test_iterations = 10 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 2 # number of drones
+nr = 3 # number of drones
 obstacles = True # Sets of obstacels spawn
 obstacle_density = 0.1 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
@@ -1496,10 +1489,10 @@ for i in range(test_iterations):
                         ongoing_frontiers[r] = frontiers[r]
                         finished_scheduling[r] = True
                         which[r] = 1
-                        if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]):
-                            save = True
-                        if all([finished_scheduling[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT:
-                            breakpoint
+                        # if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]):
+                        #     save = True
+                        # if all([finished_scheduling[ri] for ri in range(nr)]) and np.count_nonzero(env.exploration_grid) != WIDTH*HEIGHT:
+                        #     breakpoint
                     else:
                         ongoing_frontiers[r] = None
                 else:
@@ -1544,6 +1537,10 @@ for i in range(test_iterations):
                     goal_exit_condition = True
                 
                 path_time += end_path_time - start_path_time
+            env.calculate_distances()
+            env.exploration_grid[env.prev_pos[r].y, env.prev_pos[r].x] = True
+            env.exploration_grid[env.pos[r].y, env.pos[r].x] = True
+            env.explorated_cells.append((env.pos[r].y,env.pos[r].x))
             selection_time += end_selection - start_selection
             success_time += time.time() - start_success
             
