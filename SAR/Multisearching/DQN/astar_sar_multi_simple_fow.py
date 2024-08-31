@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 20
+WIDTH = 20
 UNKNOWN = WIDTH*HEIGHT*2
 
 # Chosen values
@@ -360,8 +360,8 @@ class Environment:
                 save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
                 self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
                 # self.starting_pos[ri] = Point(0, 0)
-                # if ri == 0: self.starting_pos[ri] = Point(0, 0)
-                # if ri == 1: self.starting_pos[ri] = Point(0, 4)
+                if ri == 0: self.starting_pos[ri] = Point(0, 0)
+                if ri == 1: self.starting_pos[ri] = Point(9, 9)
                 # if ri == 2: self.starting_pos[ri] = Point(4, 2)
                 self.pos[ri] = self.starting_pos[ri]
                 self.prev_pos[ri] = self.starting_pos[ri]
@@ -862,10 +862,10 @@ class Environment:
 
             
             
-        self.grid_plot()
-        plt.show()
-        # breakpoint
-        plt.close()
+        # self.grid_plot()
+        # plt.show()
+        # # breakpoint
+        # plt.close()
 
         for cell in np_known_cells:
             self.update_distances(cell, np_known_cells)
@@ -879,10 +879,10 @@ class Environment:
         self.fifth_dist.append(end-start)
             
         
-        self.grid_plot()
-        plt.show()
-        # breakpoint
-        plt.close()
+        # self.grid_plot()
+        # plt.show()
+        # # breakpoint
+        # plt.close()
 
     def grid_plot(self):
         fig, axs = plt.subplots(HEIGHT, WIDTH, figsize=(10, 10), gridspec_kw={'wspace': 0.2, 'hspace': 0.2})
@@ -1165,13 +1165,13 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 10 # Number of simulation iterations
+test_iterations = 1000 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 3 # number of drones
+nr = 1 # number of drones
 obstacles = True # Sets of obstacels spawn
-obstacle_density = 0.1 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
+obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
 save_obstacles = True # Sets if obstacles are saved
 load_obstacles = False # Sets if obstacles should be loaded from previous simulation
@@ -1234,7 +1234,7 @@ for i in range(test_iterations):
     planning_successful = True # boolean for checking if schedule and path planning is successful
     save = False #                              #    <---------------------------------------------------------------------- (IDK what this does)
     planning_starting_time = time.time() # sets starts time for current iteration
-    if i % 500 == 0: print(i) # prints every x iterations
+    if i % 1 == 0: print(i) # prints every x iterations
     # the first iteration has already been reset
     # thus it does not have to be run again
     if i != 0:
@@ -1611,7 +1611,7 @@ print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_ti
 print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times))) 
 print_string += "\nAverage time drone selection and planning: %.8fs"%(np.mean(np.array(selection_times)))
 print_string += "\nAverage time success: %.8fs"%(np.mean(np.array(success_times)))
-print_string += "\nAverage time updating distance matrix: %.8fs"%(np.mean(np.array(dist_update_times)))
+print_string += "\nAverage time updating distance matrix: %.8fs"%(np.mean(np.array(dist_update_times))*1000*1000)
 print_string += "\nAverage time per step: %.8fs"%(average_time)
 print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
 print_string += "\nObstacles: %.2f"%(obstacle_density)
