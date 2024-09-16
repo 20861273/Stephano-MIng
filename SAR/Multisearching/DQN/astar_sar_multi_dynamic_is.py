@@ -368,7 +368,7 @@ class Environment:
                 self.starting_grid = np.array(self.grids[i])
                 self.starting_grid = np.kron(self.starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
-            elif preprocessing or not self.set_obstacles:
+            elif preprocessing and not self.set_obstacles:
                 self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
                 
                     # Calculate the number of elements to be filled with 1's
@@ -390,6 +390,26 @@ class Environment:
 
                 self.ES = Enclosed_space_check(int(HEIGHT/2), int(WIDTH/2), self.starting_grid, States)
                 self.ES_starting_grid = self.ES.enclosed_space_handler()
+
+                self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
+                self.grid = self.starting_grid.copy()
+                if i==0 or not self.set_obstacles: distances = env.calculate_distances()
+            elif preprocessing or self.set_obstacles:
+                self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
+                
+                # Calculate the number of elements to be filled with 1's
+                total_elements = int(HEIGHT/2) * int(WIDTH/2)
+                num_ones_to_place = math.ceil(self.obstacle_density * total_elements)
+
+                # Set grid
+                indexes = np.array([np.array([2,9]), np.array([3,0]), np.array([3,7]), np.array([3,8]), np.array([3,9]), np.array([4,0]), np.array([4,1]), np.array([4,2]), np.array([4,3]), np.array([4,4]), np.array([4,6]), np.array([4,7]), np.array([4,8]), np.array([4,9]), np.array([5,0]), np.array([5,1]), np.array([5,2]), np.array([5,7]), np.array([5,8]), np.array([5,9]), np.array([6,0]), np.array([6,8]), np.array([6,9]), np.array([7,0]), np.array([7,9]), np.array([8,9])])
+
+                # Set the elements at the random indices to 1
+                self.starting_grid[indexes[:, 0], indexes[:, 1]] = States.OBS.value
+                self.ES_starting_grid = self.starting_grid.copy()
+
+                WIDTH = int(WIDTH/2)*2
+                HEIGHT = int(HEIGHT/2)*2
 
                 self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
@@ -428,7 +448,7 @@ class Environment:
                             # if distance is equal or smaller than radius
                             # AND within bounds
                             # AND the state is unexplored
-                            if distance <= self.spawning_radius_length and 0 <= x < WIDTH/2 and 0 <= y < HEIGHT/2 and self.ES_starting_grid[y][x] == States.UNEXP.value:
+                            if distance == self.spawning_radius_length and 0 <= x < WIDTH/2 and 0 <= y < HEIGHT/2 and self.ES_starting_grid[y][x] == States.UNEXP.value:
                                 spawning_radius.append(Point(x, y))
                     # check if all drones have been spawned
                     if len(spawning_radius) >= self.nr:
@@ -1196,7 +1216,7 @@ else:
     starting_fuel = (HEIGHT*4 + WIDTH*2)
 
 refuel_threshold = 3
-test_iterations = 1
+test_iterations = 1000
 saved_iterations = 2
 saves = []
 
@@ -1212,14 +1232,14 @@ if save_trajectory:
     if not os.path.exists(dir_path): os.makedirs(dir_path)
 
 # environment initialisations
-goal_spawning = True
-radius_spawning = False
-spawning_radius_length = 3
-nr = 2
+goal_spawning = False
+radius_spawning = True
+spawning_radius_length = 1
+nr = 3
 weight = 19
 obstacles = True
 obstacle_density = 0.5
-set_obstacles = False
+set_obstacles = True
 save_obstacles = True
 save_dir = os.path.join(dir_path, 'Save')
 if not os.path.exists(save_dir): os.makedirs(save_dir)

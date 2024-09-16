@@ -362,7 +362,7 @@ class Environment:
                 save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
                 self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
                 if ri == 0: self.starting_pos[ri] = Point(0, 0)
-                if ri == 1: self.starting_pos[ri] = Point(9, 9)
+                if ri == 1: self.starting_pos[ri] = Point(3, 3)
                 # if ri == 2: self.starting_pos[ri] = Point(4, 2)
                 self.pos[ri] = self.starting_pos[ri]
                 self.prev_pos[ri] = self.starting_pos[ri]
@@ -836,22 +836,37 @@ class Environment:
         # plt.close()
 
         # update agent positions
-        for ri in range(self.nr):
-            cell = np.array([self.pos[ri].y, self.pos[ri].x])
-            self.update_distances(cell, np_known_cells)
-        
-        # self.grid_plot()
-        # plt.show()
-        # # breakpoint
-        # plt.close()
-            
-        # for ri in range(2):
-        for cell in np_known_cells:
-            self.update_distances(cell, np_known_cells)
+
+        # Define movements (up, down, left, right)
+        moves = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+
+        for start_cell in np_known_cells:
+            # if self.starting_grid[start_cell[0], start_cell[1]] == States.UNEXP.value:
+            queue = deque([(start_cell, 0)])  # Initialize queue with the starting cell and distance 0
+            visited = []  # Mark all cells as not visited
+            visited.append(start_cell)  # Mark the starting cell as visited
+
+            while queue:
+                current_cell, distance = queue.popleft()
+                distances[start_cell[0], start_cell[1], current_cell[0], current_cell[1]] = distance
+
+                # Explore neighbors
+                row, col = current_cell[0], current_cell[1]
+                for move_row, move_col in moves:
+                    new_row, new_col = row + move_row, col + move_col
+                    neighbor_cell = np.array([new_row,new_col])
+                    if all(not np.array_equal(neighbor_cell, x) for x in np_known_cells): continue
+
+                    if 0 <= new_row < WIDTH and 0 <= new_col < HEIGHT \
+                        and all(not np.array_equal(neighbor_cell, x) for x in visited) and self.starting_grid[new_row, new_col] != States.OBS.value:
+                        queue.append((neighbor_cell, distance + 1))
+                        visited.append(neighbor_cell)
+
+        # return distances
 
         # self.grid_plot()
         # plt.show()
-        # # breakpoint
+        # breakpoint
         # plt.close()
                 # self.grid_plot()
                 # plt.show()
@@ -1741,10 +1756,10 @@ if save_obstacles:
     file_name = os.path.join(save_dir, file_name)
     write_json(obstacle_positions, file_name)
 
-    plt.close()
-    env.grid_plot()
-    file_name = 'distance_matrix.png'
-    plt.savefig(os.path.join(dir_path, file_name))
+    # plt.close()
+    # env.grid_plot()
+    # file_name = 'distance_matrix.png'
+    # plt.savefig(os.path.join(dir_path, file_name))
     # # self.grid_plot_vec()
     # plt.show()
     # breakpoint

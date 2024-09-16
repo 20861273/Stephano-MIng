@@ -15,8 +15,8 @@ from enclosed_space_checker import Enclosed_space_check
 # from sar_dqn_main import COL_REWARD
 
 # Environment characteristics
-HEIGHT = 10
-WIDTH = 10
+HEIGHT = 20
+WIDTH = 20
 
 # DENSITY = 30 # percentage
 

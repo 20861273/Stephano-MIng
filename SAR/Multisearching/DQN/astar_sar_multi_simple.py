@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 20
+WIDTH = 20
 
 # Chosen values
 height = 100 # m
@@ -330,6 +330,26 @@ class Environment:
 
                 self.ES = Enclosed_space_check(int(HEIGHT/2), int(WIDTH/2), self.starting_grid, States)
                 self.ES_starting_grid = self.ES.enclosed_space_handler()
+
+                self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
+                self.grid = self.starting_grid.copy()
+                if i==0 or not self.set_obstacles: distances = env.calculate_distances()
+            else:
+                self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
+                
+                # Calculate the number of elements to be filled with 1's
+                total_elements = int(HEIGHT/2) * int(WIDTH/2)
+                num_ones_to_place = math.ceil(self.obstacle_density * total_elements)
+
+                # Set grid
+                indexes = np.array([np.array([0,0]), np.array([0,1]), np.array([0,2]), np.array([0,3]), np.array([1,0]), np.array([1,1]), np.array([2,0]), np.array([2,1]), np.array([2,9]), np.array([3,0]), np.array([3,7]), np.array([3,8]), np.array([3,9]), np.array([4,6]), np.array([4,7]), np.array([4,8]), np.array([4,9]), np.array([5,7]), np.array([5,8]), np.array([5,9]), np.array([6,1]), np.array([6,2]), np.array([6,7]), np.array([6,8]), np.array([6,9]), np.array([7,1]), np.array([7,2]), np.array([7,8]), np.array([7,9]), np.array([8,9])])
+
+                # Set the elements at the random indices to 1
+                self.starting_grid[indexes[:, 0], indexes[:, 1]] = States.OBS.value
+                self.ES_starting_grid = self.starting_grid.copy()
+
+                WIDTH = int(WIDTH/2)*2
+                HEIGHT = int(HEIGHT/2)*2
 
                 self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
@@ -899,15 +919,15 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 1 # Number of simulation iterations
+test_iterations = 1000 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
 nr = 3 # number of drones
 obstacles = True # Sets of obstacels spawn
-obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
-set_obstacles = False # Sets if obstacles should change each iteration
-save_obstacles = False # Sets if obstacles are saved
+obstacle_density = 0.1 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
+set_obstacles = True # Sets if obstacles should change each iteration
+save_obstacles = True # Sets if obstacles are saved
 load_obstacles = False # Sets if obstacles should be loaded from previous simulation
 
 # Trajectory saving initialisations
@@ -964,7 +984,7 @@ for i in range(test_iterations):
     planning_successful = True # boolean for checking if schedule and path planning is successful
     save = False #                              #    <---------------------------------------------------------------------- (IDK what this does)
     planning_starting_time = time.time() # sets starts time for current iteration
-    if i % 500 == 0: print(i) # prints every x iterations
+    if i % 10 == 0: print(i) # prints every x iterations
     # the first iteration has already been reset
     # thus it does not have to be run again
     if i != 0:
@@ -990,7 +1010,7 @@ for i in range(test_iterations):
     # loop for planning until an exit condition is met
     start_step = 0
     while not env.exploration_grid.all() and not goal_exit_condition and planning_successful:
-        print("%.4f    %.4f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
+        # print("%.4f    %.4f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
         start_step = time.time()
         if steps > 1000:
             breakpoint

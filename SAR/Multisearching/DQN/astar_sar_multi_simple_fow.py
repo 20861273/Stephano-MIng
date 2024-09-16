@@ -264,6 +264,7 @@ class Environment:
         self.thrid_dist = []
         self.fourth_dist = []
         self.fifth_dist = []
+        self.distance_algorithm_times= {}
         
         # spawn grid
         self.starting_grid = np.zeros((HEIGHT, WIDTH))
@@ -360,8 +361,8 @@ class Environment:
                 save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
                 self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
                 # self.starting_pos[ri] = Point(0, 0)
-                if ri == 0: self.starting_pos[ri] = Point(0, 0)
-                if ri == 1: self.starting_pos[ri] = Point(9, 9)
+                # if ri == 0: self.starting_pos[ri] = Point(0, 0)
+                # if ri == 1: self.starting_pos[ri] = Point(9, 9)
                 # if ri == 2: self.starting_pos[ri] = Point(4, 2)
                 self.pos[ri] = self.starting_pos[ri]
                 self.prev_pos[ri] = self.starting_pos[ri]
@@ -872,6 +873,7 @@ class Environment:
         
         end = time.time()
         self.fourth_dist.append(end-start)
+        self.distance_algorithm_times[len(np_known_cells)] = end-start
         
         start = time.time()
         
@@ -1165,7 +1167,7 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 1000 # Number of simulation iterations
+test_iterations = 10 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
@@ -1234,7 +1236,7 @@ for i in range(test_iterations):
     planning_successful = True # boolean for checking if schedule and path planning is successful
     save = False #                              #    <---------------------------------------------------------------------- (IDK what this does)
     planning_starting_time = time.time() # sets starts time for current iteration
-    if i % 1 == 0: print(i) # prints every x iterations
+    if i % 10 == 0: print(i) # prints every x iterations
     # the first iteration has already been reset
     # thus it does not have to be run again
     if i != 0:
@@ -1463,9 +1465,7 @@ for i in range(test_iterations):
                     explorations[r] += 1
                 
                 # execute move in environment
-                start_dist_time = time.time()
                 env.move(r, current_path[r][0])
-                end_dist_time = time.time()
                 
                 # if drone reached frontier
                 # AND drone position is equal to starting position
@@ -1525,7 +1525,9 @@ for i in range(test_iterations):
                 
                 path_time += end_path_time - start_path_time
 
+            start_dist_time = time.time()
             env.calculate_distances()
+            end_dist_time = time.time()
             for r in range(nr):
                 env.exploration_grid[env.prev_pos[r].y, env.prev_pos[r].x] = True
                 env.exploration_grid[env.pos[r].y, env.pos[r].x] = True
@@ -1634,6 +1636,14 @@ print_string += "\nFirst: %.8f, Second: %.8f, Third: %.8f, Fourth: %.8f, Fifth: 
 
 print(print_string)
 
+file_name = "distance_algorithm.txt"
+file_path = os.path.join(dir_path, file_name)
+with open(file_path, 'w') as file:
+    # Iterate through the sublists and write them to the file
+    for sublist in env.distance_algorithm_times:
+        # Write the sublist string followed by a newline character
+        file.write(str(sublist) + "," + str(env.distance_algorithm_times[sublist]) + '\n')
+
 # saves results to required location
 file_name = "results.txt"
 file_path = os.path.join(dir_path, file_name)
@@ -1692,10 +1702,10 @@ if save_obstacles:
     file_name = os.path.join(save_dir, file_name)
     write_json(obstacle_positions, file_name)
 
-    plt.close()
-    env.grid_plot()
-    file_name = 'distance_matrix.png'
-    plt.savefig(os.path.join(dir_path, file_name))
+    # plt.close()
+    # env.grid_plot()
+    # file_name = 'distance_matrix.png'
+    # plt.savefig(os.path.join(dir_path, file_name))
     # # self.grid_plot_vec()
     # plt.show()
     # breakpoint

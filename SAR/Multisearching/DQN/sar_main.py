@@ -16,23 +16,23 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 if __name__ == '__main__':
     testing_parameters = {
-        "training": True,
+        "training": False,
         "load checkpoint": True,
         "from start": True,
         "show rewards interval": 100,
-        "show plot": False,
+        "show plot": True,
         "save plot": False,
         "policy number": [0,1,2],
         "session": [0,1,2],
         "test type": "iterative", # test types: grid and iterative
         "testing iterations": 300,
-        "goal spawning": True
+        "goal spawning": False
     }
 
     # encodings: image (n_images, H, W), image_occupancy (n_images, H, W), full_image (H, W), position (H*W), position_exploration (H*W*2), position_occupancy (H*W*2)
     # agent types: DQN, DDQN
     hp = {
-        "number of drones": 2,
+        "number of drones": 1,
         "training type": "centralized", # centralized (turn based), centralized actions
         "agent type": "DQN",
         "learning rate": [0.0001],
