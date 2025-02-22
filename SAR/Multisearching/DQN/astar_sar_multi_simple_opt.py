@@ -203,9 +203,9 @@ class Astar:
                     continue
                 # cross location collision
                 # current is in dynamic obstacles on next step
-                if steps+path_step+1 in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step+1]:
+                if steps+path_step in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step]:
                     # next node is in dynamic obstacles on previous step
-                    if steps+path_step in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step]:
+                    if steps+path_step-1 in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step-1]:
                         continue
 
                 new_cost = self.cost_so_far[(id,current)] + self.heuristic(current, next_node)
@@ -342,7 +342,7 @@ class Environment:
                 num_ones_to_place = math.ceil(self.obstacle_density * total_elements)
 
                 # Set grid
-                indexes = np.array([np.array([0,3]), np.array([0,4]), np.array([1,4]), np.array([2,0]), np.array([4,0]), np.array([4,4])])
+                indexes = np.array([np.array([0,0]), np.array([0,1]), np.array([0,2]), np.array([0,3]), np.array([1,0]), np.array([1,1]), np.array([2,0]), np.array([2,1]), np.array([2,9]), np.array([3,0]), np.array([3,7]), np.array([3,8]), np.array([3,9]), np.array([4,6]), np.array([4,7]), np.array([4,8]), np.array([4,9]), np.array([5,7]), np.array([5,8]), np.array([5,9]), np.array([6,1]), np.array([6,2]), np.array([6,7]), np.array([6,8]), np.array([6,9]), np.array([7,1]), np.array([7,2]), np.array([7,8]), np.array([7,9]), np.array([8,9])])
 
                 # Set the elements at the random indices to 1
                 self.starting_grid[indexes[:, 0], indexes[:, 1]] = States.OBS.value
@@ -360,7 +360,6 @@ class Environment:
         # spawn drone
         if self.load_obstacles and self.starting_positions[0] != []: # load existing positions
             self.starting_pos = [Point(self.starting_positions[i][ri].x*2, self.starting_positions[i][ri].y*2) for ri in range(nr)]
-            # self.starting_pos = [Point(0*2,0*2)]
             for ri in range(self.nr):
                 self.pos[ri] = self.starting_pos[ri]
                 self.prev_pos[ri] = self.starting_pos[ri]
@@ -373,8 +372,6 @@ class Environment:
             np.random.shuffle(indices)
 
             save_starting_pos = [None]*nr
-            # self.starting_pos = [Point(0*2,0*2)]
-            # save_starting_pos = [Point(0,0)]
             for ri in range(self.nr):
                 save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
                 self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
@@ -460,7 +457,6 @@ class Environment:
         for ri in range(self.nr):
             if min_targets_value[ri] == None: continue
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
-            # if len(min_targets[ri]) > self.nr: min_targets[ri] = min_targets[ri][:self.nr]
             
         return min_targets
         
@@ -802,7 +798,7 @@ class Environment:
             file_name = "trajectory%d_drone%d_step%d.png"%(cnt, r, steps)
         plt.savefig(os.path.join(dir_path, file_name))
         # plt.show()
-        # plt.pause(0.005)
+        # plt.pause(0.0005)
         plt.close()
 
     def print_frame(self, steps, path, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
@@ -922,13 +918,13 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
 # Initialisations
-nr_list = [3]
+nr_list = [5,6,7,8,9,10]
 obstacle_density_list = [0]
 # obstacle_density_list = [0.4]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Simulation initialisations
-        test_iterations = 1 # Number of simulation iterations
+        test_iterations = 100 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations
@@ -951,7 +947,7 @@ for nr in nr_list:
         PATH = os.path.join(PATH, 'SAR')
 
         # Set directory path
-        if True:
+        if save_trajectory:
             PATH = os.getcwd()
             PATH = os.path.join(PATH, 'SAR')
             PATH = os.path.join(PATH, 'Results')
@@ -983,7 +979,6 @@ for nr in nr_list:
         flight_distances = [] # tracks flight distance per ietration
         schedule_times = [] # tracks each scheduling time 
         path_times = [] # track each path planning time
-        selection_times = []
         frontier_list = [[] for _ in range(test_iterations)] # tracks scheduled candidates for each iteration in separate lists
         unsuccessful = 0 # tracks number of unsuccessful search attempts 
         sheduled_distances = [[] for _ in range(nr)] # tracks the distance a candidate cell is from teh current cell
@@ -1022,7 +1017,6 @@ for nr in nr_list:
             while not env.exploration_grid.all() and not goal_exit_condition and planning_successful:
                 # print("%.4f    %.4f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
                 start_step = time.time()
-                # if steps % 1 == 0: print(steps)
                 if steps > 1000:
                     breakpoint
                 if not env.exploration_grid.all() and all([finished_scheduling[ri] for ri in range(nr)]) and finished_scheduling[ri] == True:
@@ -1054,7 +1048,7 @@ for nr in nr_list:
                 frontier_list[i].append(frontiers) # tracks scheduled candidates of drones
 
                 # plan paths
-                path_time = [] # tracks path planning time
+                path_time = 0 # tracks path planning time
                 # if drones are returning home and if the drone has been taken out of consideration for scheduling 
                 for r in range(nr):
                     # if drone is at candidate and the candidate is the dtarting postition
@@ -1081,7 +1075,6 @@ for nr in nr_list:
                 temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()} # sets the occupancy of all cells to current history
 
                 # loop for path planning
-                start_selection = time.time()
                 while planning:
                     # if the number of plans for current priority drone is not equal to zero
                     # AND (the number of plans for current priorty drone) MOD (the number of drones) equals zero
@@ -1099,11 +1092,10 @@ for nr in nr_list:
                     # OR there was no path with the on going frontiers path
                     # then replan on going frontier paths aswell
                     if ongoing_frontiers[r] == None or replan_ongoing:
-                        start_path_time = time.perf_counter_ns() # sets start time for path planning
+                        start_path_time = time.time() # sets start time for path planning
                         astar = Astar(env.grid) # initialises A* class
                         current_path[r] = astar.a_star(env.pos[r], frontiers[r], env.grid, temp_occupied_cells, env.direction[r]) # plans path for selected drone
-                        end_path_time = time.perf_counter_ns() # sets end time for path planning
-                        path_time.append(end_path_time-start_path_time)
+                        end_path_time = time.time() # sets end time for path planning
 
                         # if valid path was found
                         # then add to dynamic obstacles
@@ -1198,7 +1190,6 @@ for nr in nr_list:
                             cntr = 0
                             n_plans = 0
                 
-                end_selection = time.time()
                 # paths were successfully planned
                 # then continue to moving the drones
                 if planning_successful:
@@ -1280,11 +1271,10 @@ for nr in nr_list:
                         if goal_spawning and np.array([True for j in range(0, nr) if env.pos[j] == env.goal]).any() == True:
                             goal_exit_condition = True
                         
-                    selection_time = end_selection - start_selection
+                        path_time += end_path_time - start_path_time
                     
                     schedule_times.append(end_scheduler_time-start_scheduler_time)
-                    if len(path_time) != 0: path_times.append(np.mean(np.array(path_time)))
-                    selection_times.append(selection_time)
+                    path_times.append(path_time)
                     
                     # save to draw trajectories
                     if i in saves: save = True #    <---------------------------------------------------------------------- (i think old functionality)
@@ -1354,8 +1344,7 @@ for nr in nr_list:
         for ri in range(nr):
             print_string += "\nAverage explorations for drone %d: %.2f" %(ri, average_explorations[ri])
         print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_times)))
-        print_string += "\nAverage time A* path planning: %.8fms"%(np.mean(np.array(path_times))/1000000)
-        print_string += "\nAverage time overall path planning: %.8fs"%(np.mean(np.array(selection_times)))
+        print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times)))
         print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
         print_string += "\nObstacles: %.2f"%(obstacle_density)
         for r in range(nr):
@@ -1380,16 +1369,6 @@ for nr in nr_list:
         file_path = os.path.join(dir_path, file_name)
         with open(file_path, 'w') as file:
             file.write(print_string)
-
-        file_name = "trajectory.txt"
-        file_path = os.path.join(dir_path, file_name)
-        with open(file_path, 'w') as file:
-            # Iterate through the sublists and write them to the file
-            for sublist in trajectory:
-                # Convert sublist elements to strings and join them with commas
-                sublist_str = ','.join(map(str, sublist))
-                # Write the sublist string followed by a newline character
-                file.write(sublist_str + '\n')
 
         file_name = "frontiers.txt"
         file_path = os.path.join(dir_path, file_name)

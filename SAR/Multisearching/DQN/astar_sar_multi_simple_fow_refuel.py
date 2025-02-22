@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 20
+WIDTH = 20
 UNKNOWN = WIDTH*HEIGHT*2
 
 # Chosen values
@@ -236,7 +236,7 @@ class Astar:
             return None
     
 class Environment:
-    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, goal_spawning, save_obstacles, save_dir, load_obstacles, load_dir):
+    def __init__(self, nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir):
         # initalise variables
         self.nr = nr
         self.obstacles = obstacles # turn obstacles on or off
@@ -295,12 +295,11 @@ class Environment:
             file_name = os.path.join(self.load_dir, file_name)
             self.grids = np.array(read_json(file_name))
 
-            if goal_spawning:
-                file_name = "targets.pkl"
-                file_path = os.path.join(self.load_dir, file_name)
-                with open(file_path, 'rb') as file:
-                    # Deserialize and read the sublists using pickle.load()
-                    self.goals = pickle.load(file)
+            file_name = "targets.pkl"
+            file_path = os.path.join(self.load_dir, file_name)
+            with open(file_path, 'rb') as file:
+                # Deserialize and read the sublists using pickle.load()
+                self.goals = pickle.load(file)
 
     def reset(self, goal_spawning, i=0):
         # spawn grid
@@ -361,6 +360,7 @@ class Environment:
             for ri in range(self.nr):
                 save_starting_pos[ri] = Point(indices[0,1], indices[0,0])
                 self.starting_pos[ri] = Point(indices[0,1]*2, indices[0,0]*2)
+                # self.starting_pos[ri] = Point(0, 0)
                 # if ri == 0: self.starting_pos[ri] = Point(0, 0)
                 # if ri == 1: self.starting_pos[ri] = Point(9, 9)
                 # if ri == 2: self.starting_pos[ri] = Point(4, 2)
@@ -459,13 +459,22 @@ class Environment:
             if not costs[ri]: min_targets_value[ri] = None
             else:
                 min_value = min(costs[ri].values())
-                min_targets_value[ri] = min_value
+                if refuelling:
+                    if min_value > fuel[ri]-refuel_threshold:
+                        min_targets_value[ri] = None
+                    else:
+                        min_targets_value[ri] = min_value
+                else:
+                    min_targets_value[ri] = min_value
 
         # get all positions distances equal min distance
         min_targets = [[] for i in range(self.nr)]
         for ri in range(self.nr):
             if min_targets_value[ri] == None: continue
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
+            if refuelling:
+                # add min target to list
+                min_targets[ri] = [m_target for m_target in min_targets[ri] if fuel[ri]-refuel_threshold >= distances[self.pos[ri].y][self.pos[ri].x][m_target.y][m_target.x]+distances[self.starting_pos[ri].y][self.starting_pos[ri].x][m_target.y][m_target.x]]
             
         return min_targets
         
@@ -487,7 +496,7 @@ class Environment:
 
         
         for ri in range(nr):
-            if ongoing_frontiers[ri] == None or return_home[ri]: continue
+            if ongoing_frontiers[ri] == None or return_home[ri] or refuel[ri]: continue
             # if on going candidate already searched
             # then set on going condidate to None
             if temp_exploration_grid[ongoing_frontiers[ri].y, ongoing_frontiers[ri].x]:
@@ -512,6 +521,7 @@ class Environment:
         # TODO do without for loops
         costs = [{} for _ in range(self.nr)]
         for ri in range(self.nr):
+            if refuel[ri]: continue
             # if ongoing_frontiers[ri] != None: continue
             for y in range(self.grid.shape[0]):
                 for x in range(self.grid.shape[1]):
@@ -546,8 +556,16 @@ class Environment:
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
                     min_targets[ri] = [ongoing_frontiers[ri]]
+                elif refuel[ri]:
+                    min_targets[ri] = [env.starting_pos[ri]]
                 else:
-                    min_targets[ri] += next_min_targets[ri]                
+                    min_targets[ri] += next_min_targets[ri]   
+
+        # check if any targets reachable with limited fuel
+        if refuelling:
+            for ri,r_min_targets in enumerate(min_targets):
+                if len(r_min_targets) == 0:
+                    refuel[ri] = True             
         
         # for testing
         end = time.time()
@@ -682,28 +700,59 @@ class Environment:
         return np.any(np.all(np.array([y,x]) == np.array(self.known_cells), axis=1))
     
     def update_distances(self, cell, np_known_cells):
-        for known_cell in np_known_cells:
-            new_minimum = 1000
-
-            for known_cell_2 in np_known_cells:
-                temp_minimum = distances[(known_cell_2[0],known_cell_2[1],cell[0], cell[1])] + distances[(known_cell_2[0],known_cell_2[1],known_cell[0], known_cell[1])]
-
-                if temp_minimum < new_minimum:
-                    new_minimum = temp_minimum
-
-            if new_minimum < distances[cell[0],cell[1],known_cell[0], known_cell[1]]:
-                distances[cell[0],cell[1],known_cell[0], known_cell[1]] = new_minimum
-                distances[known_cell[0], known_cell[1],cell[0],cell[1]] = new_minimum
+        distances[
+                np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+                np.repeat(cell[1], np_known_cells[:,1].shape[0]),
+                np_known_cells[:, 0],
+                np_known_cells[:, 1]
+                ] \
+            =\
+            np.minimum(\
+                # From cell to all known cells
+                distances[ 
+                    np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+                    np.repeat(cell[1], np_known_cells[:,1].shape[0]),
+                    np_known_cells[:, 0],
+                    np_known_cells[:, 1]
+                ],
+                # 
+                np.minimum.reduceat(
+                    distances[ 
+                        np.tile(np_known_cells[:, 0], np_known_cells[:,0].shape[0]),
+                        np.tile(np_known_cells[:, 1], np_known_cells[:,0].shape[0]),
+                        np.tile(np.repeat(cell[0], np_known_cells[:,0].shape[0]), np_known_cells[:,0].shape[0]),
+                        np.tile(np.repeat(cell[1], np_known_cells[:,1].shape[0]), np_known_cells[:,0].shape[0])
+                    ]\
+                    +\
+                    distances[ 
+                        np.tile(np_known_cells[:,0], np_known_cells[:,0].shape[0]),
+                        np.tile(np_known_cells[:,1], np_known_cells[:,0].shape[0]),
+                        np.repeat(np_known_cells[:,0], np_known_cells[:,0].shape[0]),
+                        np.repeat(np_known_cells[:,1], np_known_cells[:,0].shape[0])                        
+                        ],
+                    np.arange(0, np_known_cells[:,0].shape[0]*np_known_cells[:,0].shape[0], np_known_cells[:,0].shape[0])
+                )
+                    
+                )
         
+        # Update mirrored distances of updated neighbour distances
+        distances[
+            np.tile(np_known_cells[:, 0],1),
+            np.tile(np_known_cells[:, 1],1),
+            np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+            np.repeat(cell[1], np_known_cells[:,1].shape[0])                
+            ]\
+        =\
+        distances[
+            np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+            np.repeat(cell[1], np_known_cells[:,1].shape[0]),
+            np.tile(np_known_cells[:, 0],1),
+            np.tile(np_known_cells[:, 1],1)
+            ]
     
     def calculate_distances(self):
         global distances
         cells_to_update = []
-        self.grid_plot()
-        # plt.show()
-        breakpoint
-        plt.savefig(os.path.join(dir_path, "before.png"))
-        plt.close()
         for ri in range(self.nr):
             # Add curretn position to cells to update
             cells_to_update.append(np.array([self.pos[ri].y, self.pos[ri].x]))
@@ -784,21 +833,19 @@ class Environment:
             mask = distances[self.pos[ri].y, self.pos[ri].x, \
                             self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] == UNKNOWN
             
-            # self.grid_plot()
-            # plt.show()
-            # Update distance from current position to unknown neighbours
+            # Update distance from current position to neighbour neighbours
             distances[self.pos[ri].y, self.pos[ri].x, \
                       self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 1
             
             # self.grid_plot()
             # plt.show()
-            # Update distance from unknown neighbours to unknown neighbours
+            # Update distance from neighbours to neighbours
             distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
                       self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 0
             
             # self.grid_plot()
             # plt.show()
-            # Update distance from unknown neighbours to current position
+            # Update distance from neighbours to current position
             distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
                       self.pos[ri].y, self.pos[ri].x] = 1
             end = time.time()
@@ -810,101 +857,52 @@ class Environment:
             # plt.show()
             # breakpoint
             # plt.close()
+                
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
             end = time.time()
             self.second_dist.append(end-start)
+        # self.grid_plot()
+        # plt.show()
 
         np_known_cells = np.array(self.known_cells)
         # for ri in range(self.nr):
         start = time.time()
-        # Set neighbours of neighbours
-        # c_neighbours = [Point(neighbour[0], neighbour[1]) for neighbour in self.neighbours[self.pos[ri]]]
-        # # n_neighbours = [self.neighbours[key] for key in c_neighbours]
-        # # n_neighbours.append([[self.pos[ri].x, self.pos[ri].y]])
-        # # n_neighbours = [[item[0],item[1]] for row in n_neighbours for item in row]
-        # # c_neighbours.extend(n_neighbours)
-        # # Convert inner lists to tuples to make them hashable
-        # list_of_tuples = [tuple(lst) for lst in c_neighbours]
-
-        # # Use set to remove duplicates
-        # unique_tuples = set(list_of_tuples)
-
-        # # Convert tuples back to lists
-        # c_neighbours = [list(tpl) for tpl in unique_tuples]
-
         end = time.time()
         self.thrid_dist.append(end-start)
         breakpoint
         start = time.time()
 
-        self.grid_plot()
-        # plt.show()
-        breakpoint
-        plt.savefig(os.path.join(dir_path, "start.png"))
-        plt.close()
-
-        # update agent positions
-        for ri in range(self.nr):
+        # update neighbours
+        for ri in range(nr):
             cell = np.array([self.pos[ri].y, self.pos[ri].x])
             self.update_distances(cell, np_known_cells)
-        
-        self.grid_plot()
-        # plt.show()
-        breakpoint
-        plt.savefig(os.path.join(dir_path, "mid.png"))
-        plt.close()
-            
-        # for ri in range(2):
-        for cell in np_known_cells:
-            self.update_distances(cell, np_known_cells)
 
+            
+            
         # self.grid_plot()
         # plt.show()
         # # breakpoint
         # plt.close()
-                # self.grid_plot()
-                # plt.show()
-                # # breakpoint
-                # plt.close()
-                
+
+        for cell in np_known_cells:
+            self.update_distances(cell, np_known_cells)
+        
         end = time.time()
         self.fourth_dist.append(end-start)
         self.distance_algorithm_times[len(np_known_cells)] = end-start
         
-        # self.grid_plot()
-        # plt.show()
-        # breakpoint
         start = time.time()
-            
-            # Update mirrored distances of updated neighbour distances
-            # for n_cell in self.neighbours[self.pos[ri]]:
-
-            #     for known_cell in np_known_cells:
-            #         distances[]
-            
-
-            # distances[
-            #     np.tile(np_known_cells[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-            #     np.tile(np_known_cells[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0]),
-            #     np.repeat(self.neighbours[self.pos[ri]][:, 1], np_known_cells[:,0].shape[0]),
-            #     np.repeat(self.neighbours[self.pos[ri]][:, 0], np_known_cells[:,1].shape[0])                
-            #     ]\
-            # =\
-            # distances[
-            #     np.repeat(self.neighbours[self.pos[ri]][:, 1], np_known_cells[:,0].shape[0]),
-            #     np.repeat(self.neighbours[self.pos[ri]][:, 0], np_known_cells[:,1].shape[0]),
-            #     np.tile(np_known_cells[:, 0],self.neighbours[self.pos[ri]][:, 1].shape[0]),
-            #     np.tile(np_known_cells[:, 1],self.neighbours[self.pos[ri]][:, 0].shape[0])
-            #     ]
         
         end = time.time()
         self.fifth_dist.append(end-start)
             
         
-        self.grid_plot()
+        # self.grid_plot()
         # plt.show()
-        breakpoint
-        plt.savefig(os.path.join(dir_path, "end.png"))
-        plt.close()
+        # # breakpoint
+        # plt.close()
 
     def grid_plot(self):
         fig, axs = plt.subplots(HEIGHT, WIDTH, figsize=(10, 10), gridspec_kw={'wspace': 0.2, 'hspace': 0.2})
@@ -927,39 +925,9 @@ class Environment:
                 ax.set_xticklabels(np.arange(distances[j][i].shape[1]), fontsize=8)
                 ax.set_yticklabels(np.arange(distances[j][i].shape[0])[::-1], fontsize=8)  # Reversed inner y-axis
 
-                ax.tick_params(axis='both', which='both', length=0)
-                ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
-                ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
-
-        plt.tight_layout(rect=[0.15, 0.15, 0.9, 0.9])
-
-                    
-    # def grid_plot(self):
-    #     grid_size = int(math.sqrt(HEIGHT*WIDTH))
-    #     # Create a figure and axes
-    #     fig, axs = plt.subplots(grid_size, grid_size, figsize=(8, 8))
-
-    #     # Loop through each cell of the larger grid
-    #     for j in range(HEIGHT):
-    #         for i in range(WIDTH):
-    #             # Create a subplot for the current cell
-    #             ax = axs[j, i]
-
-    #             # Plot the smaller grid with actual values
-    #             ax.imshow(distances[j][i], cmap='viridis')
-
-    #             for y in range(distances[j][i].shape[0]):
-    #                 for x in range(distances[j][i].shape[1]):
-    #                     ax.text(x, y, f'{int(distances[j, i, y, x])}', va='center', ha='center', color='white', fontsize=6)
-
-    #             # Optionally, you can set titles for each subplot
-    #             ax.set_title(f'Subgrid {j * grid_size + i + 1}')
-
-    #             # Remove axis ticks and labels if desired
-    #             ax.axis('off')
-
-    #     # Adjust layout to prevent overlap
-    #     plt.tight_layout()
+                # ax.tick_params(axis='both', which='both', length=0)
+                # ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
+                # ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
 
     def grid_plot_vec(self):
         grid_size = int(math.sqrt(HEIGHT*WIDTH))
@@ -1217,16 +1185,22 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 # Simulation initialisations
-test_iterations = 1 # Number of simulation iterations
+test_iterations = 100 # Number of simulation iterations
 goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
 # Environment initialisations
-nr = 2 # number of drones
+nr = 1 # number of drones
 obstacles = True # Sets of obstacels spawn
 obstacle_density = 0 # Sets obstacle density      <---------------------------------------------------------------------- (set obstacles variable to be automatic with 0 density)
 set_obstacles = False # Sets if obstacles should change each iteration
-save_obstacles = False # Sets if obstacles are saved
+save_obstacles = True # Sets if obstacles are saved
 load_obstacles = False # Sets if obstacles should be loaded from previous simulation
+refuelling = True
+refuel_threshold = 5
+if WIDTH > HEIGHT:
+    starting_fuel = (WIDTH*4 + HEIGHT*2)
+else:
+    starting_fuel = (HEIGHT*4 + WIDTH*2)
 
 # Trajectory saving initialisations
 save_trajectory = True # Sets if drone trajectories are saves
@@ -1276,7 +1250,7 @@ sheduled_distances = [[] for _ in range(nr)] # tracks the distance a candidate c
 trajectory = [[] for r in range(nr)] # tracks drone trajectories
 
 # Environment generation
-env = Environment(nr, obstacles, set_obstacles, obstacle_density, goal_spawning, save_obstacles, save_dir, load_obstacles, load_dir)
+env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir)
 env.reset(goal_spawning)
 # print(env.ES_starting_grid)
 
@@ -1286,7 +1260,7 @@ for i in range(test_iterations):
     planning_successful = True # boolean for checking if schedule and path planning is successful
     save = False #                              #    <---------------------------------------------------------------------- (IDK what this does)
     planning_starting_time = time.time() # sets starts time for current iteration
-    if i % 1 == 0: print(i) # prints every x iterations
+    if i % 10 == 0: print(i) # prints every x iterations
     # the first iteration has already been reset
     # thus it does not have to be run again
     if i != 0:
@@ -1295,6 +1269,8 @@ for i in range(test_iterations):
     steps = 0 # sets number of steps equal to zero
     actions = [[] for _ in range(nr)] # tracks actions for current iteration
     return_home = [False for _ in range(nr)] # boolean for tracking drone state. If True the drone returns to starting position 
+    fuel = [starting_fuel for _ in range(nr)]
+    refuel = [False for _ in range(nr)]
     current_path = [[] for _ in range(nr)] # tracks current path of drone
     finished_scheduling = [False]*nr # boolean for tracking scheduling state of drone. If True the drone returns to starting position #    <---------------------------------------------------------------------- (check if same functionality as return home state)
     # trajectory = [[env.starting_pos[r]] for r in range(nr)] # tracks drone trajectories
@@ -1313,7 +1289,6 @@ for i in range(test_iterations):
     start_step = 0
     while not env.exploration_grid.all() and not goal_exit_condition and planning_successful:
         # print("%.2f    %.2f"%(np.count_nonzero(env.exploration_grid)/(WIDTH*HEIGHT)*100, time.time()-start_step))
-        if steps % 5 == 0: print(steps)
         start_step = time.time()
         if steps > 1000:
             breakpoint
@@ -1325,6 +1300,23 @@ for i in range(test_iterations):
         # if all cells have been explored then exit loop
         if env.exploration_grid.all():
             break
+
+        if refuelling:
+            for r in range(nr):
+                if finished_scheduling[r] or return_home[r] or refuel[r]: continue
+                if fuel[r]-refuel_threshold < distances[env.pos[r].y][env.pos[r].x][env.starting_pos[r].y][env.starting_pos[r].x]:
+                    refuel[r] = True
+                    frontiers[r] = env.starting_pos[r]
+                    ongoing_frontiers[r] = None
+                    if len(current_path[r]) != 0:
+                        # delete on going path from dynamic obstacles
+                        count = list(occupied_cells)[-1]
+                        for c in range(steps, count+1):
+                            # checks that the current path of the drone is not shorter than the occupied cells dictionary
+                            if len(current_path[r]) == c-steps: break
+                            occupied_cells[c].remove(current_path[r][c-steps])
+                            if len(occupied_cells[c]) == 0:
+                                del occupied_cells[c]
 
         # get frontiers
         temp_ongoing_frontiers = ongoing_frontiers.copy() # save current on going candidates
@@ -1372,6 +1364,15 @@ for i in range(test_iterations):
         r = prior_r # sets the priority drone to the current drone
         cntr = 0 # initialises the number of plans for current drone as priority drone to zeros
         n_plans = 0 # initialises the number of plans
+        # check which drone has least fuel to get back home and set as priority
+        # if no drones have to refuel then skip
+        if refuelling and any(refuel):
+            fuel_comp = []
+            for ri in range(nr):
+                fuel_comp.append(fuel[ri] - distances[env.pos[ri].y][env.pos[ri].x][env.starting_pos[ri].y][env.starting_pos[ri].x])
+            index = min(fuel_comp)
+            prior_r = fuel_comp.index(index)
+            r = prior_r
         temp_occupied_cells = {key: value[:] for key, value in occupied_cells.items()} # sets the occupancy of all cells to current history
 
         # loop for path planning
@@ -1517,13 +1518,21 @@ for i in range(test_iterations):
                 
                 # execute move in environment
                 env.move(r, current_path[r][0])
+                fuel[r] -= 1
+                if refuelling and fuel[r] < 0:
+                    print("Drone %d has crashed!!!" %(r))
                 
                 # if drone reached frontier
                 # AND drone position is equal to starting position
                 # then not drone searching state to finished
                 # else set on going candidate to current candidate #    <---------------------------------------------------------------------- (why do you check if the drone is at starting position aswell?)
                 if env.pos[r] == frontiers[r] and env.pos[r] == env.starting_pos[r]: #    <---------------------------------------------------------------------- (is this check necessary?)
-                    if return_home[r] and not finished_scheduling[r]:
+                    if refuel[r]:
+                        ongoing_frontiers[r] = None
+                        return_home[r] = False
+                        refuel[r] = False
+                        fuel[r] = starting_fuel
+                    elif return_home[r] and not finished_scheduling[r]:
                         ongoing_frontiers[r] = frontiers[r]
                         finished_scheduling[r] = True
                         which[r] = 1
@@ -1575,6 +1584,7 @@ for i in range(test_iterations):
                     goal_exit_condition = True
                 
                 path_time += end_path_time - start_path_time
+
             start_dist_time = time.time()
             env.calculate_distances()
             end_dist_time = time.time()
@@ -1582,6 +1592,7 @@ for i in range(test_iterations):
                 env.exploration_grid[env.prev_pos[r].y, env.prev_pos[r].x] = True
                 env.exploration_grid[env.pos[r].y, env.pos[r].x] = True
                 env.explorated_cells.append((env.pos[r].y,env.pos[r].x))
+
             selection_time += end_selection - start_selection
             success_time += time.time() - start_success
             
@@ -1690,6 +1701,7 @@ file_path = os.path.join(dir_path, file_name)
 with open(file_path, 'w') as file:
     # Iterate through the sublists and write them to the file
     for sublist in env.distance_algorithm_times:
+        # Write the sublist string followed by a newline character
         file.write(str(sublist) + "," + str(env.distance_algorithm_times[sublist]) + '\n')
 
 # saves results to required location
@@ -1750,10 +1762,10 @@ if save_obstacles:
     file_name = os.path.join(save_dir, file_name)
     write_json(obstacle_positions, file_name)
 
-    plt.close()
-    env.grid_plot()
-    file_name = 'distance_matrix.png'
-    plt.savefig(os.path.join(dir_path, file_name))
+    # plt.close()
+    # env.grid_plot()
+    # file_name = 'distance_matrix.png'
+    # plt.savefig(os.path.join(dir_path, file_name))
     # # self.grid_plot_vec()
     # plt.show()
     # breakpoint

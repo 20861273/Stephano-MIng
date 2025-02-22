@@ -18,6 +18,7 @@ from functools import reduce
 Point = namedtuple('Point', 'x, y')
 HEIGHT = 20
 WIDTH = 20
+UNKNOWN = WIDTH*HEIGHT**2
 
 # Chosen values
 height = 100 # m
@@ -316,6 +317,12 @@ class Environment:
         self.fifth_b_2 = []
         self.sixth = []
         self.seventh = []
+        self.first_dist = []
+        self.second_dist = []
+        self.thrid_dist = []
+        self.fourth_dist = []
+        self.fifth_dist = []
+        self.distance_algorithm_times= {}
         
         # spawn grid
         self.starting_grid = np.zeros((HEIGHT, WIDTH))
@@ -393,7 +400,7 @@ class Environment:
 
                 self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
-                if i==0 or not self.set_obstacles: distances = env.calculate_distances()
+                # if i==0 or not self.set_obstacles: distances = env.calculate_distances()
             elif preprocessing or self.set_obstacles:
                 self.starting_grid = np.zeros((int(HEIGHT/2), int(WIDTH/2)), dtype=np.int8)
                 
@@ -413,7 +420,7 @@ class Environment:
 
                 self.starting_grid = np.kron(self.ES_starting_grid, np.ones((2, 2)))
                 self.grid = self.starting_grid.copy()
-                if i==0 or not self.set_obstacles: distances = env.calculate_distances()
+                # if i==0 or not self.set_obstacles: distances = env.calculate_distances()
 
         self.grid = self.starting_grid.copy()
         
@@ -457,7 +464,7 @@ class Environment:
                             out_of_reach = [[] for spawn in spawning_radius]
                             for j in range(self.nr):
                                 # get all node distances from spawning location
-                                node_distances = distances[spawning_radius[j].y*HEIGHT+spawning_radius[j].x]
+                                node_distances = distances[spawning_radius[j].y][spawning_radius[j].x]
                                 # get indices of out of reach nodes
                                 out_of_reach_indices = np.argwhere(np.array(node_distances) != WIDTH*HEIGHT).flatten()
                                 out_of_reach_indices = np.argwhere(np.array(out_of_reach_indices) >= (starting_fuel-refuel_threshold)/2).flatten()
@@ -502,6 +509,14 @@ class Environment:
                     del indices_list[0]
                     indices = np.array(indices_list)
 
+        if i==0 or not self.set_obstacles:
+            self.neighbours = {}
+            self.known_cells = [np.array([y, x]) for y, x in np.argwhere(env.grid != States.OBS.value)]
+            distances = np.full((HEIGHT,WIDTH, HEIGHT,WIDTH), UNKNOWN)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+            for ri in range(self.nr):
+                distances[self.pos[ri].y][self.pos[ri].x][self.pos[ri].y][self.pos[ri].x] = 0
+            env.calculate_distances()
+        
         # set directions
         self.direction = [None]*self.nr
         for ri in range(self.nr):
@@ -612,7 +627,7 @@ class Environment:
             if refuelling:
                 # add min target to list 
                 # if fuel-threshold > (distance to target) + (distance from target to start)
-                min_targets[ri] = [m_target for m_target in min_targets[ri] if fuel[ri]-refuel_threshold >= distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][m_target.y*HEIGHT + m_target.x]+distances[self.starting_pos[ri].y*HEIGHT + self.starting_pos[ri].x][m_target.y*HEIGHT + m_target.x]]
+                min_targets[ri] = [m_target for m_target in min_targets[ri] if fuel[ri]-refuel_threshold >= distances[self.pos[ri].y][self.pos[ri].x][m_target.y][m_target.x]+distances[self.starting_pos[ri].y][self.starting_pos[ri].x][m_target.y][m_target.x]]
 
         return min_targets
         
@@ -674,7 +689,7 @@ class Environment:
                 for x in range(self.grid.shape[1]):
                     if not temp_exploration_grid[y,x]:
                         # costs[ri][Point(x,y)] = distances[self.pos[ri]][Point(x,y)]
-                        costs[ri][Point(x,y)] = distances[self.pos[ri].y*HEIGHT + self.pos[ri].x][y*HEIGHT + x]
+                        costs[ri][Point(x,y)] = distances[self.pos[ri].y][self.pos[ri].x][y][x]
 
         end = time.time()
         self.third.append(end-start)
@@ -820,35 +835,216 @@ class Environment:
 
         return targets
     
+    def in_bounds(self, id):
+        (x, y) = id
+        return 0 <= x < WIDTH and 0 <= y < HEIGHT
+    
+    def is_obstcle(self, id):
+        (x, y) = id
+        return env.grid[y,x] != States.OBS.value
+
+    def is_known(self, id):
+        (x, y) = id
+        return np.any(np.all(np.array([y,x]) == np.array(self.known_cells), axis=1))
+    
+    def update_distances(self, cell, np_known_cells):
+        distances[
+                np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+                np.repeat(cell[1], np_known_cells[:,1].shape[0]),
+                np_known_cells[:, 0],
+                np_known_cells[:, 1]
+                ] \
+            =\
+            np.minimum(\
+                # From cell to all known cells
+                distances[ 
+                    np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+                    np.repeat(cell[1], np_known_cells[:,1].shape[0]),
+                    np_known_cells[:, 0],
+                    np_known_cells[:, 1]
+                ],
+                # 
+                np.minimum.reduceat(
+                    distances[ 
+                        np.tile(np_known_cells[:, 0], np_known_cells[:,0].shape[0]),
+                        np.tile(np_known_cells[:, 1], np_known_cells[:,0].shape[0]),
+                        np.tile(np.repeat(cell[0], np_known_cells[:,0].shape[0]), np_known_cells[:,0].shape[0]),
+                        np.tile(np.repeat(cell[1], np_known_cells[:,1].shape[0]), np_known_cells[:,0].shape[0])
+                    ]\
+                    +\
+                    distances[ 
+                        np.tile(np_known_cells[:,0], np_known_cells[:,0].shape[0]),
+                        np.tile(np_known_cells[:,1], np_known_cells[:,0].shape[0]),
+                        np.repeat(np_known_cells[:,0], np_known_cells[:,0].shape[0]),
+                        np.repeat(np_known_cells[:,1], np_known_cells[:,0].shape[0])                        
+                        ],
+                    np.arange(0, np_known_cells[:,0].shape[0]*np_known_cells[:,0].shape[0], np_known_cells[:,0].shape[0])
+                )
+                    
+                )
+        
+        # Update mirrored distances of updated neighbour distances
+        distances[
+            np.tile(np_known_cells[:, 0],1),
+            np.tile(np_known_cells[:, 1],1),
+            np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+            np.repeat(cell[1], np_known_cells[:,1].shape[0])                
+            ]\
+        =\
+        distances[
+            np.repeat(cell[0], np_known_cells[:,0].shape[0]),
+            np.repeat(cell[1], np_known_cells[:,1].shape[0]),
+            np.tile(np_known_cells[:, 0],1),
+            np.tile(np_known_cells[:, 1],1)
+            ]
+    
     def calculate_distances(self):
-        num_cells = HEIGHT * WIDTH
-        distances = np.full((num_cells, num_cells), HEIGHT * WIDTH)  # Initialize distances to HEIGHT*WIDTH (unreachable)
+        global distances
+        cells_to_update = []
+        for ri in range(self.nr):
+            # Add curretn position to cells to update
+            cells_to_update.append(np.array([self.pos[ri].y, self.pos[ri].x]))
 
-        # Define movements (up, down, left, right)
-        moves = [(0, -1), (0, 1), (-1, 0), (1, 0)]
+            # if the current position is not in neighbours collection
+            # then get neighbours and add to neighbours
+            # BUG!!!!!!!!!!!!!!!!
+            # if not explored
+            # add neighbours as parents and add all known neighbours
+            start = time.time()
+            if not self.exploration_grid[self.pos[ri].y, self.pos[ri].x]:
+                # get neighbours
+                # (right, up, left, down)
+                results = [[self.pos[ri].x+1, self.pos[ri].y],
+                        [self.pos[ri].x, self.pos[ri].y-1],
+                        [self.pos[ri].x-1, self.pos[ri].y],
+                        [self.pos[ri].x, self.pos[ri].y+1]]
+                results = list(filter(self.in_bounds, results))
+                results = list(filter(self.is_obstcle, results))
+            
+                self.neighbours[self.pos[ri]] = np.array(results)
+                # Update neighbours of the neighbours
+                for neighbour in results:
+                    # Add to known list
+                    if not np.any(np.all(np.array([neighbour[1],neighbour[0]]) == np.array(self.known_cells), axis=1)): self.known_cells.append(np.array([neighbour[1],neighbour[0]]))
 
-        for start_cell in range(num_cells):
-            if self.starting_grid[start_cell // HEIGHT, start_cell % HEIGHT] == States.UNEXP.value:
-                queue = deque([(start_cell, 0)])  # Initialize queue with the starting cell and distance 0
-                visited = np.zeros(num_cells, dtype=bool)  # Mark all cells as not visited
-                visited[start_cell] = True  # Mark the starting cell as visited
+                    # If neighbour is not in neighbours dictionary
+                    # Then add new key to dictionary with current position as neighbour
+                    if Point(neighbour[0], neighbour[1]) not in self.neighbours: self.neighbours[Point(neighbour[0], neighbour[1])] = [np.array([self.pos[ri].x, self.pos[ri].y])]
+                    # If neighbour does not have the current position as neighbour, but it's already in the neighbours dictionary
+                    # Then add current position to neigbours
+                    elif not np.any(np.all(np.array([self.pos[ri].x, self.pos[ri].y]) == self.neighbours[Point(neighbour[0], neighbour[1])], axis=1)):
+                        np.append(self.neighbours[Point(neighbour[0], neighbour[1])], np.array([self.pos[ri].x, self.pos[ri].y]))
 
-                while queue:
-                    current_cell, distance = queue.popleft()
-                    distances[start_cell, current_cell] = distance
+                    # Add neighbour and neighbours known second neighbours to update list
+                    if not np.any(np.all(np.array([neighbour[1],neighbour[0]]) == np.array(cells_to_update), axis=1)):
+                        cells_to_update.append(np.array([neighbour[1],neighbour[0]]))
+                    # get second neighbours
+                    second_neighbours = [
+                                        [neighbour[0]+1, neighbour[1]],
+                                        [neighbour[0], neighbour[1]-1],
+                                        [neighbour[0]-1, neighbour[1]],
+                                        [neighbour[0], neighbour[1]+1]
+                                        ]
+                    # remove any invalid neighbours (out of bounds or not known) and add to neighbours dictionary
+                    second_neighbours = list(filter(self.in_bounds, second_neighbours))
+                    neighbours = list(filter(self.is_known, second_neighbours))
+                    self.neighbours[Point(neighbour[0],neighbour[1])] = np.array(neighbours)
 
-                    # Explore neighbors
-                    row, col = current_cell // HEIGHT, current_cell % HEIGHT
-                    for move_row, move_col in moves:
-                        new_row, new_col = row + move_row, col + move_col
-                        neighbor_cell = new_row * HEIGHT + new_col
+                    # Update distance from second neighbour to current neighbours
+                    distances[
+                        neighbour[1],
+                        neighbour[0],
+                        self.neighbours[Point(neighbour[0],neighbour[1])][:, 1],
+                        self.neighbours[Point(neighbour[0],neighbour[1])][:, 0]] \
+                        = 1
+                    # Update distance from second neighbours to second neighbours
+                    distances[
+                        self.neighbours[Point(neighbour[0],neighbour[1])][:, 1], 
+                        self.neighbours[Point(neighbour[0],neighbour[1])][:, 0], 
+                            self.neighbours[Point(neighbour[0],neighbour[1])][:, 1], 
+                            self.neighbours[Point(neighbour[0],neighbour[1])][:, 0]] \
+                            = 0
+                    # Update distance from current neighbours to second position
+                    distances[
+                        self.neighbours[Point(neighbour[0],neighbour[1])][:, 1], 
+                        self.neighbours[Point(neighbour[0],neighbour[1])][:, 0], 
+                        neighbour[1], 
+                        neighbour[0]] \
+                        = 1
+                    # self.grid_plot()
+                    # plt.show()
+                    # plt.close()
 
-                        if 0 <= new_row < WIDTH and 0 <= new_col < HEIGHT \
-                            and not visited[neighbor_cell] and self.starting_grid[new_row, new_col] == States.UNEXP.value:
-                            queue.append((neighbor_cell, distance + 1))
-                            visited[neighbor_cell] = True
+                # self.neighbours_complete[self.pos[ri]] = True
+                
+            # Mask the already calculated distances to avoid overwriting them
+            mask = distances[self.pos[ri].y, self.pos[ri].x, \
+                            self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] == UNKNOWN
+            
+            # Update distance from current position to neighbour neighbours
+            distances[self.pos[ri].y, self.pos[ri].x, \
+                      self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 1
+            
+            # self.grid_plot()
+            # plt.show()
+            # Update distance from neighbours to neighbours
+            distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
+                      self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0]] = 0
+            
+            # self.grid_plot()
+            # plt.show()
+            # Update distance from neighbours to current position
+            distances[self.neighbours[self.pos[ri]][:, 1], self.neighbours[self.pos[ri]][:, 0], \
+                      self.pos[ri].y, self.pos[ri].x] = 1
+            end = time.time()
+            self.first_dist.append(end-start)
+            # self.grid_plot()
+            # plt.show()
 
-        return distances
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
+            # plt.close()
+                
+            # self.grid_plot()
+            # plt.show()
+            # breakpoint
+            end = time.time()
+            self.second_dist.append(end-start)
+        # self.grid_plot()
+        # plt.show()
+
+        np_known_cells = np.array(self.known_cells)
+        # for ri in range(self.nr):
+        start = time.time()
+        end = time.time()
+        self.thrid_dist.append(end-start)
+        breakpoint
+        start = time.time()
+
+        # update neighbours
+        for ri in range(nr):
+            cell = np.array([self.pos[ri].y, self.pos[ri].x])
+            self.update_distances(cell, np_known_cells)
+
+            
+            
+        # self.grid_plot()
+        # plt.show()
+        # # breakpoint
+        # plt.close()
+
+        for cell in np_known_cells:
+            self.update_distances(cell, np_known_cells)
+        
+        end = time.time()
+        self.fourth_dist.append(end-start)
+        self.distance_algorithm_times[len(np_known_cells)] = end-start
+        
+        start = time.time()
+        
+        end = time.time()
+        self.fifth_dist.append(end-start)
     
     def print_graph(self, r, steps, path, maneuvers, actions, starting_pos, obstacles, dir_path, cnt, summary=False, goal_pos=None, step=None):
         """
@@ -1193,9 +1389,8 @@ class Environment:
 
 #     indices.append(all_steps.index(min(all_steps)))
 # print(weight[max(set(indices), key = indices.count)])
-nr_list = [1,2,3,4]
+nr_list = [1,2,3]
 obstacle_density_list = [0,0.05,0.1,0.2,0.3,0.4]
-# obstacle_density_list = [0.4]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
 
@@ -1213,7 +1408,7 @@ for nr in nr_list:
         in_loop_dist = False
         preprocessing = True
         maneuvering = False
-        fixed_wing = True
+        fixed_wing = False
         refuelling = False
         # if WIDTH > HEIGHT:
         #     starting_fuel = (WIDTH*4 + HEIGHT*4)
@@ -1235,7 +1430,7 @@ for nr in nr_list:
             date_and_time = datetime.now()
             dir_path = os.path.join(PATH, date_and_time.strftime("%d-%m-%Y %Hh%Mm%Ss"))
             if not os.path.exists(dir_path): os.makedirs(dir_path)
-            print("nr:%d\nObstacle density:%.2f\ndate_and_time:%s"%(nr, obstacle_density, str(date_and_time)))
+            print("Obstacle density:%.2f\ndate_and_time:%s"%(obstacle_density, str(date_and_time)))
 
         # environment initialisations
         goal_spawning = False
@@ -1253,66 +1448,68 @@ for nr in nr_list:
         load_dir = os.path.join(PATH, 'Load') 
         if not os.path.exists(load_dir): os.makedirs(load_dir)
         env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, radius_spawning, spawning_radius_length, save_dir, load_obstacles, load_dir)
+        distances = np.full((HEIGHT,WIDTH, HEIGHT,WIDTH), UNKNOWN)
         env.reset(weight, 0, goal_spawning)
         print(env.ES_starting_grid)
 
         # calculate distances
-        if not in_loop_dist:
-            # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
-            file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
-            if file_name in os.listdir(load_dir):
-            #     file_path = os.path.join(load_dir, file_name)
-            #     with open(file_path, 'rb') as file:
-            #         distances = file.read()
-                file_path = os.path.join(load_dir, file_name)
-                distances = read_json(file_path)
+        # if not in_loop_dist:
+        #     # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
+        #     file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
+        #     if file_name in os.listdir(load_dir):
+        #     #     file_path = os.path.join(load_dir, file_name)
+        #     #     with open(file_path, 'rb') as file:
+        #     #         distances = file.read()
+        #         file_path = os.path.join(load_dir, file_name)
+        #         distances = read_json(file_path)
 
-                distances = convert_json_data(distances)
-            else:
-                distances = {}
-                print("Preprocessing...")
-                starting_time = time.time()
-                # for dx in range(WIDTH):
-                #     print(dx)
-                #     for dy in range(HEIGHT):
-                #         if env.grid[dy,dx] == States.OBS.value: continue
-                #         temp_paths = {}
-                #         for x in range(WIDTH):
-                #             for y in range(HEIGHT):
-                #                 if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
-                #                     # A* distances
-                #                     # astar = Astar(env.grid)
-                #                     # temp_path = astar.a_star(Point(dx, dy), Point(x,y), env.grid)
-                #                     # del temp_path[0]
-                #                     # temp_paths[Point(x,y)] = temp_path
-                #                     # distances[Point(dx,dy)] = temp_paths
+        #         distances = convert_json_data(distances)
+        #     else:
+        #         distances = {}
+        #         print("Preprocessing...")
+        #         starting_time = time.time()
+        #         # for dx in range(WIDTH):
+        #         #     print(dx)
+        #         #     for dy in range(HEIGHT):
+        #         #         if env.grid[dy,dx] == States.OBS.value: continue
+        #         #         temp_paths = {}
+        #         #         for x in range(WIDTH):
+        #         #             for y in range(HEIGHT):
+        #         #                 if env.grid[y,x] != States.OBS.value and (x,y) != (dx,dy):
+        #         #                     # A* distances
+        #         #                     # astar = Astar(env.grid)
+        #         #                     # temp_path = astar.a_star(Point(dx, dy), Point(x,y), env.grid)
+        #         #                     # del temp_path[0]
+        #         #                     # temp_paths[Point(x,y)] = temp_path
+        #         #                     # distances[Point(dx,dy)] = temp_paths
 
-                #                     # Mannhattan distances
-                #                     distance = env.get_distance(Point(dx, dy), Point(x,y))
-                #                     temp_paths[Point(x,y)] = distance
-                #                     distances[Point(dx,dy)] = temp_paths
+        #         #                     # Mannhattan distances
+        #         #                     distance = env.get_distance(Point(dx, dy), Point(x,y))
+        #         #                     temp_paths[Point(x,y)] = distance
+        #         #                     distances[Point(dx,dy)] = temp_paths
 
-                # # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
-                # # file_path = os.path.join(load_dir, file_name)
-                # # with open(file_path, 'wb') as file:
-                # #     file.write(distances)
+        #         # # file_name = "distances%dx%d.bin"%(HEIGHT,WIDTH)
+        #         # # file_path = os.path.join(load_dir, file_name)
+        #         # # with open(file_path, 'wb') as file:
+        #         # #     file.write(distances)
 
-                # # write to file for later use
-                # # data_json = convert_data_to_json_format(distances)
-                # # file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
-                # # file_path = os.path.join(load_dir, file_name)
-                # # write_json(data_json, file_path)
+        #         # # write to file for later use
+        #         # # data_json = convert_data_to_json_format(distances)
+        #         # # file_name = "distances%dx%d.json"%(HEIGHT,WIDTH)
+        #         # # file_path = os.path.join(load_dir, file_name)
+        #         # # write_json(data_json, file_path)
 
-                distances = env.calculate_distances()
+        print("Preprocessing...")
+        starting_time = time.time()
+        # distances = env.calculate_distances()
 
-            end_time = time.time()
-            print("Preprocessing time: %.2fs" %(end_time - starting_time))
+        end_time = time.time()
+        print("Preprocessing time: %.2fs" %(end_time - starting_time))
             
         preprocessing = False
 
         # testing loop
         testing_start_time = time.time()
-        refuels_list = [[] for r in range(nr)]
         steps_list = []
         explorations_list = [[] for r in range(nr)]
         maneuvers_list = []
@@ -1330,8 +1527,8 @@ for nr in nr_list:
             save = False
             planning_starting_time = time.time()
             if i % 100 == 0: print(i)
-            if i != 0:
-                env.reset(weight, i, goal_spawning)
+            # if i == 0:
+            env.reset(weight, i, goal_spawning)
             obstacles = env.exploration_grid.copy()
             starting_fuel = int(np.unique(distances.flatten())[-2]*2.5)
             steps = 0
@@ -1349,7 +1546,6 @@ for nr in nr_list:
             occupied_cells = {}
             occupied_cells[steps] = []
             explorations = [0]*nr
-            num_refuels = [0]*nr
             for r in range(nr):
                 occupied_cells[steps].append(env.starting_pos[r])
 
@@ -1370,11 +1566,11 @@ for nr in nr_list:
                 if refuelling:
                     for r in range(nr):
                         if finished_scheduling[r] or return_home[r] or refuel[r]: continue
-                        if fuel[r]-refuel_threshold < distances[env.pos[r].y*HEIGHT + env.pos[r].x][env.starting_pos[r].y*HEIGHT + env.starting_pos[r].x]:
+                        if fuel[r]-refuel_threshold < distances[env.pos[r].y][env.pos[r].x][env.starting_pos[r].y][env.starting_pos[r].x]:
                             refuel[r] = True
                             r_which.append(env.pos)
                             r_which.append(fuel[r]-refuel_threshold)
-                            r_which.append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][env.starting_pos[r].y*HEIGHT + env.starting_pos[r].x])
+                            r_which.append(distances[env.pos[r].y][env.pos[r].x][env.starting_pos[r].y][env.starting_pos[r].x])
                             frontiers[r] = env.starting_pos[r]
                             ongoing_frontiers[r] = None
                             if len(current_path[r]) != 0:
@@ -1472,7 +1668,7 @@ for nr in nr_list:
                     if refuelling and any(refuel):
                         fuel_comp = []
                         for ri in range(nr):
-                            fuel_comp.append(fuel[ri] - distances[env.pos[ri].y*HEIGHT + env.pos[ri].x][env.starting_pos[ri].y*HEIGHT + env.starting_pos[ri].x])
+                            fuel_comp.append(fuel[ri] - distances[env.pos[ri].y][env.pos[ri].x][env.starting_pos[ri].y][env.starting_pos[ri].x])
                         index = min(fuel_comp)
                         prior_r = fuel_comp.index(index)
                         r = prior_r
@@ -1580,7 +1776,7 @@ for nr in nr_list:
                             continue
                         # count distance
                         if frontiers[r] != ongoing_frontiers[r]:
-                            sheduled_distances[r].append(distances[env.pos[r].y*HEIGHT + env.pos[r].x][frontiers[r].y*HEIGHT + frontiers[r].x])
+                            sheduled_distances[r].append(distances[env.pos[r].y][env.pos[r].x][frontiers[r].y][frontiers[r].x])
 
                         # execute move 
                         trajectory[r].append(current_path[r][0])
@@ -1606,7 +1802,6 @@ for nr in nr_list:
                                 return_home[r] = False
                                 refuel[r] = False
                                 fuel[r] = starting_fuel
-                                num_refuels[r] += 1
                             elif return_home[r] and not finished_scheduling[r]:
                                 ongoing_frontiers[r] = frontiers[r]
                                 finished_scheduling[r] = True
@@ -1674,11 +1869,9 @@ for nr in nr_list:
                     else:
                         if i in saves: save = True
 
-            
             steps_list.append(steps)
             for ri in range(nr):
                 explorations_list[ri].append(explorations[ri])
-                refuels_list[ri].append(num_refuels[ri])
 
             if save_trajectory and save or i < saved_iterations:
                 maneuvers_list.append(maneuvers)
@@ -1728,12 +1921,6 @@ for nr in nr_list:
             drone_average = np.mean(np.array(drone_explorations))
             # Append the average to the corresponding sublist in the averages list
             average_explorations.append(drone_average)
-        average_refuels = []
-        for drone_refuels in refuels_list:
-            # Calculate the average of the current sublist
-            drone_average = np.mean(np.array(drone_refuels))
-            # Append the average to the corresponding sublist in the averages list
-            average_refuels.append(drone_average)
 
         print_string = ""
         print_string += "Maneuvering: %s"%(str(maneuvering))
@@ -1747,8 +1934,6 @@ for nr in nr_list:
         print_string += "\nAverage flight distance: %.2f m" %(np.mean(np.array(flight_distances)))
         for ri in range(nr):
             print_string += "\nAverage explorations for drone %d: %.2f" %(ri, average_explorations[ri])
-        for ri in range(nr):
-            print_string += "\nAverage refuels for drone %d: %.2f" %(ri, average_refuels[ri])
         print_string += "\nAverage time scheduling: %.8fs"%(np.mean(np.array(schedule_times)))
         print_string += "\nAverage time path planning: %.8fs"%(np.mean(np.array(path_times)))
         print_string += "\nPercentage success: %.2f"%((test_iterations-unsuccessful)/test_iterations*100)
