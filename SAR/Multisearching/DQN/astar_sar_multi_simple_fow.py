@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 4
-WIDTH = 4
+HEIGHT = 20
+WIDTH = 20
 UNKNOWN = WIDTH*HEIGHT*2
 
 # Chosen values
@@ -323,6 +323,9 @@ class Environment:
                 total_elements = int(HEIGHT/2) * int(WIDTH/2)
                 num_ones_to_place = math.ceil(self.obstacle_density * total_elements)
 
+                # indexes = np.array([np.array([2,9]), np.array([3,0]), np.array([3,7]), np.array([3,8]), np.array([3,9]), np.array([4,0]), np.array([4,1]), np.array([4,2]), np.array([4,3]), np.array([4,4]), np.array([4,6]), np.array([4,7]), np.array([4,8]), np.array([4,9]), np.array([5,0]), np.array([5,1]), np.array([5,2]), np.array([5,7]), np.array([5,8]), np.array([5,9]), np.array([6,0]), np.array([6,8]), np.array([6,9]), np.array([7,0]), np.array([7,9]), np.array([8,9])])
+
+
                 # Generate random indices to place 1's
                 possible_indexes = np.argwhere(np.array(self.starting_grid) == States.UNEXP.value)
                 np.random.shuffle(possible_indexes)
@@ -452,7 +455,7 @@ class Environment:
         # self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
         # self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
         
-    def get_min_targets(self, costs):
+    def get_min_targets(self, costs, en):
         # get min distance of each dorne
         min_targets_value = [None]*self.nr
         for ri in range(self.nr):
@@ -467,7 +470,10 @@ class Environment:
             if min_targets_value[ri] == None: continue
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
             
-        return min_targets
+        if HEIGHT*WIDTH - en <= self.nr:
+            return min_targets
+        else:
+            return [sublist[:1] for sublist in min_targets]
         
     def scheduler(self, ongoing_frontiers):
         start = time.time()
@@ -532,7 +538,7 @@ class Environment:
         # it's repeated this many times since drones could share the minumum distance cells
         # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
         # this becomes important when there are only n cells left to explore
-        min_targets = self.get_min_targets(costs)
+        min_targets = self.get_min_targets(costs, np.count_nonzero(temp_exploration_grid))
         temp_costs = copy.deepcopy(costs)
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
@@ -542,7 +548,7 @@ class Environment:
                         del temp_costs[ri][target]
 
             # find next best targets
-            next_min_targets = self.get_min_targets(temp_costs)
+            next_min_targets = self.get_min_targets(temp_costs, np.count_nonzero(temp_exploration_grid))
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
                     min_targets[ri] = [ongoing_frontiers[ri]]
@@ -845,11 +851,11 @@ class Environment:
             # breakpoint
             end = time.time()
             self.second_dist.append(end-start)
-        self.grid_plot()
-        # plt.show()
-        breakpoint
-        plt.savefig(os.path.join(dir_path, "start.png"))
-        plt.close()
+        # self.grid_plot()
+        # # plt.show()
+        # breakpoint
+        # plt.savefig(os.path.join(dir_path, "start.png"))
+        # plt.close()
 
 
         np_known_cells = np.array(self.known_cells)
@@ -867,11 +873,11 @@ class Environment:
 
             
             
-        self.grid_plot()
-        # plt.show()
-        breakpoint
-        plt.savefig(os.path.join(dir_path, "mid.png"))
-        plt.close()
+        # self.grid_plot()
+        # # plt.show()
+        # breakpoint
+        # plt.savefig(os.path.join(dir_path, "mid.png"))
+        # plt.close()
 
         for cell in np_known_cells:
             self.update_distances(cell, np_known_cells)
@@ -888,11 +894,11 @@ class Environment:
         self.fifth_dist.append(end-start)
             
         
-        self.grid_plot()
+        # self.grid_plot()
         # plt.show()
         breakpoint
-        plt.savefig(os.path.join(dir_path, "after.png"))
-        plt.close()
+        # plt.savefig(os.path.join(dir_path, "after.png"))
+        # plt.close()
         breakpoint
 
 
@@ -914,12 +920,12 @@ class Environment:
 
                 ax.set_xticks(np.arange(distances[j][i].shape[1]))
                 ax.set_yticks(np.arange(distances[j][i].shape[0]))
-                ax.set_xticklabels(np.arange(distances[j][i].shape[1]), fontsize=8)
-                ax.set_yticklabels(np.arange(distances[j][i].shape[0])[::-1], fontsize=8)  # Reversed inner y-axis
+                ax.set_xticklabels(np.arange(distances[j][i].shape[1])+1, fontsize=8)
+                ax.set_yticklabels(np.arange(distances[j][i].shape[0])[::-1]+1, fontsize=8)  # Reversed inner y-axis
 
                 ax.tick_params(axis='both', which='both', length=0)
-                ax.text(1.5, 4, 'X-axis (%d, %d)'%(i, HEIGHT-1-j), ha='center', fontsize=6)
-                ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i, HEIGHT-1-j), va='center', rotation='vertical', fontsize=6)
+                ax.text(1.5, 4, 'X-axis (%d, %d)'%(i+1, HEIGHT-j), ha='center', fontsize=6)
+                ax.text(-1, 1.5, 'Y-axis (%d, %d)'%(i+1, HEIGHT-j), va='center', rotation='vertical', fontsize=6)
 
     def grid_plot_vec(self):
         grid_size = int(math.sqrt(HEIGHT*WIDTH))
@@ -1175,13 +1181,13 @@ class Environment:
 
 ##############################################################################################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
-nr_list = [2]
-obstacle_density_list = [0]
+nr_list = [1,2,3,4]
+obstacle_density_list = [0,5,10,20,30,40]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Initialisations
         # Simulation initialisations
-        test_iterations = 1000 # Number of simulation iterations
+        test_iterations = 100 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations

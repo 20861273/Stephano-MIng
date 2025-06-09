@@ -452,7 +452,7 @@ class Environment:
         # self.exploration_grid[self.pos[r].y, self.pos[r].x] = True
         # self.explorated_cells.append((self.pos[r].y,self.pos[r].x))
         
-    def get_min_targets(self, costs):
+    def get_min_targets(self, costs, en):
         # get min distance of each dorne
         min_targets_value = [None]*self.nr
         for ri in range(self.nr):
@@ -467,7 +467,10 @@ class Environment:
             if min_targets_value[ri] == None: continue
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
             
-        return min_targets
+        if HEIGHT*WIDTH - en <= self.nr:
+            return min_targets
+        else:
+            return [sublist[:1] for sublist in min_targets]
         
     def scheduler(self, ongoing_frontiers):
         start = time.time()
@@ -532,7 +535,7 @@ class Environment:
         # it's repeated this many times since drones could share the minumum distance cells
         # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
         # this becomes important when there are only n cells left to explore
-        min_targets = self.get_min_targets(costs)
+        min_targets = self.get_min_targets(costs, np.count_nonzero(temp_exploration_grid))
         temp_costs = copy.deepcopy(costs)
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
@@ -542,7 +545,7 @@ class Environment:
                         del temp_costs[ri][target]
 
             # find next best targets
-            next_min_targets = self.get_min_targets(temp_costs)
+            next_min_targets = self.get_min_targets(temp_costs, np.count_nonzero(temp_exploration_grid))
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
                     min_targets[ri] = [ongoing_frontiers[ri]]
@@ -688,6 +691,8 @@ class Environment:
             for known_cell_2 in np_known_cells:
                 temp_minimum = distances[(known_cell_2[0],known_cell_2[1],cell[0], cell[1])] + distances[(known_cell_2[0],known_cell_2[1],known_cell[0], known_cell[1])]
 
+                if cell[0] == known_cell_2[0]:
+                    breakpoint
                 if temp_minimum < new_minimum:
                     new_minimum = temp_minimum
 

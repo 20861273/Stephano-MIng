@@ -1389,8 +1389,8 @@ class Environment:
 
 #     indices.append(all_steps.index(min(all_steps)))
 # print(weight[max(set(indices), key = indices.count)])
-nr_list = [1,2,3]
-obstacle_density_list = [0,0.05,0.1,0.2,0.3,0.4]
+nr_list = [3]
+obstacle_density_list = [0.2]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
 
@@ -1403,13 +1403,13 @@ for nr in nr_list:
         # distances = read_json(file_path)
         # distances = convert_json_data(distances)
         save_trajectory = True
-        in_loop_trajectory = False
+        in_loop_trajectory = True
         each_drone = False
         in_loop_dist = False
         preprocessing = True
         maneuvering = False
         fixed_wing = False
-        refuelling = False
+        refuelling = True
         # if WIDTH > HEIGHT:
         #     starting_fuel = (WIDTH*4 + HEIGHT*4)
         # else:

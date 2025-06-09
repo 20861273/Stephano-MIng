@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 10
-WIDTH = 10
+HEIGHT = 20
+WIDTH = 20
 
 # Chosen values
 height = 100 # m
@@ -443,7 +443,7 @@ class Environment:
         elif self.prev_pos[r].y > self.pos[r].y: # up
             self.direction[r] = "up"
         
-    def get_min_targets(self, costs):
+    def get_min_targets(self, costs, en):
         # get min distance of each dorne
         min_targets_value = [None]*self.nr
         for ri in range(self.nr):
@@ -458,7 +458,10 @@ class Environment:
             if min_targets_value[ri] == None: continue
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
             
-        return min_targets
+        if HEIGHT*WIDTH - en <= self.nr:
+            return min_targets
+        else:
+            return [sublist[:1] for sublist in min_targets]
         
     def scheduler(self, ongoing_frontiers):
         start = time.time()
@@ -523,7 +526,7 @@ class Environment:
         # it's repeated this many times since drones could share the minumum distance cells
         # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
         # this becomes important when there are only n cells left to explore
-        min_targets = self.get_min_targets(costs)
+        min_targets = self.get_min_targets(costs, np.count_nonzero(temp_exploration_grid))
         temp_costs = copy.deepcopy(costs)
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
@@ -533,7 +536,7 @@ class Environment:
                     del temp_costs[ri][target]
 
             # find next best targets
-            next_min_targets = self.get_min_targets(temp_costs)
+            next_min_targets = self.get_min_targets(temp_costs, np.count_nonzero(temp_exploration_grid))
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
                     min_targets[ri] = [ongoing_frontiers[ri]]
@@ -911,20 +914,20 @@ class Environment:
         else:
             file_name = "trajectory%d_step%d.png"%(cnt, steps)
         plt.savefig(os.path.join(dir_path, file_name))
-        # plt.show()
+        plt.show()
         # plt.pause(0.0005)
         plt.close()
 
 ##############################################################################################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
 # Initialisations
-nr_list = [5,6,7,8,9,10]
+nr_list = [10]
 obstacle_density_list = [0]
 # obstacle_density_list = [0.4]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Simulation initialisations
-        test_iterations = 100 # Number of simulation iterations
+        test_iterations = 1 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations
@@ -937,7 +940,7 @@ for nr in nr_list:
 
         # Trajectory saving initialisations
         save_trajectory = True # Sets if drone trajectories are saves
-        step_trajectory = False # Sets if the drone trajectories are saves each step
+        step_trajectory = True # Sets if the drone trajectories are saves each step
         each_drone = False # Stes if drone trajectories are saved separately in the step trajectories
         saved_iterations = 2 # Sets number of iteration trajectories are saved
         saves = []                                     #    <---------------------------------------------------------------------- (IDK what this does)
@@ -989,7 +992,7 @@ for nr in nr_list:
             planning_successful = True # boolean for checking if schedule and path planning is successful
             save = False #                              #    <---------------------------------------------------------------------- (IDK what this does)
             planning_starting_time = time.time() # sets starts time for current iteration
-            if i % 10 == 0: print(i) # prints every x iterations
+            if i % 100 == 0: print(i) # prints every x iterations
             # the first iteration has already been reset
             # thus it does not have to be run again
             if i != 0:
