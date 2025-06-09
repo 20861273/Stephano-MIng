@@ -922,13 +922,13 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
 # Initialisations
-nr_list = [3]
+nr_list = [2]
 obstacle_density_list = [0]
 # obstacle_density_list = [0.4]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Simulation initialisations
-        test_iterations = 1 # Number of simulation iterations
+        test_iterations = 5 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations
@@ -1372,7 +1372,29 @@ for nr in nr_list:
             file_name = 'distance_hist_%d.png' %(r)
             plt.savefig(os.path.join(dir_path, file_name))
 
-        print_string += "\nFirst: %.8f, Second: %.8f, Third: %.8f, Fourth: %.8f, Fifth: %.8f, Fifth A: %.8f, Fifth B: %.8f, Fifth B1: %.8f, Fifth B2: %.8f, Sixth: %.8f, Seventh: %.8f"%(np.mean(np.array(env.first)),np.mean(np.array(env.second)),np.mean(np.array(env.third)),np.mean(np.array(env.fourth)),np.mean(np.array(env.fifth)),np.mean(np.array(env.fifth_a)),np.mean(np.array(env.fifth_b)),np.mean(np.array(env.fifth_b_1)),np.mean(np.array(env.fifth_b_2)),np.mean(np.array(env.sixth)),np.mean(np.array(env.seventh)))
+        print_string += "\nFirst: %.8f, "\
+                        "Second: %.8f, "\
+                        "Third: %.8f, "\
+                        "Fourth: %.8f, "\
+                        "Fifth: %.8f, "\
+                        "Fifth A: %.8f, "\
+                        "Fifth B: %.8f, "\
+                        "Fifth B1: %.8f, "\
+                        "Fifth B2: %.8f, "\
+                        "Sixth: %.8f, "\
+                        "Seventh: %.8f" %(
+                        np.mean(np.array(env.first)),
+                        np.mean(np.array(env.second)),
+                        np.mean(np.array(env.third)),
+                        np.mean(np.array(env.fourth)),
+                        np.mean(np.array(env.fifth)),
+                        np.mean(np.array(env.fifth_a)),
+                        np.mean(np.array(env.fifth_b)),
+                        np.mean(np.array(env.fifth_b_1)),
+                        np.mean(np.array(env.fifth_b_2)),
+                        np.mean(np.array(env.sixth)),
+                        np.mean(np.array(env.seventh))
+                        )
         print(print_string)
 
         # saves results to required location

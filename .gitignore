@@ -16,6 +16,8 @@
 /Maze/Scripts
 /Maze/share
 
+/Data
+
 # Ignore IDE giles
 /.vscode
 
