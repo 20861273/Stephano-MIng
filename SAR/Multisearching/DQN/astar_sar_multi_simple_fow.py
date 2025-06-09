@@ -17,8 +17,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 20
-WIDTH = 20
+HEIGHT = 5
+WIDTH = 5
 UNKNOWN = WIDTH*HEIGHT*2
 
 # Chosen values
@@ -1181,13 +1181,13 @@ class Environment:
 
 ##############################################################################################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
-nr_list = [1,2,3,4]
-obstacle_density_list = [0,5,10,20,30,40]
+nr_list = [2]
+obstacle_density_list = [0]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Initialisations
         # Simulation initialisations
-        test_iterations = 100 # Number of simulation iterations
+        test_iterations = 2 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations
