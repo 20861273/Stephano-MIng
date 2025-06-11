@@ -1,3 +1,6 @@
+'''
+This is the project with the fow adn refueling
+'''
 import heapq
 from collections import namedtuple
 import collections
@@ -250,9 +253,9 @@ class Astar:
                         continue
                 # cross location collision
                 # current is in dynamic obstacles on next step
-                if steps+path_step in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step]:
+                if steps+path_step+1 in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step+1]:
                     # next node is in dynamic obstacles on previous step
-                    if steps+path_step-1 in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step-1]:
+                    if steps+path_step in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step]:
                         if maneuvering:
                             maneuver = True
                         else:
@@ -600,7 +603,7 @@ class Environment:
         else:
             return min(distances, key=distances.get) # returns position
         
-    def get_min_targets(self, costs):
+    def get_min_targets(self, costs, en):
         # get min value of each dorne
         min_targets_value = [None]*self.nr
         for ri in range(self.nr):
@@ -629,7 +632,10 @@ class Environment:
                 # if fuel-threshold > (distance to target) + (distance from target to start)
                 min_targets[ri] = [m_target for m_target in min_targets[ri] if fuel[ri]-refuel_threshold >= distances[self.pos[ri].y][self.pos[ri].x][m_target.y][m_target.x]+distances[self.starting_pos[ri].y][self.starting_pos[ri].x][m_target.y][m_target.x]]
 
-        return min_targets
+        if HEIGHT*WIDTH - en <= self.nr:
+            return min_targets
+        else:
+            return [sublist[:1] for sublist in min_targets]
         
     def scheduler(self, ongoing_frontiers):
         start = time.time()
@@ -696,7 +702,7 @@ class Environment:
         start = time.time()
 
         # set minimum targets
-        min_targets = self.get_min_targets(costs)
+        min_targets = self.get_min_targets(costs, np.count_nonzero(temp_exploration_grid))
         temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
@@ -705,7 +711,7 @@ class Environment:
                     if target in temp_costs[ri]: del temp_costs[ri][target]
 
             # find next best targets
-            next_min_targets = self.get_min_targets(temp_costs)
+            next_min_targets = self.get_min_targets(temp_costs, np.count_nonzero(temp_exploration_grid))
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
                     min_targets[ri] = [ongoing_frontiers[ri]]
@@ -726,7 +732,7 @@ class Environment:
         start = time.time()
 
         # get all combinations of best targets
-        combinations = list(product(*min_targets))
+        combinations = list(product(*[lst[:nr] for lst in min_targets]))
 
         end_a = time.time()
         self.fifth_a.append(end_a-start)
@@ -1416,7 +1422,7 @@ for nr in nr_list:
         #     starting_fuel = (HEIGHT*4 + WIDTH*4)
 
         refuel_threshold = 5
-        test_iterations = 1000
+        test_iterations = 3
         saved_iterations = 2
         saves = []
 
@@ -1976,6 +1982,27 @@ for nr in nr_list:
                         np.mean(np.array(env.seventh))
                         )
         print(print_string)
+
+        # save data
+        file_name = "planning_time.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, planning_times)))
+
+        file_name = "scheduling.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, schedule_times)))
+
+        file_name = "steps.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, steps_list)))
+
+        file_name = "a_star.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, path_times)))
 
         file_name = "results.txt"
         file_path = os.path.join(dir_path, file_name)

@@ -203,9 +203,9 @@ class Astar:
                     continue
                 # cross location collision
                 # current is in dynamic obstacles on next step
-                if steps+path_step in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step]:
+                if steps+path_step+1 in self.dynamic_obstacles and current in self.dynamic_obstacles[steps+path_step+1]:
                     # next node is in dynamic obstacles on previous step
-                    if steps+path_step-1 in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step-1]:
+                    if steps+path_step in self.dynamic_obstacles and next_node in self.dynamic_obstacles[steps+path_step]:
                         continue
 
                 new_cost = self.cost_so_far[(id,current)] + self.heuristic(current, next_node)
@@ -527,7 +527,7 @@ class Environment:
         # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
         # this becomes important when there are only n cells left to explore
         min_targets = self.get_min_targets(costs, np.count_nonzero(temp_exploration_grid))
-        temp_costs = copy.deepcopy(costs)
+        temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
             for ri in range(self.nr):
@@ -549,7 +549,7 @@ class Environment:
         start = time.time()
 
         # get all combinations of best targets
-        combinations = list(product(*min_targets))
+        combinations = list(product(*[lst[:nr] for lst in min_targets]))
 
         # for testing
         end_a = time.time()
@@ -921,13 +921,13 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
 # Initialisations
-nr_list = [10]
-obstacle_density_list = [0]
+nr_list = [1,2,3]
+obstacle_density_list = [0,5,10,20,30,40]
 # obstacle_density_list = [0.4]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Simulation initialisations
-        test_iterations = 1 # Number of simulation iterations
+        test_iterations = 3 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations
@@ -1388,6 +1388,26 @@ for nr in nr_list:
                         np.mean(np.array(env.seventh))
                         )
         print(print_string)
+
+        file_name = "planning_time.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, planning_times)))
+
+        file_name = "scheduling.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, schedule_times)))
+
+        file_name = "steps.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, steps_list)))
+
+        file_name = "a_star.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, path_times)))
 
         # saves results to required location
         file_name = "results.txt"
