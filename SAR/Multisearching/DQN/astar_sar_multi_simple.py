@@ -1,3 +1,6 @@
+'''
+This is the project without the fow, manuvering, and refueling
+'''
 import heapq
 from collections import namedtuple
 import collections
@@ -17,8 +20,8 @@ from functools import reduce
 import copy
 
 Point = namedtuple('Point', 'x, y')
-HEIGHT = 10
-WIDTH = 10
+HEIGHT = 20
+WIDTH = 20
 
 # Chosen values
 height = 100 # m
@@ -446,7 +449,7 @@ class Environment:
         elif self.prev_pos[r].y > self.pos[r].y: # up
             self.direction[r] = "up"
         
-    def get_min_targets(self, costs):
+    def get_min_targets(self, costs, en):
         # get min distance of each dorne
         min_targets_value = [None]*self.nr
         for ri in range(self.nr):
@@ -462,7 +465,10 @@ class Environment:
             min_targets[ri] = [key for key, value in costs[ri].items() if costs[ri] if value == min_targets_value[ri] ]
             # if len(min_targets[ri]) > self.nr: min_targets[ri] = min_targets[ri][:self.nr]
             
-        return min_targets
+        if HEIGHT*WIDTH - en <= self.nr:
+            return min_targets
+        else:
+            return [sublist[:1] for sublist in min_targets]
         
     def scheduler(self, ongoing_frontiers):
         start = time.time()
@@ -527,8 +533,8 @@ class Environment:
         # it's repeated this many times since drones could share the minumum distance cells
         # to allow each drone to have an option the process is repeated n-1 times to give each drone at least 1 option
         # this becomes important when there are only n cells left to explore
-        min_targets = self.get_min_targets(costs)
-        temp_costs = copy.deepcopy(costs)
+        min_targets = self.get_min_targets(costs, np.count_nonzero(temp_exploration_grid))
+        temp_costs = [{key: value for key, value in dictionary.items()} for dictionary in costs]
         for rj in range(self.nr-1):
             # delete best targets from temp cost list
             for ri in range(self.nr):
@@ -537,7 +543,7 @@ class Environment:
                     del temp_costs[ri][target]
 
             # find next best targets
-            next_min_targets = self.get_min_targets(temp_costs)
+            next_min_targets = self.get_min_targets(temp_costs, np.count_nonzero(temp_exploration_grid))
             for ri in range(self.nr):
                 if ongoing_frontiers[ri] != None:
                     min_targets[ri] = [ongoing_frontiers[ri]]
@@ -550,6 +556,7 @@ class Environment:
         start = time.time()
 
         # get all combinations of best targets
+        # combinations = list(product(*[lst[:nr] for lst in min_targets]))
         combinations = list(product(*min_targets))
 
         # for testing
@@ -922,13 +929,13 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 ##############################################################################################################################################################################################################################################
 # Initialisations
-nr_list = [2]
-obstacle_density_list = [0]
+nr_list = [1,2,3]
+obstacle_density_list = [0,5,10,20,30,40]
 # obstacle_density_list = [0.4]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Simulation initialisations
-        test_iterations = 5 # Number of simulation iterations
+        test_iterations = 1000 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations
@@ -972,6 +979,7 @@ for nr in nr_list:
         # Environment generation
         env = Environment(nr, obstacles, set_obstacles, obstacle_density, save_obstacles, save_dir, load_obstacles, load_dir, goal_spawning)
         env.reset(goal_spawning)
+        print("Obstacle density:%.2f\ndate_and_time:%s"%(obstacle_density, str(date_and_time)))
         print(env.ES_starting_grid)
 
         # Tracking initialisations
@@ -994,7 +1002,7 @@ for nr in nr_list:
             planning_successful = True # boolean for checking if schedule and path planning is successful
             save = False #                              #    <---------------------------------------------------------------------- (IDK what this does)
             planning_starting_time = time.time() # sets starts time for current iteration
-            if i % 10 == 0: print(i) # prints every x iterations
+            if i % 500 == 0: print(i) # prints every x iterations
             # the first iteration has already been reset
             # thus it does not have to be run again
             if i != 0:
@@ -1396,6 +1404,32 @@ for nr in nr_list:
                         np.mean(np.array(env.seventh))
                         )
         print(print_string)
+
+        # save data
+        file_name = "planning_time.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, planning_times)))
+
+        file_name = "scheduling.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, schedule_times)))
+
+        file_name = "steps.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, steps_list)))
+
+        file_name = "a_star.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, path_times)))
+
+        file_name = "path.txt"
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w") as f:
+            f.write(", ".join(map(str, selection_times)))
 
         # saves results to required location
         file_name = "results.txt"

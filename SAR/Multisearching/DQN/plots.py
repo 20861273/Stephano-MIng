@@ -10,6 +10,10 @@ import ast
 DATA_DIR = Path("data")
 WIDTH = 0.8  # total width per group
 BOX_WIDTH = 0.15  # individual box width
+TITLE = "Comparison of Multiple Data Sources (Boxplot with Min/Max and ±1σ)"
+X_TITLE = "Obstacle density [%]"
+Y_TITLE = "Number of steps"
+X_AXIS = [0,1]
 
 def load_file(path: Path) -> list[float]:
     """Load a Python-style list of numbers from a file."""
@@ -91,9 +95,10 @@ for source_idx, (source_name, group_data) in enumerate(datasets.items()):
 
 # ── Final Touches ────────────────────────────────────────────────────────────
 ax.set_xticks(group_centers)
-ax.set_xticklabels([f"Group {i+1}" for i in range(n_groups)])
-ax.set_ylabel("Value")
-ax.set_title("Comparison of Multiple Data Sources (Boxplot with Min/Max and ±1σ)")
+ax.set_xticklabels([f"{i}" for i in X_AXIS])
+ax.set_ylabel(f"{Y_TITLE}")
+ax.set_xlabel(f"{X_TITLE}")
+ax.set_title(f"{TITLE}")
 
 legend_patches = [Patch(facecolor=colors[i], label=source_names[i])
                   for i in range(n_sources)]
@@ -102,4 +107,6 @@ ax.legend(handles=legend_patches, title="Data Sources",
 
 
 plt.tight_layout()
+plt.savefig("Data/comparison_boxplot.png")
 plt.show()
+
