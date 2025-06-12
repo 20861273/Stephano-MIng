@@ -10,10 +10,10 @@ import ast
 DATA_DIR = Path("data")
 WIDTH = 0.8  # total width per group
 BOX_WIDTH = 0.15  # individual box width
-TITLE = "Comparison of Multiple Data Sources (Boxplot with Min/Max and ±1σ)"
+TITLE = "Steps"
 X_TITLE = "Obstacle density [%]"
 Y_TITLE = "Number of steps"
-X_AXIS = [0,1]
+X_AXIS = [0,5,10,20,30,40]
 
 def load_file(path: Path) -> list[float]:
     """Load a Python-style list of numbers from a file."""
@@ -31,6 +31,14 @@ def load_all_data(base_path: Path):
             data = [load_file(f) for f in group_files]
             datasets[folder.name] = data
     return datasets
+
+def darken(colors, amount=1.5):
+    """Darken a given color by the given amount."""
+    darker = []
+    for color in colors:
+        c = mcolors.to_rgb(color)
+        darker.append(tuple(max(min(channel / amount, 1.0), 0.0) for channel in c))
+    return darker
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Load all data sources (folders)
@@ -51,26 +59,27 @@ offsets = np.linspace(-total_width / 2, total_width / 2, n_sources)
 
 # Generate distinct colors using colormap
 cmap = cm.get_cmap("rainbow")
-colors = [mcolors.to_hex(cmap(i / max(n_sources - 1, 1))) for i in range(n_sources)]
+colors = darken([mcolors.to_hex(cmap(i / max(n_sources - 1, 1))) for i in range(n_sources)])
+edgecolors = darken(colors)
 
 # ── Plot ─────────────────────────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(12, 6))
 
 for source_idx, (source_name, group_data) in enumerate(datasets.items()):
     color = colors[source_idx]
+    edgecolor = edgecolors[source_idx]
     positions = group_centers + offsets[source_idx]
 
     for x, data in zip(positions, group_data):
         ax.boxplot(
             [data], positions=[x], widths=BOX_WIDTH,
-            patch_artist=True, showmeans=True,
-            boxprops     = dict(facecolor=color, color=color),
-            medianprops  = dict(color='black'),
+            patch_artist=True, showmeans=True, showfliers=False,
+            boxprops     = dict(facecolor=color, color=edgecolor),
+            medianprops  = dict(color=edgecolor),
             whiskerprops = dict(color=color),
             capprops     = dict(color=color),
-            flierprops   = dict(marker='o', color=color, markersize=4),
-            meanprops    = dict(marker='D', markerfacecolor='white',
-                                markeredgecolor=color, markersize=6),
+            meanprops    = dict(marker='x', markerfacecolor='none',
+                                markeredgecolor='black'),
         )
 
     # Add min/max/±1σ annotations
@@ -80,22 +89,24 @@ for source_idx, (source_name, group_data) in enumerate(datasets.items()):
         dmin = np.min(data)
         dmax = np.max(data)
 
-        ax.scatter(x, dmin, marker='v', color=color, s=20)
-        ax.text(x + 0.05, dmin, f"{dmin:g}", va="center", fontsize=8)
+        # ax.scatter(x, dmin, marker='v', color=color, s=20)
+        # ax.text(x + 0.05, dmin, f"{dmin:g}", va="center", fontsize=8)
 
-        ax.scatter(x, dmax, marker='^', color=color, s=20)
-        ax.text(x + 0.05, dmax, f"{dmax:g}", va="center", fontsize=8)
+        # ax.scatter(x, dmax, marker='^', color=color, s=20)
+        # ax.text(x + 0.05, dmax, f"{dmax:g}", va="center", fontsize=8)
 
         ax.hlines([mean - std, mean + std], xmin=x - 0.1, xmax=x + 0.1,
                   linestyles="dashed", colors=color)
-        ax.text(x - 0.1, mean + std, "+1σ", va="center", fontsize=8)
-        ax.text(x - 0.1, mean - std, "−1σ", va="center", fontsize=8)
+        # ax.text(x - 0.1, mean + std, "+1σ", va="center", fontsize=8)
+        # ax.text(x - 0.1, mean - std, "−1σ", va="center", fontsize=8)
 
 
 
 # ── Final Touches ────────────────────────────────────────────────────────────
 ax.set_xticks(group_centers)
 ax.set_xticklabels([f"{i}" for i in X_AXIS])
+ax.yaxis.grid(True, linestyle='--', linewidth=0.5, color='gray', alpha=0.7)
+ax.xaxis.grid(True, linestyle='--', linewidth=0.5, color='gray', alpha=0.7)
 ax.set_ylabel(f"{Y_TITLE}")
 ax.set_xlabel(f"{X_TITLE}")
 ax.set_title(f"{TITLE}")
