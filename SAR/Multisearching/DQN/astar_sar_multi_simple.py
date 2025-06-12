@@ -930,12 +930,12 @@ class Environment:
 ##############################################################################################################################################################################################################################################
 # Initialisations
 nr_list = [1,2,3]
-obstacle_density_list = [0,5,10,20,30,40]
+obstacle_density_list = [0,0.05,0.10,0.20,0.30,0.40]
 # obstacle_density_list = [0.4]
 for nr in nr_list:
     for obstacle_density in obstacle_density_list:
         # Simulation initialisations
-        test_iterations = 1000 # Number of simulation iterations
+        test_iterations = 5000 # Number of simulation iterations
         goal_spawning = False # Sets exit condition: finding the goal or 100% coverage
 
         # Environment initialisations
